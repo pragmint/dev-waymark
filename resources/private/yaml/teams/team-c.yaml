@@ -1,0 +1,106 @@
+id: team-c
+name: Team C
+description: >
+  Mobile application team building iOS and Android apps for customer engagement.
+targetedCapabilities:
+  - id: test-automation
+    currentScore: 2
+    trend: up
+  - id: code-maintainability
+    currentScore: 3
+    trend: stable
+  - id: trunk-based-development
+    currentScore: 2
+    trend: down
+  - id: learning-culture
+    currentScore: 3
+    trend: up
+nonTargetedCapabilities:
+  - id: continuous-delivery
+    currentScore: 2
+    trend: stable
+  - id: continuous-integration
+    currentScore: 3
+    trend: stable
+  - id: customer-feedback
+    currentScore: 2
+    trend: up
+  - id: database-change-management
+    currentScore: 1
+    trend: stable
+  - id: deployment-automation
+    currentScore: 2
+    trend: stable
+  - id: documentation-quality
+    currentScore: 3
+    trend: up
+  - id: empowering-teams-to-choose-tools
+    currentScore: 2
+    trend: stable
+  - id: flexible-infrastructure
+    currentScore: 1
+    trend: down
+  - id: generative-organizational-culture
+    currentScore: 2
+    trend: stable
+  - id: job-satisfaction
+    currentScore: 3
+    trend: stable
+  - id: loosely-coupled-teams
+    currentScore: 2
+    trend: stable
+  - id: monitoring-and-observability
+    currentScore: 2
+    trend: stable
+  - id: monitoring-systems-to-inform-business-decisions
+    currentScore: 1
+    trend: stable
+  - id: pervasive-security
+    currentScore: 3
+    trend: up
+  - id: proactive-failure-notification
+    currentScore: 2
+    trend: stable
+  - id: streamline-change-approval
+    currentScore: 2
+    trend: stable
+  - id: team-experimentation
+    currentScore: 2
+    trend: stable
+  - id: test-data-management
+    currentScore: 2
+    trend: up
+  - id: transformational-leadership
+    currentScore: 2
+    trend: stable
+  - id: version-control
+    currentScore: 3
+    trend: stable
+  - id: visibility-of-work-in-the-value-stream
+    currentScore: 2
+    trend: stable
+  - id: visual-management
+    currentScore: 2
+    trend: stable
+  - id: well-being
+    currentScore: 2
+    trend: stable
+  - id: work-in-process-limits
+    currentScore: 2
+    trend: stable
+  - id: working-in-small-batches
+    currentScore: 2
+    trend: stable
+activeExperiments:
+  - practiceId: automate-test-coverage-checks
+    startDate: 2025-11-15
+    hypothesis: >
+      Enforcing 80% test coverage through automated checks will catch more bugs
+      before production and reduce QA cycle time.
+    status: in-progress
+  - practiceId: refactor
+    startDate: 2025-12-01
+    hypothesis: >
+      Dedicating 20% of sprint capacity to technical debt reduction will improve
+      velocity by 25% over the next quarter.
+    status: in-progress

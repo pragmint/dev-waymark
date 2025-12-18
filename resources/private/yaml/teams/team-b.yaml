@@ -1,0 +1,112 @@
+id: team-b
+name: Team B
+description: >
+  Customer-facing web application team responsible for the main e-commerce platform.
+targetedCapabilities:
+  - id: continuous-integration
+    currentScore: 3
+    trend: up
+  - id: test-automation
+    currentScore: 2
+    trend: stable
+  - id: trunk-based-development
+    currentScore: 3
+    trend: up
+  - id: monitoring-and-observability
+    currentScore: 2
+    trend: up
+nonTargetedCapabilities:
+  - id: code-maintainability
+    currentScore: 3
+    trend: stable
+  - id: continuous-delivery
+    currentScore: 2
+    trend: up
+  - id: customer-feedback
+    currentScore: 3
+    trend: up
+  - id: database-change-management
+    currentScore: 2
+    trend: stable
+  - id: deployment-automation
+    currentScore: 2
+    trend: stable
+  - id: documentation-quality
+    currentScore: 2
+    trend: stable
+  - id: empowering-teams-to-choose-tools
+    currentScore: 2
+    trend: stable
+  - id: flexible-infrastructure
+    currentScore: 1
+    trend: stable
+  - id: generative-organizational-culture
+    currentScore: 3
+    trend: up
+  - id: job-satisfaction
+    currentScore: 3
+    trend: stable
+  - id: learning-culture
+    currentScore: 3
+    trend: up
+  - id: loosely-coupled-teams
+    currentScore: 2
+    trend: stable
+  - id: monitoring-systems-to-inform-business-decisions
+    currentScore: 2
+    trend: up
+  - id: pervasive-security
+    currentScore: 2
+    trend: stable
+  - id: proactive-failure-notification
+    currentScore: 2
+    trend: stable
+  - id: streamline-change-approval
+    currentScore: 2
+    trend: stable
+  - id: team-experimentation
+    currentScore: 3
+    trend: up
+  - id: test-data-management
+    currentScore: 2
+    trend: stable
+  - id: transformational-leadership
+    currentScore: 2
+    trend: stable
+  - id: version-control
+    currentScore: 4
+    trend: stable
+  - id: visibility-of-work-in-the-value-stream
+    currentScore: 2
+    trend: stable
+  - id: visual-management
+    currentScore: 2
+    trend: stable
+  - id: well-being
+    currentScore: 3
+    trend: up
+  - id: work-in-process-limits
+    currentScore: 2
+    trend: stable
+  - id: working-in-small-batches
+    currentScore: 3
+    trend: up
+activeExperiments:
+  - practiceId: implement-tdd
+    startDate: 2025-10-15
+    hypothesis: >
+      Adopting TDD for new features will reduce bug density by 40% and improve
+      code maintainability scores.
+    status: in-progress
+  - practiceId: conduct-code-reviews
+    startDate: 2025-09-01
+    hypothesis: >
+      Implementing structured code reviews with checklists will improve code quality
+      and knowledge sharing across the team.
+    status: blocked
+  - practiceId: run-pair-programming-sessions
+    startDate: 2025-12-10
+    hypothesis: >
+      Weekly pair programming sessions will reduce knowledge silos and improve
+      team collaboration metrics.
+    status: in-progress

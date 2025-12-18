@@ -1,0 +1,9 @@
+id: flexible-infrastructure
+name: Flexible Infrastructure
+category: Fast Flow
+currentScore: 2
+trend: stable
+teamsTargeting: 4
+description: >
+  Flexible Infrastructure enables teams to provision and scale resources on-demand.
+  This capability includes infrastructure as code, cloud platforms, and self-service environments.

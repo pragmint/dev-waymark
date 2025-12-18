@@ -1,0 +1,9 @@
+id: deployment-automation
+name: Deployment Automation
+category: Fast Flow
+currentScore: 3
+trend: up
+teamsTargeting: 6
+description: >
+  Deployment Automation removes manual steps from the deployment process, reducing errors
+  and increasing deployment frequency. Automated deployments are faster, more reliable, and repeatable.

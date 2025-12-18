@@ -1,0 +1,10 @@
+id: continuous-integration
+name: Continuous Integration
+category: Fast Feedback
+currentScore: 4
+trend: up
+teamsTargeting: 8
+description: >
+  Continuous Integration (CI) is the practice of automatically building and testing
+  code changes as they are committed to version control. This capability ensures that
+  integration issues are detected early and resolved quickly.

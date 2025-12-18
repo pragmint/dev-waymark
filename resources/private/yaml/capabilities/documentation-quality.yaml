@@ -1,0 +1,9 @@
+id: documentation-quality
+name: Documentation Quality
+category: Climate for Learning
+currentScore: 2
+trend: stable
+teamsTargeting: 4
+description: >
+  Documentation Quality ensures that systems, APIs, and processes are well-documented
+  and accessible. Good documentation accelerates onboarding and reduces knowledge silos.

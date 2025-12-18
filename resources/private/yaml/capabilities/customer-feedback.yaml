@@ -1,0 +1,9 @@
+id: customer-feedback
+name: Customer Feedback
+category: Fast Feedback
+currentScore: 2
+trend: up
+teamsTargeting: 5
+description: >
+  Customer Feedback mechanisms enable teams to gather and act on user input quickly.
+  This capability includes surveys, analytics, A/B testing, and direct customer engagement.

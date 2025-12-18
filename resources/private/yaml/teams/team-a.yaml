@@ -1,0 +1,107 @@
+id: team-a
+name: Team A
+description: >
+  Platform Engineering team focused on building internal developer tools
+  and improving deployment infrastructure.
+targetedCapabilities:
+  - id: continuous-delivery
+    currentScore: 2
+    trend: up
+  - id: deployment-automation
+    currentScore: 3
+    trend: up
+  - id: flexible-infrastructure
+    currentScore: 2
+    trend: stable
+nonTargetedCapabilities:
+  - id: code-maintainability
+    currentScore: 2
+    trend: stable
+  - id: continuous-integration
+    currentScore: 3
+    trend: up
+  - id: customer-feedback
+    currentScore: 1
+    trend: stable
+  - id: database-change-management
+    currentScore: 2
+    trend: up
+  - id: documentation-quality
+    currentScore: 1
+    trend: stable
+  - id: empowering-teams-to-choose-tools
+    currentScore: 3
+    trend: stable
+  - id: generative-organizational-culture
+    currentScore: 2
+    trend: up
+  - id: job-satisfaction
+    currentScore: 3
+    trend: up
+  - id: learning-culture
+    currentScore: 2
+    trend: stable
+  - id: loosely-coupled-teams
+    currentScore: 2
+    trend: stable
+  - id: monitoring-and-observability
+    currentScore: 2
+    trend: up
+  - id: monitoring-systems-to-inform-business-decisions
+    currentScore: 1
+    trend: stable
+  - id: pervasive-security
+    currentScore: 2
+    trend: stable
+  - id: proactive-failure-notification
+    currentScore: 2
+    trend: up
+  - id: streamline-change-approval
+    currentScore: 2
+    trend: stable
+  - id: team-experimentation
+    currentScore: 2
+    trend: up
+  - id: test-automation
+    currentScore: 2
+    trend: stable
+  - id: test-data-management
+    currentScore: 1
+    trend: stable
+  - id: transformational-leadership
+    currentScore: 2
+    trend: stable
+  - id: trunk-based-development
+    currentScore: 2
+    trend: stable
+  - id: version-control
+    currentScore: 4
+    trend: stable
+  - id: visibility-of-work-in-the-value-stream
+    currentScore: 2
+    trend: stable
+  - id: visual-management
+    currentScore: 1
+    trend: stable
+  - id: well-being
+    currentScore: 3
+    trend: stable
+  - id: work-in-process-limits
+    currentScore: 1
+    trend: stable
+  - id: working-in-small-batches
+    currentScore: 2
+    trend: stable
+activeExperiments:
+  - practiceId: automate-infrastructure-management
+    startDate: 2025-11-01
+    hypothesis: >
+      By automating infrastructure provisioning with Terraform, we can reduce
+      environment setup time from 2 days to 2 hours and eliminate configuration drift.
+    status: in-progress
+  - practiceId: create-and-manage-ephemeral-environments
+    startDate: 2025-12-01
+    hypothesis: >
+      Providing ephemeral environments for each pull request will increase developer
+      confidence and reduce production bugs by 30%.
+    status: in-progress

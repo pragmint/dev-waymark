@@ -1,0 +1,9 @@
+id: monitoring-and-observability
+name: Monitoring and Observability
+category: Fast Feedback
+currentScore: 2
+trend: up
+teamsTargeting: 6
+description: >
+  Monitoring and Observability provide visibility into system behavior and health.
+  This capability includes metrics, logs, traces, and alerts that help teams understand and debug systems.

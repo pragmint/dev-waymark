@@ -1,0 +1,9 @@
+id: test-data-management
+name: Test Data Management
+category: Fast Feedback
+currentScore: 2
+trend: up
+teamsTargeting: 3
+description: >
+  Test Data Management provides realistic, safe test data for development and testing.
+  This capability includes data generation, anonymization, and test data provisioning.

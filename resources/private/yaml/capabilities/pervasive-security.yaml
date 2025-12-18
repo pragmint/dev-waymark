@@ -1,0 +1,9 @@
+id: pervasive-security
+name: Pervasive Security
+category: Fast Feedback
+currentScore: 2
+trend: up
+teamsTargeting: 5
+description: >
+  Pervasive Security integrates security practices throughout the development lifecycle.
+  This includes security testing, vulnerability scanning, and secure coding practices.

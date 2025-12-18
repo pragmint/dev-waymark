@@ -1,0 +1,9 @@
+id: proactive-failure-notification
+name: Proactive Failure Notification
+category: Fast Feedback
+currentScore: 2
+trend: stable
+teamsTargeting: 4
+description: >
+  Proactive Failure Notification alerts teams to issues before they impact users.
+  This capability includes automated monitoring, alerting, and on-call processes.
