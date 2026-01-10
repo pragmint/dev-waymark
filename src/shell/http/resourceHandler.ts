@@ -1,3 +1,5 @@
+// Pure HTTP resource handler - handles static file serving
+
 export const getContentType = (path: string): string => {
   const ext = path.split('.').pop()?.toLowerCase();
   const contentTypes: Record<string, string> = {
