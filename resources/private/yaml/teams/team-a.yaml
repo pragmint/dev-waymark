@@ -93,15 +93,73 @@ nonTargetedCapabilities:
     currentScore: 2
     trend: stable
 activeExperiments:
-  - practiceId: automate-infrastructure-management
+  - id: exp-team-a-001
+    practiceId: automate-infrastructure-management
     startDate: 2025-11-01
     hypothesis: >
       By automating infrastructure provisioning with Terraform, we can reduce
       environment setup time from 2 days to 2 hours and eliminate configuration drift.
     status: in-progress
-  - practiceId: create-and-manage-ephemeral-environments
+    duration: 8 weeks
+    supportingEvidence:
+      metrics:
+        - "Current environment setup takes 16 hours on average (2 days)"
+        - "Manual configurations cause 3-5 incidents per month due to drift"
+        - "20% of developer time spent waiting for environments"
+      anecdotes:
+        - "Developers frequently report frustration with inconsistent staging environments"
+        - "Last sprint we had to delay release due to production-staging config mismatch"
+        - "New team members take 3+ days just to get their dev environment running"
+    actionPlan:
+      - task: "Set up Terraform repository and base module structure"
+        assignees: ["Alice Chen", "Bob Kumar"]
+      - task: "Migrate staging environment to Terraform"
+        assignees: ["Alice Chen"]
+      - task: "Create automated provisioning pipeline"
+        assignees: ["Bob Kumar", "Carol Martinez"]
+      - task: "Document Terraform workflow and train team"
+        assignees: ["Carol Martinez"]
+      - task: "Migrate production environment to Terraform"
+        assignees: ["Alice Chen", "Bob Kumar"]
+    decisionRoles:
+      decisionMaker: ["David Park (Engineering Manager)", "Alice Chen (Tech Lead)"]
+      contributors: ["Alice Chen", "Bob Kumar", "Carol Martinez"]
+      consulted: ["Platform Architecture Team", "Security Team"]
+      informed: ["All Engineering Teams", "DevOps Guild"]
+    expectedImpact:
+      metrics: "Reduce environment setup time from 16 hours to 2 hours (87.5% reduction). Eliminate configuration drift incidents (from 3-5 to 0 per month). Free up 20% of developer time currently spent on environment issues."
+      anecdotes: "Developers will be able to spin up consistent environments with a single command. New team members can be productive on day one. Teams can experiment freely without fear of breaking shared environments."
+  - id: exp-team-a-002
+    practiceId: create-and-manage-ephemeral-environments
     startDate: 2025-12-01
     hypothesis: >
       Providing ephemeral environments for each pull request will increase developer
       confidence and reduce production bugs by 30%.
     status: in-progress
+    duration: 6 weeks
+    supportingEvidence:
+      metrics:
+        - "15 production bugs found in last quarter that could have been caught with better testing environments"
+        - "PRs currently tested manually in shared staging, causing conflicts"
+        - "Average PR review time is 48 hours, partly due to testing delays"
+      anecdotes:
+        - "Developers hesitate to test risky changes because they don't want to break staging for others"
+        - "Multiple PRs waiting for staging access creates bottlenecks"
+        - "Reviewers often approve without testing because staging is occupied"
+    actionPlan:
+      - task: "Design ephemeral environment architecture and resource limits"
+        assignees: ["Alice Chen"]
+      - task: "Integrate ephemeral environment creation with CI/CD pipeline"
+        assignees: ["Bob Kumar"]
+      - task: "Implement automatic cleanup after PR merge/close"
+        assignees: ["Carol Martinez"]
+      - task: "Add PR environment URL to GitHub PR comments"
+        assignees: ["Bob Kumar"]
+    decisionRoles:
+      decisionMaker: ["David Park (Engineering Manager)"]
+      contributors: ["Alice Chen", "Bob Kumar", "Carol Martinez"]
+      consulted: ["QA Team", "Product Managers"]
+      informed: ["All Development Teams"]
+    expectedImpact:
+      metrics: "Reduce production bugs by 30%. Decrease PR review time from 48 hours to 24 hours. Eliminate staging environment conflicts (currently 2-3 per week)."
+      anecdotes: "Every PR will have its own environment for testing. Reviewers can test changes independently without coordination. Developers will feel confident testing breaking changes without impacting others."

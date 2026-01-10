@@ -247,12 +247,29 @@
   gap: 20px;
 }
 
+.experiment-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.experiment-card-link:hover {
+  transform: translateY(-2px);
+}
+
+.experiment-card-link:hover .experiment-card {
+  border-color: #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
 .experiment-card {
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 24px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
 .experiment-header {
@@ -294,10 +311,31 @@
   color: #666;
   font-size: 14px;
   margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 .experiment-date {
   display: inline-block;
+}
+
+.experiment-duration {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #e8f4f8;
+  color: #0066cc;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.experiment-view-details {
+  margin-top: 16px;
+  color: #007bff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
 }
 
 .experiment-hypothesis {

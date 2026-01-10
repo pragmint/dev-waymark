@@ -3,11 +3,39 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { TrendDirection } from "./capabilities";
 
+export interface ActionItem {
+  task: string;
+  assignees: string[];
+}
+
+export interface SupportingEvidence {
+  metrics: string[];
+  anecdotes: string[];
+}
+
+export interface ExpectedImpact {
+  metrics: string;
+  anecdotes: string;
+}
+
+export interface DecisionRoles {
+  decisionMaker: string[];
+  contributors: string[];
+  consulted: string[];
+  informed: string[];
+}
+
 export interface ActiveExperiment {
+  id: string;
   practiceId: string;
   startDate: string;
   hypothesis: string;
   status: "in-progress" | "blocked" | "paused";
+  supportingEvidence?: SupportingEvidence;
+  actionPlan?: ActionItem[];
+  decisionRoles?: DecisionRoles;
+  expectedImpact?: ExpectedImpact;
+  duration?: string; // e.g., "6 weeks", "3 months"
 }
 
 export interface TeamCapability {
@@ -54,4 +82,14 @@ export function getAllTeams(): Team[] {
 
 export function getTeamById(id: string): Team | undefined {
   return teams.find(t => t.id === id);
+}
+
+export function getExperimentById(experimentId: string): { team: Team, experiment: ActiveExperiment } | undefined {
+  for (const team of teams) {
+    const experiment = team.activeExperiments.find(exp => exp.id === experimentId);
+    if (experiment) {
+      return { team, experiment };
+    }
+  }
+  return undefined;
 }

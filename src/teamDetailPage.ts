@@ -111,21 +111,25 @@ async function renderActiveExperiments(experiments: ActiveExperiment[]): Promise
       const practiceName = practice ? practice.title : exp.practiceId;
 
       return `
-        <div class="experiment-card">
-          <div class="experiment-header">
-            <h3>
-              <a href="/catalog/practice/${exp.practiceId}/">${practiceName}</a>
-            </h3>
-            ${getStatusBadge(exp.status)}
+        <a href="/experiment/${exp.id}/" class="experiment-card-link">
+          <div class="experiment-card">
+            <div class="experiment-header">
+              <h3>${practiceName}</h3>
+              ${getStatusBadge(exp.status)}
+            </div>
+            <div class="experiment-meta">
+              <span class="experiment-date">Started: ${new Date(exp.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              ${exp.duration ? `<span class="experiment-duration">${exp.duration}</span>` : ''}
+            </div>
+            <div class="experiment-hypothesis">
+              <strong>Hypothesis:</strong>
+              <p>${exp.hypothesis}</p>
+            </div>
+            <div class="experiment-view-details">
+              View Details →
+            </div>
           </div>
-          <div class="experiment-meta">
-            <span class="experiment-date">Started: ${new Date(exp.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-          </div>
-          <div class="experiment-hypothesis">
-            <strong>Hypothesis:</strong>
-            <p>${exp.hypothesis}</p>
-          </div>
-        </div>
+        </a>
       `;
     })
   );

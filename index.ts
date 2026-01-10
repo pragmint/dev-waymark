@@ -6,8 +6,9 @@ import { generateCapabilityDetailPageContent } from './src/capabilityDetailPage'
 import { generateCapabilityCatalogPageContent } from './src/capabilityCatalogPage';
 import { generatePracticesCatalogPageContent } from './src/practicesCatalogPage';
 import { generatePracticeDetailPageContent, loadPracticeById } from './src/practiceDetailPage';
-import { loadTeams, getAllTeams, getTeamById } from './src/teams';
+import { loadTeams, getAllTeams, getTeamById, getExperimentById } from './src/teams';
 import { generateTeamDetailPageContent } from './src/teamDetailPage';
+import { generateExperimentDetailPageContent } from './src/experimentDetailPage';
 
 // Initialize
 await pageRenderer.init();
@@ -131,6 +132,37 @@ const server = Bun.serve({
 
       // Team not found
       return new Response("Team Not Found", { status: 404 });
+    }
+
+    // Handle dynamic experiment detail pages
+    const experimentMatch = url.pathname.match(/^\/experiment\/([a-z0-9-]+)\/?$/);
+    if (experimentMatch) {
+      const experimentId = experimentMatch[1];
+      const result = getExperimentById(experimentId);
+
+      if (result) {
+        const { team, experiment } = result;
+        const practice = await loadPracticeById(experiment.practiceId);
+        const practiceName = practice ? practice.title : experiment.practiceId;
+
+        const content = await generateExperimentDetailPageContent(experimentId);
+        if (content) {
+          const html = pageRenderer.render({
+            title: `${practiceName} - ${team.name}`,
+            heading: `Experiment: ${practiceName}`,
+            activePage: team.id,
+            content,
+          });
+          return new Response(html, {
+            headers: {
+              "Content-Type": "text/html",
+            },
+          });
+        }
+      }
+
+      // Experiment not found
+      return new Response("Experiment Not Found", { status: 404 });
     }
 
     // Handle dynamic capability detail pages

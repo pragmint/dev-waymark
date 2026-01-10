@@ -92,15 +92,75 @@ nonTargetedCapabilities:
     currentScore: 2
     trend: stable
 activeExperiments:
-  - practiceId: automate-test-coverage-checks
+  - id: exp-team-c-001
+    practiceId: automate-test-coverage-checks
     startDate: 2025-11-15
     hypothesis: >
       Enforcing 80% test coverage through automated checks will catch more bugs
       before production and reduce QA cycle time.
     status: in-progress
-  - practiceId: refactor
+    duration: 10 weeks
+    supportingEvidence:
+      metrics:
+        - "Current test coverage: 45% (iOS), 52% (Android)"
+        - "Production bugs found per release: 18 average"
+        - "QA cycle time: 5 days per release"
+      anecdotes:
+        - "Recent login bug made it to production despite manual testing"
+        - "QA team repeatedly finds bugs that unit tests could catch"
+        - "Developers uncertain which code paths are tested"
+    actionPlan:
+      - task: "Configure coverage tools for iOS (XCTest) and Android (JaCoCo)"
+        assignees: ["Tom Rodriguez"]
+      - task: "Establish baseline coverage metrics"
+        assignees: ["Jessica Kim"]
+      - task: "Integrate coverage checks into CI pipeline"
+        assignees: ["Tom Rodriguez", "Kevin Patel"]
+      - task: "Set initial threshold at 60% and gradually increase to 80%"
+        assignees: ["Jessica Kim"]
+      - task: "Create guide for writing testable mobile code"
+        assignees: ["Jessica Kim", "Tom Rodriguez"]
+    decisionRoles:
+      decisionMaker: ["Rachel Green (Engineering Manager)", "Jessica Kim (Tech Lead)"]
+      contributors: ["Tom Rodriguez", "Kevin Patel", "Jessica Kim", "All Mobile Developers"]
+      consulted: ["QA Team", "iOS and Android Platform Teams"]
+      informed: ["Product Team", "Customer Success"]
+    expectedImpact:
+      metrics: "Increase test coverage from 45-52% to 80%. Reduce production bugs from 18 to 7 per release (60% reduction). Decrease QA cycle time from 5 days to 3 days."
+      anecdotes: "Developers will catch bugs before code review. QA team can focus on UX and edge cases rather than basic functionality. Team will have confidence that changes don't break existing features. Releases will be less stressful."
+  - id: exp-team-c-002
+    practiceId: refactor
     startDate: 2025-12-01
     hypothesis: >
       Dedicating 20% of sprint capacity to technical debt reduction will improve
       velocity by 25% over the next quarter.
     status: in-progress
+    duration: 12 weeks
+    supportingEvidence:
+      metrics:
+        - "Current sprint velocity: 32 story points (trending down from 40)"
+        - "Technical debt tickets: 78 open, growing 5 per sprint"
+        - "Average feature development time: 8.5 days (up from 6 days last quarter)"
+      anecdotes:
+        - "Developers avoid touching legacy authentication code due to complexity"
+        - "Simple features take longer because of workarounds for old bugs"
+        - "Team morale affected by constant firefighting instead of clean solutions"
+    actionPlan:
+      - task: "Identify and prioritize top 10 technical debt items"
+        assignees: ["Jessica Kim", "All developers"]
+      - task: "Reserve 20% of sprint capacity (6-7 story points) for tech debt"
+        assignees: ["Rachel Green"]
+      - task: "Refactor authentication module"
+        assignees: ["Tom Rodriguez", "Kevin Patel"]
+      - task: "Modernize data layer architecture"
+        assignees: ["Jessica Kim", "Tom Rodriguez"]
+      - task: "Track velocity improvements weekly"
+        assignees: ["Rachel Green", "Jessica Kim"]
+    decisionRoles:
+      decisionMaker: ["Rachel Green (Engineering Manager)"]
+      contributors: ["Jessica Kim", "Tom Rodriguez", "Kevin Patel", "All Mobile Developers"]
+      consulted: ["Product Manager", "Architecture Team"]
+      informed: ["Executive Team", "Other Engineering Teams"]
+    expectedImpact:
+      metrics: "Increase sprint velocity from 32 to 40 story points (25% improvement). Reduce technical debt backlog from 78 to 40 items. Decrease average feature development time from 8.5 to 6 days."
+      anecdotes: "Developers will be able to work on any part of the codebase confidently. New features will be faster to implement with cleaner foundations. Team morale will improve as the codebase becomes more maintainable. Product team will see faster delivery of features they request."
