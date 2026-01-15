@@ -3,7 +3,7 @@
 import { RouteHandler } from '../router';
 import { findExperimentById } from '../../../core/data/teamQueries';
 import { loadPracticeFromFilesystem } from '../../loaders/practiceLoader';
-import { generateExperimentDetailPageContent } from '../../../experimentDetailPage';
+import { generateExperimentDetailPageContent } from '../../../core/rendering/experimentPage';
 import { renderPage } from '../../../core/rendering/templates';
 
 export const experimentDetailHandler: RouteHandler = async (url, context) => {
@@ -21,10 +21,7 @@ export const experimentDetailHandler: RouteHandler = async (url, context) => {
   const practice = await loadPracticeFromFilesystem(experiment.practiceId);
   const practiceName = practice ? practice.title : experiment.practiceId;
 
-  const content = await generateExperimentDetailPageContent(experimentId);
-  if (!content) {
-    return new Response("Experiment Not Found", { status: 404 });
-  }
+  const content = generateExperimentDetailPageContent(team, experiment, practiceName);
 
   const html = renderPage(context.templates, context.teams, {
     title: `${practiceName} - ${team.name}`,

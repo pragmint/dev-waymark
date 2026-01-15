@@ -1,42 +1,7 @@
-import { getExperimentById, type ActiveExperiment, type ActionItem, type SupportingEvidence, type DecisionRoles, type ExpectedImpact } from "./teams";
-import { loadPracticeById } from "./practiceDetailPage";
+import type { Team, ActiveExperiment, ActionItem, SupportingEvidence, DecisionRoles, ExpectedImpact } from "../data/teamTypes";
+import { getStatusBadge, calculateEndDate } from "./htmlHelpers";
 
-function getStatusBadge(status: string): string {
-  const statusColors: Record<string, { bg: string; text: string }> = {
-    "in-progress": { bg: "#e8f4f8", text: "#0066cc" },
-    "blocked": { bg: "#f8d7da", text: "#721c24" },
-    "paused": { bg: "#fff3cd", text: "#856404" },
-  };
-
-  const colors = statusColors[status] || { bg: "#e0e0e0", text: "#666" };
-  const label = status.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase());
-
-  return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
-}
-
-function calculateEndDate(startDate: string, duration?: string): string {
-  if (!duration) return "TBD";
-
-  const start = new Date(startDate);
-  const durationMatch = duration.match(/(\d+)\s*(week|month|day)/i);
-
-  if (!durationMatch) return "TBD";
-
-  const amount = parseInt(durationMatch[1]);
-  const unit = durationMatch[2].toLowerCase();
-
-  const end = new Date(start);
-  if (unit.startsWith("week")) {
-    end.setDate(end.getDate() + amount * 7);
-  } else if (unit.startsWith("month")) {
-    end.setMonth(end.getMonth() + amount);
-  } else if (unit.startsWith("day")) {
-    end.setDate(end.getDate() + amount);
-  }
-
-  return end.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
+// Pure rendering function for supporting evidence section
 function renderSupportingEvidence(evidence?: SupportingEvidence): string {
   if (!evidence || (!evidence.metrics?.length && !evidence.anecdotes?.length)) {
     return '<p class="empty-state">No supporting evidence documented yet.</p>';
@@ -72,6 +37,7 @@ function renderSupportingEvidence(evidence?: SupportingEvidence): string {
   `;
 }
 
+// Pure rendering function for action plan section
 function renderActionPlan(actionPlan?: ActionItem[]): string {
   if (!actionPlan || actionPlan.length === 0) {
     return '<p class="empty-state">No action plan defined yet.</p>';
@@ -92,12 +58,13 @@ function renderActionPlan(actionPlan?: ActionItem[]): string {
   return `<div class="action-plan">${actionItems}</div>`;
 }
 
+// Pure rendering function for decision roles section
 function renderDecisionRoles(roles?: DecisionRoles): string {
   if (!roles) {
     return '<p class="empty-state">Decision roles not defined yet.</p>';
   }
 
-  const sections = [];
+  const sections: string[] = [];
 
   if (roles.decisionMaker && roles.decisionMaker.length > 0) {
     sections.push(`
@@ -150,6 +117,7 @@ function renderDecisionRoles(roles?: DecisionRoles): string {
   return `<div class="decision-roles">${sections.join("")}</div>`;
 }
 
+// Pure rendering function for expected impact section
 function renderExpectedImpact(impact?: ExpectedImpact): string {
   if (!impact || (!impact.metrics && !impact.anecdotes)) {
     return '<p class="empty-state">Expected impact not documented yet.</p>';
@@ -181,17 +149,12 @@ function renderExpectedImpact(impact?: ExpectedImpact): string {
   `;
 }
 
-export async function generateExperimentDetailPageContent(experimentId: string): Promise<string | null> {
-  const result = getExperimentById(experimentId);
-
-  if (!result) {
-    return null;
-  }
-
-  const { team, experiment } = result;
-  const practice = await loadPracticeById(experiment.practiceId);
-  const practiceName = practice ? practice.title : experiment.practiceId;
-
+// Pure rendering function for experiment detail page
+export function generateExperimentDetailPageContent(
+  team: Team,
+  experiment: ActiveExperiment,
+  practiceName: string
+): string {
   const startDate = new Date(experiment.startDate).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',

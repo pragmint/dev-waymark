@@ -2,7 +2,9 @@
 
 import { RouteHandler } from '../router';
 import { findTeamById } from '../../../core/data/teamQueries';
-import { generateTeamDetailPageContent } from '../../../teamDetailPage';
+import { groupCapabilitiesByCategory } from '../../../core/data/capabilityQueries';
+import { loadPracticeFromFilesystem } from '../../loaders/practiceLoader';
+import { generateTeamDetailPageContent } from '../../../core/rendering/teamPage';
 import { renderPage } from '../../../core/rendering/templates';
 
 export const teamDetailHandler: RouteHandler = async (url, context) => {
@@ -16,10 +18,25 @@ export const teamDetailHandler: RouteHandler = async (url, context) => {
     return new Response("Team Not Found", { status: 404 });
   }
 
-  const content = await generateTeamDetailPageContent(teamId);
-  if (!content) {
-    return new Response("Team Not Found", { status: 404 });
+  // Prepare data for rendering
+  const capabilitiesByCategory = groupCapabilitiesByCategory(context.capabilities);
+  const capabilityMap = new Map(context.capabilities.map(c => [c.id, c]));
+
+  // Load practices for all experiments
+  const practiceMap = new Map();
+  for (const exp of team.activeExperiments) {
+    const practice = await loadPracticeFromFilesystem(exp.practiceId);
+    if (practice) {
+      practiceMap.set(exp.practiceId, practice);
+    }
   }
+
+  const content = generateTeamDetailPageContent(
+    team,
+    capabilitiesByCategory,
+    capabilityMap,
+    practiceMap
+  );
 
   const html = renderPage(context.templates, context.teams, {
     title: team.name,

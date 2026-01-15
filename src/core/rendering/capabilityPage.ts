@@ -1,55 +1,57 @@
-import { getCapabilityById, type Capability } from "./capabilities";
+import type { Capability } from "../data/capabilityTypes";
+import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from "./htmlHelpers";
 
-function getTrendIcon(trend: string): string {
-  switch (trend) {
-    case "up":
-      return "↑";
-    case "down":
-      return "↓";
-    case "stable":
-      return "→";
-    default:
-      return "→";
-  }
+// Pure rendering function for capability tiles
+export function renderCapabilityTile(capability: Capability): string {
+  const trendIcon = getTrendIcon(capability.trend);
+  return `
+    <div class="capability-tile" data-capability-id="${capability.id}">
+      <div class="capability-tile-header">
+        <h3 class="capability-tile-name">${capability.name}</h3>
+        <span class="capability-tile-trend ${capability.trend}">${trendIcon}</span>
+      </div>
+      <div class="capability-tile-score">
+        <span class="capability-tile-score-current">${capability.currentScore}</span>
+        <span class="capability-tile-score-max">/ 4</span>
+      </div>
+      <div class="capability-tile-teams">
+        <span class="capability-tile-teams-count">${capability.teamsTargeting}</span> team${capability.teamsTargeting !== 1 ? 's' : ''} targeting
+      </div>
+    </div>
+  `;
 }
 
-function getTrendLabel(trend: string): string {
-  switch (trend) {
-    case "up":
-      return "Improving";
-    case "down":
-      return "Declining";
-    case "stable":
-      return "Stable";
-    default:
-      return "Stable";
-  }
+// Pure rendering function for capability catalog page
+export function generateCapabilityCatalogPageContent(
+  capabilitiesByCategory: Record<string, Capability[]>
+): string {
+  const categorySections = Object.entries(capabilitiesByCategory)
+    .map(([category, capabilities]) => {
+      const tiles = capabilities.map(renderCapabilityTile).join("");
+      return `
+        <div class="capability-category-section">
+          <h2 class="capability-category-title">${category}</h2>
+          <div class="capability-tiles-grid">
+            ${tiles}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <link rel="stylesheet" href="/resources/public/overview.css">
+
+    <div class="capability-tiles-container">
+      ${categorySections}
+    </div>
+
+    <script src="/resources/public/overview.js"></script>
+  `;
 }
 
-function getMaturityLevelLabel(level: number): string {
-  switch (level) {
-    case 0:
-      return "Not Started";
-    case 1:
-      return "Initial";
-    case 2:
-      return "Developing";
-    case 3:
-      return "Defined";
-    case 4:
-      return "Optimizing";
-    default:
-      return "Unknown";
-  }
-}
-
-export function generateCapabilityDetailPageContent(capabilityId: string): string | null {
-  const capability = getCapabilityById(capabilityId);
-
-  if (!capability) {
-    return null;
-  }
-
+// Pure rendering function for capability detail page
+export function generateCapabilityDetailPageContent(capability: Capability): string {
   const trendIcon = getTrendIcon(capability.trend);
   const trendLabel = getTrendLabel(capability.trend);
 

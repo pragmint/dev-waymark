@@ -2,7 +2,7 @@
 
 import { RouteHandler } from '../router';
 import { loadPracticeFromFilesystem } from '../../loaders/practiceLoader';
-import { generatePracticeDetailPageContent } from '../../../practiceDetailPage';
+import { generatePracticeDetailPageContent } from '../../../core/rendering/practicePage';
 import { renderPage } from '../../../core/rendering/templates';
 
 export const practiceDetailHandler: RouteHandler = async (url, context) => {
@@ -16,10 +16,7 @@ export const practiceDetailHandler: RouteHandler = async (url, context) => {
     return new Response("Practice Not Found", { status: 404 });
   }
 
-  const content = await generatePracticeDetailPageContent(practiceId);
-  if (!content) {
-    return new Response("Practice Not Found", { status: 404 });
-  }
+  const content = generatePracticeDetailPageContent(practice);
 
   const html = renderPage(context.templates, context.teams, {
     title: practice.title,

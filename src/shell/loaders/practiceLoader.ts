@@ -1,5 +1,4 @@
 import { marked } from "marked";
-import { join } from "node:path";
 
 export interface Practice {
   id: string;
@@ -18,7 +17,7 @@ function transformCapabilityLinks(html: string): string {
 // Pure I/O function - loads practice from filesystem
 export async function loadPracticeFromFilesystem(practiceId: string): Promise<Practice | null> {
   const filename = `${practiceId}.md`;
-  const filePath = join("resources/private/markdown/practices", filename);
+  const filePath = `resources/private/markdown/practices/${filename}`;
 
   try {
     const markdown = await Bun.file(filePath).text();
@@ -41,4 +40,25 @@ export async function loadPracticeFromFilesystem(practiceId: string): Promise<Pr
   } catch (error) {
     return null;
   }
+}
+
+// Pure I/O function - loads all practices from filesystem
+export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
+  const dir = "resources/private/markdown/practices";
+  const glob = new Bun.Glob("*.md");
+  const files: string[] = Array.from(glob.scanSync(dir)) as string[];
+
+  const practices = await Promise.all(
+    files
+      .filter(file => file.endsWith(".md"))
+      .map(async file => {
+        const practiceId = file.replace(".md", "");
+        return await loadPracticeFromFilesystem(practiceId);
+      })
+  );
+
+  // Filter out nulls and sort alphabetically
+  return practices
+    .filter((p): p is Practice => p !== null)
+    .sort((a, b) => a.title.localeCompare(b.title));
 }

@@ -2,7 +2,7 @@
 
 import { RouteHandler } from '../router';
 import { findCapabilityById } from '../../../core/data/capabilityQueries';
-import { generateCapabilityDetailPageContent } from '../../../capabilityDetailPage';
+import { generateCapabilityDetailPageContent } from '../../../core/rendering/capabilityPage';
 import { renderPage } from '../../../core/rendering/templates';
 
 export const capabilityDetailHandler: RouteHandler = async (url, context) => {
@@ -16,10 +16,7 @@ export const capabilityDetailHandler: RouteHandler = async (url, context) => {
     return new Response("Capability Not Found", { status: 404 });
   }
 
-  const content = generateCapabilityDetailPageContent(capabilityId);
-  if (!content) {
-    return new Response("Capability Not Found", { status: 404 });
-  }
+  const content = generateCapabilityDetailPageContent(capability);
 
   const html = renderPage(context.templates, context.teams, {
     title: capability.name,
