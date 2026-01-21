@@ -1,4 +1,4 @@
-import type { FC } from 'hono/jsx';
+import type { FC, Child } from 'hono/jsx';
 import { Layout } from './Layout';
 import { Sidebar } from './Sidebar';
 import type { Team } from '../core/data/teamTypes';
@@ -8,7 +8,7 @@ interface PageProps {
   heading: string;
   activePage: string;
   teams: Team[];
-  children: any;
+  children: Child;
 }
 
 export const Page: FC<PageProps> = ({ title, heading, activePage, teams, children }) => {

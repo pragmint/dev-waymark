@@ -9,7 +9,10 @@ interface CapabilityCatalogPageProps {
   capabilitiesByCategory: Record<string, Capability[]>;
 }
 
-export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({ teams, capabilitiesByCategory }) => {
+export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({
+  teams,
+  capabilitiesByCategory,
+}) => {
   return (
     <Page title="Capabilities" heading="Capabilities" activePage="capabilities" teams={teams}>
       <div class="capability-tiles-container">

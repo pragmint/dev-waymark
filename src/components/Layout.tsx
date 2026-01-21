@@ -1,8 +1,8 @@
-import type { FC } from 'hono/jsx';
+import type { FC, Child } from 'hono/jsx';
 
 interface LayoutProps {
   title: string;
-  children: any;
+  children: Child;
 }
 
 export const Layout: FC<LayoutProps> = ({ title, children }) => {
@@ -14,9 +14,7 @@ export const Layout: FC<LayoutProps> = ({ title, children }) => {
         <title>{title} - Step Engine</title>
         <link rel="stylesheet" href="/resources/public/style.css" />
       </head>
-      <body>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 };

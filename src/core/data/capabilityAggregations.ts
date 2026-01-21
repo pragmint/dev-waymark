@@ -1,5 +1,5 @@
-import type { Capability, TrendDirection } from "./capabilityTypes";
-import type { Team } from "./teamTypes";
+import type { Capability, TrendDirection } from './capabilityTypes';
+import type { Team } from './teamTypes';
 
 // Pure aggregation function - returns new enriched capabilities array
 export function enrichCapabilitiesWithTeamData(
@@ -7,16 +7,19 @@ export function enrichCapabilitiesWithTeamData(
   teams: Team[]
 ): Capability[] {
   // Build a map of capability scores from all teams (both targeted and non-targeted)
-  const capabilityScores = new Map<string, { scores: number[], trends: TrendDirection[], teamCount: number }>();
+  const capabilityScores = new Map<
+    string,
+    { scores: number[]; trends: TrendDirection[]; teamCount: number }
+  >();
 
   teams.forEach(team => {
     // Combine targeted and non-targeted capabilities
     const allCapabilities = [
       ...(team.targetedCapabilities || []),
-      ...(team.nonTargetedCapabilities || [])
+      ...(team.nonTargetedCapabilities || []),
     ];
 
-    allCapabilities.forEach((tc) => {
+    allCapabilities.forEach(tc => {
       if (!capabilityScores.has(tc.id)) {
         capabilityScores.set(tc.id, { scores: [], trends: [], teamCount: 0 });
       }
@@ -30,7 +33,7 @@ export function enrichCapabilitiesWithTeamData(
   // Count teams that are actively targeting each capability
   const targetingCounts = new Map<string, number>();
   teams.forEach(team => {
-    team.targetedCapabilities?.forEach((tc) => {
+    team.targetedCapabilities?.forEach(tc => {
       targetingCounts.set(tc.id, (targetingCounts.get(tc.id) || 0) + 1);
     });
   });
@@ -53,18 +56,18 @@ export function enrichCapabilitiesWithTeamData(
 
       let trend: TrendDirection;
       if (trendCounts.up >= trendCounts.stable && trendCounts.up >= trendCounts.down) {
-        trend = "up";
+        trend = 'up';
       } else if (trendCounts.down > trendCounts.stable) {
-        trend = "down";
+        trend = 'down';
       } else {
-        trend = "stable";
+        trend = 'stable';
       }
 
       return {
         ...capability,
         currentScore,
         teamsTargeting,
-        trend
+        trend,
       };
     } else {
       // No teams have this capability
@@ -72,7 +75,7 @@ export function enrichCapabilitiesWithTeamData(
         ...capability,
         teamsTargeting: 0,
         currentScore: 0,
-        trend: "stable" as TrendDirection
+        trend: 'stable' as TrendDirection,
       };
     }
   });

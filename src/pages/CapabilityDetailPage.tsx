@@ -31,7 +31,8 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
             </div>
           </div>
           <div class="capability-teams-info">
-            <strong>{capability.teamsTargeting}</strong> team{capability.teamsTargeting !== 1 ? 's' : ''} currently targeting this capability
+            <strong>{capability.teamsTargeting}</strong> team
+            {capability.teamsTargeting !== 1 ? 's' : ''} currently targeting this capability
           </div>
         </div>
 
@@ -48,11 +49,16 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
             <div class="maturity-level">
               <div class="maturity-level-header">
                 <h3>Maturity Level: {capability.currentScore}</h3>
-                <span class="maturity-level-label">{getMaturityLevelLabel(capability.currentScore)}</span>
+                <span class="maturity-level-label">
+                  {getMaturityLevelLabel(capability.currentScore)}
+                </span>
               </div>
               <div class="maturity-progress">
                 <div class="maturity-progress-bar">
-                  <div class="maturity-progress-fill" style={`width: ${(capability.currentScore / 4) * 100}%`}></div>
+                  <div
+                    class="maturity-progress-fill"
+                    style={`width: ${(capability.currentScore / 4) * 100}%`}
+                  ></div>
                 </div>
                 <div class="maturity-levels">
                   <span class={`level ${capability.currentScore >= 1 ? 'achieved' : ''}`}>1</span>
@@ -63,16 +69,18 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
               </div>
             </div>
             <p>
-              The organization is currently at level {capability.currentScore}, demonstrating
-              {' '}{getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of this capability.
+              The organization is currently at level {capability.currentScore}, demonstrating{' '}
+              {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of this
+              capability.
             </p>
           </section>
 
           <section class="capability-section">
             <h2>Teams Working On This</h2>
             <p>
-              {capability.teamsTargeting} team{capability.teamsTargeting !== 1 ? 's are' : ' is'} actively working to improve this capability.
-              Teams targeting this capability are focused on implementing best practices and measuring their progress.
+              {capability.teamsTargeting} team{capability.teamsTargeting !== 1 ? 's are' : ' is'}{' '}
+              actively working to improve this capability. Teams targeting this capability are
+              focused on implementing best practices and measuring their progress.
             </p>
             <div class="placeholder-note">
               <em>Team-specific details and progress will be displayed here.</em>
@@ -82,7 +90,10 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
           <section class="capability-section">
             <h2>Key Practices</h2>
             <div class="placeholder-note">
-              <em>Recommended practices and implementation guidance for this capability will be displayed here.</em>
+              <em>
+                Recommended practices and implementation guidance for this capability will be
+                displayed here.
+              </em>
             </div>
           </section>
 
@@ -96,14 +107,20 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
           <section class="capability-section">
             <h2>Success Stories</h2>
             <div class="placeholder-note">
-              <em>Examples of successful implementations and lessons learned will be displayed here.</em>
+              <em>
+                Examples of successful implementations and lessons learned will be displayed here.
+              </em>
             </div>
           </section>
         </div>
 
         <div class="capability-actions">
-          <a href="/" class="btn btn-secondary">← Back to Overview</a>
-          <a href="/catalog/capability/" class="btn btn-primary">View All Capabilities</a>
+          <a href="/" class="btn btn-secondary">
+            ← Back to Overview
+          </a>
+          <a href="/catalog/capability/" class="btn btn-primary">
+            View All Capabilities
+          </a>
         </div>
       </div>
     </Page>

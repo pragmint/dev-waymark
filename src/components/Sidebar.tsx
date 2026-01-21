@@ -14,11 +14,7 @@ export const Sidebar: FC<SidebarProps> = ({ teams, activePage }) => {
       <div class="nav-section">
         <ul class="nav-list">
           <li>
-            <a
-              href="/"
-              data-page="overview"
-              class={activePage === 'overview' ? 'active' : ''}
-            >
+            <a href="/" data-page="overview" class={activePage === 'overview' ? 'active' : ''}>
               Overview
             </a>
           </li>

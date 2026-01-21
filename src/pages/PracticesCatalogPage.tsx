@@ -14,9 +14,9 @@ export const PracticesCatalogPage: FC<PracticesCatalogPageProps> = ({ teams, pra
       <div class="practices-container">
         <div class="practices-intro">
           <p>
-            Engineering practices are proven techniques and methodologies that help teams
-            deliver better software. The practices below support the development of DORA
-            capabilities and contribute to improved software delivery performance.
+            Engineering practices are proven techniques and methodologies that help teams deliver
+            better software. The practices below support the development of DORA capabilities and
+            contribute to improved software delivery performance.
           </p>
         </div>
 

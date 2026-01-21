@@ -1,4 +1,4 @@
-import { marked } from "marked";
+import { marked } from 'marked';
 
 export interface Practice {
   id: string;
@@ -8,10 +8,7 @@ export interface Practice {
 
 // Transform capability links from markdown format to web format
 function transformCapabilityLinks(html: string): string {
-  return html.replace(
-    /href="\/capabilities\/([a-z0-9-]+)\.md"/g,
-    'href="/catalog/capability/$1/"'
-  );
+  return html.replace(/href="\/capabilities\/([a-z0-9-]+)\.md"/g, 'href="/catalog/capability/$1/"');
 }
 
 // Pure I/O function - loads practice from filesystem
@@ -37,22 +34,22 @@ export async function loadPracticeFromFilesystem(practiceId: string): Promise<Pr
       title,
       content: html,
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
 // Pure I/O function - loads all practices from filesystem
 export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
-  const dir = "resources/private/markdown/practices";
-  const glob = new Bun.Glob("*.md");
+  const dir = 'resources/private/markdown/practices';
+  const glob = new Bun.Glob('*.md');
   const files: string[] = Array.from(glob.scanSync(dir)) as string[];
 
   const practices = await Promise.all(
     files
-      .filter(file => file.endsWith(".md"))
+      .filter(file => file.endsWith('.md'))
       .map(async file => {
-        const practiceId = file.replace(".md", "");
+        const practiceId = file.replace('.md', '');
         return await loadPracticeFromFilesystem(practiceId);
       })
   );

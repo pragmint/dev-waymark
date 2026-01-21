@@ -1,6 +1,13 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team, ActiveExperiment, SupportingEvidence, ActionItem, DecisionRoles, ExpectedImpact } from '../core/data/teamTypes';
+import type {
+  Team,
+  ActiveExperiment,
+  SupportingEvidence,
+  ActionItem,
+  DecisionRoles,
+  ExpectedImpact,
+} from '../core/data/teamTypes';
 import { getStatusBadge, calculateEndDate } from '../core/rendering/htmlHelpers';
 
 interface ExperimentDetailPageProps {
@@ -21,7 +28,9 @@ const SupportingEvidenceSection: FC<{ evidence?: SupportingEvidence }> = ({ evid
         <div class="evidence-subsection">
           <h4>Metrics</h4>
           <ul class="evidence-list">
-            {evidence.metrics.map(metric => <li>{metric}</li>)}
+            {evidence.metrics.map(metric => (
+              <li>{metric}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -29,7 +38,9 @@ const SupportingEvidenceSection: FC<{ evidence?: SupportingEvidence }> = ({ evid
         <div class="evidence-subsection">
           <h4>Anecdotes</h4>
           <ul class="evidence-list">
-            {evidence.anecdotes.map(anecdote => <li>{anecdote}</li>)}
+            {evidence.anecdotes.map(anecdote => (
+              <li>{anecdote}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -71,7 +82,9 @@ const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
           <h4>Decision Maker</h4>
           <p class="role-description">Final call on whether to adopt the practice</p>
           <ul class="role-list">
-            {roles.decisionMaker.map(person => <li>{person}</li>)}
+            {roles.decisionMaker.map(person => (
+              <li>{person}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -80,7 +93,9 @@ const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
           <h4>Contributors / Implementers</h4>
           <p class="role-description">Actively working on the experiment</p>
           <ul class="role-list">
-            {roles.contributors.map(person => <li>{person}</li>)}
+            {roles.contributors.map(person => (
+              <li>{person}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -89,7 +104,9 @@ const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
           <h4>Consulted</h4>
           <p class="role-description">Input sought before decisions are made</p>
           <ul class="role-list">
-            {roles.consulted.map(person => <li>{person}</li>)}
+            {roles.consulted.map(person => (
+              <li>{person}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -98,7 +115,9 @@ const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
           <h4>Informed</h4>
           <p class="role-description">Kept informed of progress and decisions</p>
           <ul class="role-list">
-            {roles.informed.map(person => <li>{person}</li>)}
+            {roles.informed.map(person => (
+              <li>{person}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -129,22 +148,30 @@ const ExpectedImpactSection: FC<{ impact?: ExpectedImpact }> = ({ impact }) => {
   );
 };
 
-export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({ teams, team, experiment, practiceName }) => {
+export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
+  teams,
+  team,
+  experiment,
+  practiceName,
+}) => {
   const startDate = new Date(experiment.startDate).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   });
   const endDate = calculateEndDate(experiment.startDate, experiment.duration);
 
   return (
-    <Page title={`${practiceName} - ${team.name}`} heading={`Experiment: ${practiceName}`} activePage={team.id} teams={teams}>
+    <Page
+      title={`${practiceName} - ${team.name}`}
+      heading={`Experiment: ${practiceName}`}
+      activePage={team.id}
+      teams={teams}
+    >
       <div class="experiment-detail-container">
         <div class="experiment-detail-header">
           <div class="breadcrumbs">
-            <a href="/">Home</a> /
-            <a href={`/team/${team.id}/`}>{team.name}</a> /
-            Experiment
+            <a href="/">Home</a> /<a href={`/team/${team.id}/`}>{team.name}</a> / Experiment
           </div>
           <h1>{practiceName}</h1>
           <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
@@ -153,11 +180,15 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({ teams, tea
         <div class="experiment-meta-bar">
           <div class="meta-item">
             <span class="meta-label">Team:</span>
-            <a href={`/team/${team.id}/`} class="meta-value">{team.name}</a>
+            <a href={`/team/${team.id}/`} class="meta-value">
+              {team.name}
+            </a>
           </div>
           <div class="meta-item">
             <span class="meta-label">Practice:</span>
-            <a href={`/catalog/practice/${experiment.practiceId}/`} class="meta-value">{practiceName}</a>
+            <a href={`/catalog/practice/${experiment.practiceId}/`} class="meta-value">
+              {practiceName}
+            </a>
           </div>
           <div class="meta-item">
             <span class="meta-label">Started:</span>
@@ -165,7 +196,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({ teams, tea
           </div>
           <div class="meta-item">
             <span class="meta-label">Duration:</span>
-            <span class="meta-value">{experiment.duration || "Not specified"}</span>
+            <span class="meta-value">{experiment.duration || 'Not specified'}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Expected End:</span>
@@ -190,9 +221,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({ teams, tea
 
         <section class="experiment-section">
           <h2>Action Plan</h2>
-          <p class="section-intro">
-            Tasks and assignments for executing this experiment.
-          </p>
+          <p class="section-intro">Tasks and assignments for executing this experiment.</p>
           <ActionPlanSection actionPlan={experiment.actionPlan} />
         </section>
 
@@ -206,15 +235,17 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({ teams, tea
 
         <section class="experiment-section">
           <h2>Expected Impact</h2>
-          <p class="section-intro">
-            What we expect to achieve if this experiment is successful.
-          </p>
+          <p class="section-intro">What we expect to achieve if this experiment is successful.</p>
           <ExpectedImpactSection impact={experiment.expectedImpact} />
         </section>
 
         <div class="experiment-actions">
-          <a href={`/team/${team.id}/`} class="btn btn-secondary">← Back to {team.name}</a>
-          <a href={`/catalog/practice/${experiment.practiceId}/`} class="btn btn-primary">View Practice Details</a>
+          <a href={`/team/${team.id}/`} class="btn btn-secondary">
+            ← Back to {team.name}
+          </a>
+          <a href={`/catalog/practice/${experiment.practiceId}/`} class="btn btn-primary">
+            View Practice Details
+          </a>
         </div>
       </div>
     </Page>

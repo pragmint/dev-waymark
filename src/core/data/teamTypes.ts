@@ -1,4 +1,4 @@
-import type { TrendDirection } from "./capabilityTypes";
+import type { TrendDirection } from './capabilityTypes';
 
 export interface ActionItem {
   task: string;
@@ -27,7 +27,7 @@ export interface ActiveExperiment {
   practiceId: string;
   startDate: string;
   hypothesis: string;
-  status: "in-progress" | "blocked" | "paused";
+  status: 'in-progress' | 'blocked' | 'paused';
   supportingEvidence?: SupportingEvidence;
   actionPlan?: ActionItem[];
   decisionRoles?: DecisionRoles;

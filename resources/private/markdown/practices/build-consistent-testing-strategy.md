@@ -85,29 +85,29 @@ Track how this knowledge transfer impacts the quality and consistency of your te
 
 #### Tailoring Your Testing Strategy
 
-* How well does your current testing strategy align with the specific needs and constraints of your project?
-* What unique aspects of your project (e.g., technology stack, team expertise) might require a different testing approach?
+- How well does your current testing strategy align with the specific needs and constraints of your project?
+- What unique aspects of your project (e.g., technology stack, team expertise) might require a different testing approach?
 
 #### Balancing Test Coverage and Maintenance
 
-* How often do you refactor your tests to ensure they remain relevant and maintainable as your codebase evolves?
-* How do you currently handle resource-intensive and time-consuming tests, such as end-to-end tests?
-* Are there opportunities to replace some of these expensive tests with more efficient alternatives?
+- How often do you refactor your tests to ensure they remain relevant and maintainable as your codebase evolves?
+- How do you currently handle resource-intensive and time-consuming tests, such as end-to-end tests?
+- Are there opportunities to replace some of these expensive tests with more efficient alternatives?
 
 #### Integrating Manual Testing
 
-* Have you considered the role of manual exploratory testing in your overall strategy?
-* How can you use the creativity and intuition of manual testers to uncover issues automated tests might miss?
+- Have you considered the role of manual exploratory testing in your overall strategy?
+- How can you use the creativity and intuition of manual testers to uncover issues automated tests might miss?
 
 #### Continuous Integration and Testing
 
-* How well integrated are your tests into your continuous integration pipeline?
-* Are your tests providing timely and reliable feedback during the development process?
+- How well integrated are your tests into your continuous integration pipeline?
+- Are your tests providing timely and reliable feedback during the development process?
 
 #### Spreading Testing Knowledge
 
-* How effectively is your testing strategy and best practices communicated and shared within your development team?
-* What steps can you take to ensure everyone on the team understands and follows the testing strategy?
+- How effectively is your testing strategy and best practices communicated and shared within your development team?
+- What steps can you take to ensure everyone on the team understands and follows the testing strategy?
 
 ## Supporting Capabilities
 

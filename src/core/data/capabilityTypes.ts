@@ -1,9 +1,6 @@
-export type TrendDirection = "up" | "down" | "stable";
+export type TrendDirection = 'up' | 'down' | 'stable';
 
-export type CapabilityCategory =
-  | "Climate for Learning"
-  | "Fast Flow"
-  | "Fast Feedback";
+export type CapabilityCategory = 'Climate for Learning' | 'Fast Flow' | 'Fast Feedback';
 
 export interface Capability {
   id: string;

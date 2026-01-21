@@ -2,10 +2,10 @@
 
 SPIN Selling is a practice that focuses on understanding a person's needs through four types of questions: Situation, Problem, Implication, and Need-Payoff. By identifying and addressing the someone's pain points and the consequences of inaction, the question asker guides the person to recognize the value of the solution being offered. Below is a more detailed breakdown of each category of question:
 
-* Situation: questions that collect facts, information, and background data about the existing situation.
-* Problem: questions that probe for problems, difficulties, or dissatisfaction.
-* Implication: questions that develop the seriousness of an implied need and increase the size of the problem.
-* Need-Payoff: questions that build up the value or usefulness of the solution.
+- Situation: questions that collect facts, information, and background data about the existing situation.
+- Problem: questions that probe for problems, difficulties, or dissatisfaction.
+- Implication: questions that develop the seriousness of an implied need and increase the size of the problem.
+- Need-Payoff: questions that build up the value or usefulness of the solution.
 
 Software professionals can use SPIN to generate buy-in on a new idea. This occurs when there is a high level of agreement in the problems and implications of those problems existing.
 

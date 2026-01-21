@@ -22,9 +22,7 @@ export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({ teamCapability
           <span class="capability-tile-score-current">{teamCapability.currentScore}</span>
           <span class="capability-tile-score-max">/ 4</span>
         </div>
-        <div class="capability-tile-category">
-          {capability.category}
-        </div>
+        <div class="capability-tile-category">{capability.category}</div>
       </div>
     </a>
   );

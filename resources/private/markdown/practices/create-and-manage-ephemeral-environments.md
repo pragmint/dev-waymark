@@ -36,18 +36,18 @@ This article goes through the basics of ephemeral environments. It's a great res
 
 ### [Host A Roundtable Discussion](/practices/host-a-roundtable-discussion.md)
 
-* In what ways do you anticipate ephemeral environments will simplify troubleshooting and debugging for your team?
-* Are most bugs easily reproducible?
-* Are there a lot of "it works on my machine" issues?
-* Might ephemeral environments save resources compared to long-lived testing environments?
-* How familiar is your team with using Infrastructure as Code (IaC) for automating environments?
-* How do you envision integrating ephemeral environments into your CI/CD pipelines?
-* How will you ensure the security and privacy of sensitive data within ephemeral environments?
-* Which applications or systems might face challenges with ephemeral deployment, and why?
-* Does adopting a hybrid approach that combines ephemeral and persistent environments make sense for our use case?
-* What initial steps will you take to start adopting ephemeral environments in your organization?
-* How prepared is your team to adopt and manage ephemeral environments, and what training or resources will be necessary?
-* Should we conduct pilot tests of ephemeral environments before full-scale implementation, and what criteria will you use to evaluate their success?
+- In what ways do you anticipate ephemeral environments will simplify troubleshooting and debugging for your team?
+- Are most bugs easily reproducible?
+- Are there a lot of "it works on my machine" issues?
+- Might ephemeral environments save resources compared to long-lived testing environments?
+- How familiar is your team with using Infrastructure as Code (IaC) for automating environments?
+- How do you envision integrating ephemeral environments into your CI/CD pipelines?
+- How will you ensure the security and privacy of sensitive data within ephemeral environments?
+- Which applications or systems might face challenges with ephemeral deployment, and why?
+- Does adopting a hybrid approach that combines ephemeral and persistent environments make sense for our use case?
+- What initial steps will you take to start adopting ephemeral environments in your organization?
+- How prepared is your team to adopt and manage ephemeral environments, and what training or resources will be necessary?
+- Should we conduct pilot tests of ephemeral environments before full-scale implementation, and what criteria will you use to evaluate their success?
 
 ## Supporting Capabilities
 

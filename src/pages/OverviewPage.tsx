@@ -11,7 +11,11 @@ interface OverviewPageProps {
   capabilitiesByCategory: Record<string, Capability[]>;
 }
 
-export const OverviewPage: FC<OverviewPageProps> = ({ teams, topThree, capabilitiesByCategory }) => {
+export const OverviewPage: FC<OverviewPageProps> = ({
+  teams,
+  topThree,
+  capabilitiesByCategory,
+}) => {
   return (
     <Page title="Overview" heading="Overview" activePage="overview" teams={teams}>
       <div class="capability-tiles-container">

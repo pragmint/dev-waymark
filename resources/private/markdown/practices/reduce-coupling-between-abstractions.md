@@ -27,7 +27,7 @@ Effective communication and comprehensive documentation are essential.
 
 ### Radical Implementation vs. Incremental
 
-Attempting to reduce coupling throughout an existing codebase *all at once* can be overwhelming and risky.
+Attempting to reduce coupling throughout an existing codebase _all at once_ can be overwhelming and risky.
 Instead, it's often more practical to implement these changes incrementally.
 Start with the most problematic areas, gradually refactoring and decoupling components. This helps manage risk and maintain system stability.
 
@@ -44,7 +44,7 @@ Focus on the current requirements and only introduce abstractions when there's a
 
 ## Gaining Traction
 
-The following actions will help your team implement this practice. 
+The following actions will help your team implement this practice.
 
 ### [Host a Viewing Party](/practices/host-a-viewing-party.md)
 
@@ -72,31 +72,31 @@ Below are suggestions for topics and prompts you could explore with your team du
 
 #### Understanding Dependencies
 
-* How tightly coupled are our current modules and components?
-* What are the most common pain points we encounter due to high coupling in our codebase?
-* How often do changes in one part of the system require changes in other parts?
+- How tightly coupled are our current modules and components?
+- What are the most common pain points we encounter due to high coupling in our codebase?
+- How often do changes in one part of the system require changes in other parts?
 
 #### Evaluating Interfaces
 
-* Are we using interfaces effectively to reduce coupling, or are they adding unnecessary complexity?
-* How many interfaces in our codebase have only one implementation?
-* Do we have a clear understanding of when and why we should introduce new interfaces?
+- Are we using interfaces effectively to reduce coupling, or are they adding unnecessary complexity?
+- How many interfaces in our codebase have only one implementation?
+- Do we have a clear understanding of when and why we should introduce new interfaces?
 
 #### Knowledge Sharing
 
-* How effectively do we share knowledge about our design decisions and abstractions within the team?
-* Are there ways to improve collaboration and onboarding through better documentation and communication?
+- How effectively do we share knowledge about our design decisions and abstractions within the team?
+- Are there ways to improve collaboration and onboarding through better documentation and communication?
 
 #### Gradual Refactoring
 
-* Have we identified the most problematic areas of coupling in our codebase?
-* What small, incremental changes can we make to start reducing coupling in these areas?
-* How do we ensure system stability while refactoring to reduce coupling?
+- Have we identified the most problematic areas of coupling in our codebase?
+- What small, incremental changes can we make to start reducing coupling in these areas?
+- How do we ensure system stability while refactoring to reduce coupling?
 
 ### [Do a Spike, or Timeboxed Experiment](/practices/do-a-spike.md)
 
-* **Refactor**: Set some time aside to refactor a key component or set of components to reduce coupling. Present your findings to the team to see if committing those changes or making additional changes have a good potential return on investment.
-* **Audit Your Dependencies**: Use a [dependency analysis tool](https://markgacoka.medium.com/how-to-visualize-your-codebase-7c4c4d948141) to visualize the relationships between modules and components, and to identify highly coupled areas. Discuss why these dependencies exist.
+- **Refactor**: Set some time aside to refactor a key component or set of components to reduce coupling. Present your findings to the team to see if committing those changes or making additional changes have a good potential return on investment.
+- **Audit Your Dependencies**: Use a [dependency analysis tool](https://markgacoka.medium.com/how-to-visualize-your-codebase-7c4c4d948141) to visualize the relationships between modules and components, and to identify highly coupled areas. Discuss why these dependencies exist.
 
 ## Adjacent Capability
 

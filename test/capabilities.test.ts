@@ -1,69 +1,65 @@
-import { describe, test, expect } from "bun:test";
-import { enrichCapabilitiesWithTeamData } from "../src/core/data/capabilityAggregations";
+import { describe, test, expect } from 'bun:test';
+import { enrichCapabilitiesWithTeamData } from '../src/core/data/capabilityAggregations';
 import {
   getTopThreeCapabilities,
   groupCapabilitiesByCategory,
-  findCapabilityById
-} from "../src/core/data/capabilityQueries";
-import type { Capability } from "../src/core/data/capabilityTypes";
-import type { Team } from "../src/core/data/teamTypes";
+  findCapabilityById,
+} from '../src/core/data/capabilityQueries';
+import type { Capability } from '../src/core/data/capabilityTypes';
+import type { Team } from '../src/core/data/teamTypes';
 
-describe("Capability Data Transformations", () => {
+describe('Capability Data Transformations', () => {
   const baseCapabilities: Capability[] = [
     {
-      id: "cap-1",
-      name: "Continuous Integration",
-      category: "Fast Flow",
+      id: 'cap-1',
+      name: 'Continuous Integration',
+      category: 'Fast Flow',
       currentScore: 0,
-      trend: "stable",
-      teamsTargeting: 0
+      trend: 'stable',
+      teamsTargeting: 0,
     },
     {
-      id: "cap-2",
-      name: "Automated Testing",
-      category: "Fast Feedback",
+      id: 'cap-2',
+      name: 'Automated Testing',
+      category: 'Fast Feedback',
       currentScore: 0,
-      trend: "stable",
-      teamsTargeting: 0
+      trend: 'stable',
+      teamsTargeting: 0,
     },
     {
-      id: "cap-3",
-      name: "Learning Culture",
-      category: "Climate for Learning",
+      id: 'cap-3',
+      name: 'Learning Culture',
+      category: 'Climate for Learning',
       currentScore: 0,
-      trend: "stable",
-      teamsTargeting: 0
-    }
+      trend: 'stable',
+      teamsTargeting: 0,
+    },
   ];
 
   const teams: Team[] = [
     {
-      id: "team-a",
-      name: "Team A",
+      id: 'team-a',
+      name: 'Team A',
       targetedCapabilities: [
-        { id: "cap-1", currentScore: 3, trend: "up" },
-        { id: "cap-2", currentScore: 2, trend: "stable" }
+        { id: 'cap-1', currentScore: 3, trend: 'up' },
+        { id: 'cap-2', currentScore: 2, trend: 'stable' },
       ],
-      nonTargetedCapabilities: [
-        { id: "cap-3", currentScore: 1, trend: "down" }
-      ],
-      activeExperiments: []
+      nonTargetedCapabilities: [{ id: 'cap-3', currentScore: 1, trend: 'down' }],
+      activeExperiments: [],
     },
     {
-      id: "team-b",
-      name: "Team B",
-      targetedCapabilities: [
-        { id: "cap-1", currentScore: 4, trend: "up" }
-      ],
+      id: 'team-b',
+      name: 'Team B',
+      targetedCapabilities: [{ id: 'cap-1', currentScore: 4, trend: 'up' }],
       nonTargetedCapabilities: [
-        { id: "cap-2", currentScore: 3, trend: "up" },
-        { id: "cap-3", currentScore: 2, trend: "stable" }
+        { id: 'cap-2', currentScore: 3, trend: 'up' },
+        { id: 'cap-3', currentScore: 2, trend: 'stable' },
       ],
-      activeExperiments: []
-    }
+      activeExperiments: [],
+    },
   ];
 
-  test("enrichCapabilitiesWithTeamData calculates average scores", () => {
+  test('enrichCapabilitiesWithTeamData calculates average scores', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
 
     // cap-1: (3 + 4) / 2 = 3.5
@@ -74,7 +70,7 @@ describe("Capability Data Transformations", () => {
     expect(enriched[2].currentScore).toBe(1.5);
   });
 
-  test("enrichCapabilitiesWithTeamData counts teams targeting capabilities", () => {
+  test('enrichCapabilitiesWithTeamData counts teams targeting capabilities', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
 
     expect(enriched[0].teamsTargeting).toBe(2); // cap-1 targeted by both teams
@@ -82,22 +78,22 @@ describe("Capability Data Transformations", () => {
     expect(enriched[2].teamsTargeting).toBe(0); // cap-3 not targeted by any team
   });
 
-  test("enrichCapabilitiesWithTeamData determines overall trend", () => {
+  test('enrichCapabilitiesWithTeamData determines overall trend', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
 
-    expect(enriched[0].trend).toBe("up");     // both teams: up
-    expect(enriched[1].trend).toBe("up");     // stable and up -> up wins
-    expect(enriched[2].trend).toBe("stable"); // down and stable -> stable wins
+    expect(enriched[0].trend).toBe('up'); // both teams: up
+    expect(enriched[1].trend).toBe('up'); // stable and up -> up wins
+    expect(enriched[2].trend).toBe('stable'); // down and stable -> stable wins
   });
 
-  test("enrichCapabilitiesWithTeamData does not mutate input", () => {
+  test('enrichCapabilitiesWithTeamData does not mutate input', () => {
     const originalScore = baseCapabilities[0].currentScore;
     enrichCapabilitiesWithTeamData(baseCapabilities, teams);
 
     expect(baseCapabilities[0].currentScore).toBe(originalScore);
   });
 
-  test("getTopThreeCapabilities returns top 3 by score", () => {
+  test('getTopThreeCapabilities returns top 3 by score', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
     const topThree = getTopThreeCapabilities(enriched);
 
@@ -107,18 +103,18 @@ describe("Capability Data Transformations", () => {
     expect(topThree[2].currentScore).toBe(1.5);
   });
 
-  test("groupCapabilitiesByCategory organizes by category", () => {
+  test('groupCapabilitiesByCategory organizes by category', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
     const grouped = groupCapabilitiesByCategory(enriched);
 
-    expect(grouped["Fast Flow"]).toHaveLength(1);
-    expect(grouped["Fast Feedback"]).toHaveLength(1);
-    expect(grouped["Climate for Learning"]).toHaveLength(1);
+    expect(grouped['Fast Flow']).toHaveLength(1);
+    expect(grouped['Fast Feedback']).toHaveLength(1);
+    expect(grouped['Climate for Learning']).toHaveLength(1);
   });
 
-  test("findCapabilityById returns correct capability", () => {
-    const capability = findCapabilityById(baseCapabilities, "cap-2");
+  test('findCapabilityById returns correct capability', () => {
+    const capability = findCapabilityById(baseCapabilities, 'cap-2');
 
-    expect(capability?.name).toBe("Automated Testing");
+    expect(capability?.name).toBe('Automated Testing');
   });
 });

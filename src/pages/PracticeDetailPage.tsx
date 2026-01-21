@@ -15,11 +15,18 @@ export const PracticeDetailPage: FC<PracticeDetailPageProps> = ({ teams, practic
   return (
     <Page title={practice.title} heading={practice.title} activePage="practices" teams={teams}>
       <div class="practice-detail-container">
-        <div class="practice-content markdown-content" dangerouslySetInnerHTML={{ __html: contentWithoutH1 }} />
+        <div
+          class="practice-content markdown-content"
+          dangerouslySetInnerHTML={{ __html: contentWithoutH1 }}
+        />
 
         <div class="practice-actions">
-          <a href="/" class="btn btn-secondary">← Back to Overview</a>
-          <a href="/catalog/practice/" class="btn btn-primary">View All Practices</a>
+          <a href="/" class="btn btn-secondary">
+            ← Back to Overview
+          </a>
+          <a href="/catalog/practice/" class="btn btn-primary">
+            View All Practices
+          </a>
         </div>
       </div>
     </Page>

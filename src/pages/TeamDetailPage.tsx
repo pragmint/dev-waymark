@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, TeamCapability, ActiveExperiment } from '../core/data/teamTypes';
+import type { Team, ActiveExperiment } from '../core/data/teamTypes';
 import type { Capability } from '../core/data/capabilityTypes';
 import type { Practice } from '../shell/loaders/practiceLoader';
 import { getStatusBadge } from '../core/rendering/htmlHelpers';
@@ -14,7 +14,10 @@ interface TeamDetailPageProps {
   practiceMap: Map<string, Practice>;
 }
 
-const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }> = ({ experiment, practiceName }) => {
+const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }> = ({
+  experiment,
+  practiceName,
+}) => {
   return (
     <a href={`/experiment/${experiment.id}/`} class="experiment-card-link">
       <div class="experiment-card">
@@ -24,7 +27,12 @@ const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }>
         </div>
         <div class="experiment-meta">
           <span class="experiment-date">
-            Started: {new Date(experiment.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Started:{' '}
+            {new Date(experiment.startDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })}
           </span>
           {experiment.duration && <span class="experiment-duration">{experiment.duration}</span>}
         </div>
@@ -32,15 +40,19 @@ const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }>
           <strong>Hypothesis:</strong>
           <p>{experiment.hypothesis}</p>
         </div>
-        <div class="experiment-view-details">
-          View Details →
-        </div>
+        <div class="experiment-view-details">View Details →</div>
       </div>
     </a>
   );
 };
 
-export const TeamDetailPage: FC<TeamDetailPageProps> = ({ teams, team, capabilitiesByCategory, capabilityMap, practiceMap }) => {
+export const TeamDetailPage: FC<TeamDetailPageProps> = ({
+  teams,
+  team,
+  capabilitiesByCategory,
+  capabilityMap,
+  practiceMap,
+}) => {
   // Combine targeted and non-targeted capabilities
   const allTeamCapabilities = [...team.targetedCapabilities, ...team.nonTargetedCapabilities];
   const teamCapabilityMap = new Map(allTeamCapabilities.map(tc => [tc.id, tc]));
@@ -84,12 +96,19 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({ teams, team, capabilit
                     {capabilities.map(capability => {
                       const teamCapability = teamCapabilityMap.get(capability.id);
                       if (teamCapability) {
-                        return <TeamCapabilityTile teamCapability={teamCapability} capability={capability} />;
+                        return (
+                          <TeamCapabilityTile
+                            teamCapability={teamCapability}
+                            capability={capability}
+                          />
+                        );
                       } else {
-                        return <TeamCapabilityTile
-                          teamCapability={{ id: capability.id, currentScore: 0, trend: 'stable' }}
-                          capability={capability}
-                        />;
+                        return (
+                          <TeamCapabilityTile
+                            teamCapability={{ id: capability.id, currentScore: 0, trend: 'stable' }}
+                            capability={capability}
+                          />
+                        );
                       }
                     })}
                   </div>
@@ -106,7 +125,8 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({ teams, team, capabilit
         <section class="team-section">
           <h2>Active Experiments</h2>
           <p class="section-intro">
-            Engineering practices the team is experimenting with to improve their delivery performance.
+            Engineering practices the team is experimenting with to improve their delivery
+            performance.
           </p>
           {team.activeExperiments && team.activeExperiments.length > 0 ? (
             <div class="experiment-cards">
@@ -122,8 +142,12 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({ teams, team, capabilit
         </section>
 
         <div class="team-actions">
-          <a href="/" class="btn btn-secondary">← Back to Overview</a>
-          <a href="/catalog/capability/" class="btn btn-primary">View All Capabilities</a>
+          <a href="/" class="btn btn-secondary">
+            ← Back to Overview
+          </a>
+          <a href="/catalog/capability/" class="btn btn-primary">
+            View All Capabilities
+          </a>
         </div>
       </div>
 

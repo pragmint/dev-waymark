@@ -56,11 +56,11 @@ This presentation delves into the concept of using simple values rather than com
 
 ### [Host A Roundtable Discussion](/practices/host-a-roundtable-discussion.md)
 
-* What are the key third-party dependencies we rely on in our projects?
-* Have we identified any single points of failure or critical dependencies on specific third-party tools?
-* Have there been instances where changes or updates to third-party tools have caused unexpected issues or disruptions in our projects?
-* What are the potential risks and drawbacks of maintaining high levels of dependency on third-party tools in the long term?
-* What steps can we take to future-proof our projects and mitigate risks associated with changes or discontinuation of third-party tools?
+- What are the key third-party dependencies we rely on in our projects?
+- Have we identified any single points of failure or critical dependencies on specific third-party tools?
+- Have there been instances where changes or updates to third-party tools have caused unexpected issues or disruptions in our projects?
+- What are the potential risks and drawbacks of maintaining high levels of dependency on third-party tools in the long term?
+- What steps can we take to future-proof our projects and mitigate risks associated with changes or discontinuation of third-party tools?
 
 ## Supporting Capabilities
 

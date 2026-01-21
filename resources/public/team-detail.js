@@ -1,4 +1,4 @@
-(function() {
+(function () {
   'use strict';
 
   // Handle expand/collapse of capabilities view
@@ -8,7 +8,7 @@
   let isExpanded = false;
 
   if (toggleViewLink) {
-    toggleViewLink.addEventListener('click', function(e) {
+    toggleViewLink.addEventListener('click', function (e) {
       e.preventDefault();
 
       isExpanded = !isExpanded;
@@ -28,8 +28,8 @@
   // Handle capability tile clicks - navigate to capability detail page
   const capabilityTiles = document.querySelectorAll('.capability-tile');
 
-  capabilityTiles.forEach(function(tile) {
-    tile.addEventListener('click', function() {
+  capabilityTiles.forEach(function (tile) {
+    tile.addEventListener('click', function () {
       const capabilityId = tile.getAttribute('data-capability-id');
       if (capabilityId) {
         // Navigate to the capability detail page
