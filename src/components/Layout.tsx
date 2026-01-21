@@ -2,11 +2,10 @@ import type { FC } from 'hono/jsx';
 
 interface LayoutProps {
   title: string;
-  heading: string;
   children: any;
 }
 
-export const Layout: FC<LayoutProps> = ({ title, heading, children }) => {
+export const Layout: FC<LayoutProps> = ({ title, children }) => {
   return (
     <html lang="en">
       <head>

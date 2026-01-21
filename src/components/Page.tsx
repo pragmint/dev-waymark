@@ -13,7 +13,7 @@ interface PageProps {
 
 export const Page: FC<PageProps> = ({ title, heading, activePage, teams, children }) => {
   return (
-    <Layout title={title} heading={heading}>
+    <Layout title={title}>
       <Sidebar teams={teams} activePage={activePage} />
       <main class="main-content">
         <h1>{heading}</h1>
