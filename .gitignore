@@ -43,3 +43,6 @@ temp/
 
 # OS files
 Thumbs.db
+
+# AI tool settings
+.claude/
