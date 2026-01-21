@@ -3,8 +3,7 @@ import { enrichCapabilitiesWithTeamData } from "../src/core/data/capabilityAggre
 import {
   getTopThreeCapabilities,
   groupCapabilitiesByCategory,
-  findCapabilityById,
-  sortCapabilitiesAlphabetically
+  findCapabilityById
 } from "../src/core/data/capabilityQueries";
 import type { Capability } from "../src/core/data/capabilityTypes";
 import type { Team } from "../src/core/data/teamTypes";
@@ -121,13 +120,5 @@ describe("Capability Data Transformations", () => {
     const capability = findCapabilityById(baseCapabilities, "cap-2");
 
     expect(capability?.name).toBe("Automated Testing");
-  });
-
-  test("sortCapabilitiesAlphabetically sorts by name", () => {
-    const sorted = sortCapabilitiesAlphabetically(baseCapabilities);
-
-    expect(sorted[0].name).toBe("Automated Testing");
-    expect(sorted[1].name).toBe("Continuous Integration");
-    expect(sorted[2].name).toBe("Learning Culture");
   });
 });

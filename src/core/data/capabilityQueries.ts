@@ -18,10 +18,6 @@ export function getTopThreeCapabilities(capabilities: Capability[]): Capability[
     .slice(0, 3);
 }
 
-export function sortCapabilitiesAlphabetically(capabilities: Capability[]): Capability[] {
-  return [...capabilities].sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export function groupCapabilitiesByCategory(capabilities: Capability[]): Record<CapabilityCategory, Capability[]> {
   const result: Record<CapabilityCategory, Capability[]> = {
     "Climate for Learning": [],

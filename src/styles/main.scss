@@ -1,0 +1,13 @@
+// Use variables first
+@use 'variables' as *;
+
+// Use base styles
+@use 'base';
+
+// Use component styles
+@use 'sidebar';
+@use 'overview';
+@use 'capability-detail';
+@use 'practices';
+@use 'team-detail';
+@use 'experiment-detail';

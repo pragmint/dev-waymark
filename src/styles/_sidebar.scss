@@ -1,0 +1,86 @@
+@use 'variables' as *;
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: $sidebar-width;
+  background-color: $bg-light;
+  border-right: 0.1rem solid $border-color;
+  padding: $spacing-xl;
+  overflow-y: auto;
+
+  h2 {
+    font-size: $font-lg;
+    margin-bottom: $spacing-xl;
+    color: $text-primary;
+    font-weight: 600;
+  }
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: $spacing-xl;
+}
+
+.nav-section-title {
+  font-size: $font-xs;
+  font-weight: 600;
+  color: $text-secondary;
+  text-transform: uppercase;
+  margin-bottom: $spacing-sm;
+  letter-spacing: 0.05rem;
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+
+  li {
+    margin-bottom: $spacing-xs;
+  }
+
+  a {
+    display: block;
+    padding: $spacing-sm $spacing-md;
+    color: $text-primary;
+    text-decoration: none;
+    border-radius: $border-radius-sm;
+    transition: background-color $transition-fast;
+    font-size: $font-sm;
+
+    &:hover {
+      background-color: $bg-lighter;
+    }
+
+    &.active {
+      background-color: $primary-color;
+      color: white;
+      font-weight: 500;
+    }
+  }
+
+  &.nested {
+    margin-left: $spacing-lg;
+  }
+}
+
+.data-updated {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding-top: $spacing-xl;
+  border-top: 0.1rem solid $border-color;
+  font-size: $font-xs;
+}
+
+.data-updated-label {
+  color: $text-secondary;
+  margin-bottom: $spacing-xs;
+}
+
+.data-updated-date {
+  color: $text-primary;
+  font-weight: 600;
+}

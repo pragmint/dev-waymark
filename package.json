@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "bun run index.ts",
-    "dev": "bun --watch index.ts"
+    "start": "bun run index.tsx",
+    "dev": "bun --watch index.tsx",
+    "build:css": "sass src/styles/main.scss:resources/public/style.css",
+    "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css"
   },
   "dependencies": {
     "glob": "^13.0.0",
+    "hono": "^4.11.4",
     "marked": "^17.0.1",
+    "sass": "^1.97.2",
     "yaml": "^2.8.2"
   }
 }
