@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { consoleLogger } from '../../core/logger';
 
 export interface Practice {
   id: string;
@@ -6,35 +7,65 @@ export interface Practice {
   content: string;
 }
 
-// Transform capability links from markdown format to web format
+// Type for file reading function (enables easy testing/mocking)
+type FileReader = (path: string) => Promise<string>;
+
+// Production file reader using Bun
+const bunFileReader: FileReader = async (path: string) => {
+  return await Bun.file(path).text();
+};
+
+// Pure function - reads markdown file from filesystem
+async function readMarkdownFile(
+  practiceId: string,
+  readFile: FileReader = bunFileReader
+): Promise<string> {
+  const filename = `${practiceId}.md`;
+  const filePath = `resources/private/markdown/practices/${filename}`;
+  return await readFile(filePath);
+}
+
+// Pure function - parses markdown to HTML
+async function parseMarkdown(markdown: string): Promise<string> {
+  return await marked.parse(markdown);
+}
+
+// Pure function - extracts title from markdown
+function extractTitle(markdown: string, fallbackId: string): string {
+  const titleMatch = markdown.match(/^#\s+(.+)$/m);
+  return titleMatch ? titleMatch[1] : fallbackId;
+}
+
+// Pure function - transforms capability links from markdown format to web format
 function transformCapabilityLinks(html: string): string {
   return html.replace(/href="\/capabilities\/([a-z0-9-]+)\.md"/g, 'href="/catalog/capability/$1/"');
 }
 
-// Pure I/O function - loads practice from filesystem
-export async function loadPracticeFromFilesystem(practiceId: string): Promise<Practice | null> {
-  const filename = `${practiceId}.md`;
-  const filePath = `resources/private/markdown/practices/${filename}`;
-
+// Composed function - loads and parses a single practice
+export async function loadPracticeFromFilesystem(
+  practiceId: string,
+  readFile?: FileReader
+): Promise<Practice | null> {
   try {
-    const markdown = await Bun.file(filePath).text();
+    // Load markdown
+    const markdown = await readMarkdownFile(practiceId, readFile);
 
     // Parse markdown to HTML
-    let html = await marked.parse(markdown);
+    const rawHtml = await parseMarkdown(markdown);
 
-    // Transform capability links
-    html = transformCapabilityLinks(html);
+    // Transform links
+    const html = transformCapabilityLinks(rawHtml);
 
-    // Extract title from first h1
-    const titleMatch = markdown.match(/^#\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1] : practiceId;
+    // Extract metadata
+    const title = extractTitle(markdown, practiceId);
 
     return {
       id: practiceId,
       title,
       content: html,
     };
-  } catch {
+  } catch (error) {
+    consoleLogger.error(`Failed to load practice ${practiceId}`, { error });
     return null;
   }
 }
@@ -59,3 +90,6 @@ export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
     .filter((p): p is Practice => p !== null)
     .sort((a, b) => a.title.localeCompare(b.title));
 }
+
+// Export individual functions for testing/reuse
+export { extractTitle, transformCapabilityLinks, parseMarkdown };

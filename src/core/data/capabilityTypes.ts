@@ -1,13 +1,9 @@
-export type TrendDirection = 'up' | 'down' | 'stable';
+// Re-export types from schemas (for backward compatibility)
+export type { TrendDirection, CapabilityCategory, Capability } from './capabilitySchemas';
 
-export type CapabilityCategory = 'Climate for Learning' | 'Fast Flow' | 'Fast Feedback';
-
-export interface Capability {
-  id: string;
-  name: string;
-  category: CapabilityCategory;
-  currentScore: number; // 0-4
-  trend: TrendDirection;
-  teamsTargeting: number;
-  description?: string;
-}
+// Re-export schemas for validation
+export {
+  TrendDirectionSchema,
+  CapabilityCategorySchema,
+  CapabilitySchema,
+} from './capabilitySchemas';
