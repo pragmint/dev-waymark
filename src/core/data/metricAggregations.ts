@@ -66,7 +66,8 @@ export function enrichCapabilitiesWithMetrics(
       let trend: TrendDirection = 'stable';
 
       if (previousTeamValues.length > 0) {
-        const prevAvg = previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
+        const prevAvg =
+          previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
         const scoreDiff = avgScore - prevAvg;
 
         if (scoreDiff > 0.1) {
@@ -156,7 +157,9 @@ function enrichTeamCapability(
   }
 
   // Get most recent score
-  const sortedData = teamData.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
+  const sortedData = teamData.sort(
+    (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
+  );
   const currentScore = sortedData[0].value;
 
   // Calculate trend

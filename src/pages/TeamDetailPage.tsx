@@ -55,7 +55,6 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teamCapabilityMap,
   practiceMap,
 }) => {
-
   return (
     <Page title={team.name} heading={team.name} activePage={team.id} teams={teams}>
       <div class="team-detail-container">
