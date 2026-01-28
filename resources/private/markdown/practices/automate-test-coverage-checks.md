@@ -46,18 +46,18 @@ He advocates for a balanced approach that combines test coverage with thoughtful
 
 #### Tailoring and Adjusting Test Coverage
 
-- Are our current coverage thresholds realistic and tailored to the specific needs of different modules within our application?
-- How often do we review and adjust our coverage metrics to align with evolving project requirements?
+* Are our current coverage thresholds realistic and tailored to the specific needs of different modules within our application?
+* How often do we review and adjust our coverage metrics to align with evolving project requirements?
 
 #### Effectiveness of Test Coverage
 
-- Do our tests catch bugs and edge cases, or are they merely boosting our coverage numbers?
-- Are we adequately addressing non-functional testing, such as performance, security, and usability, in our automated test coverage?
+* Do our tests catch bugs and edge cases, or are they merely boosting our coverage numbers?
+* Are we adequately addressing non-functional testing, such as performance, security, and usability, in our automated test coverage?
 
 #### Challenges and Lessons in Test Coverage Implementation
 
-- Are there any cultural or organizational barriers that prevent us from fully implementing this practice?
-- What lessons can we learn from past experiences to enhance our future approach to automated test coverage?
+* Are there any cultural or organizational barriers that prevent us from fully implementing this practice?
+* What lessons can we learn from past experiences to enhance our future approach to automated test coverage?
 
 ## Supporting Capabilities
 

@@ -93,12 +93,12 @@ The Conduct Code Reviews practice supports the Test Automation DORA capability b
 
 ### [Host A Roundtable Discussion](/practices/host-a-roundtable-discussion.md)
 
-- Do our reviewers have a clear understanding of the broader context surrounding code changes, including user requirements and project goals?
-- Are there opportunities for reviewers to engage in pair programming or collaborative discussions with developers to gain deeper insights into the code being reviewed?
-- How do we handle differing opinions among developers regarding code style, architecture, and implementation details during code reviews?
-- Do we have clear guidelines in place for review turnaround times, and are they being consistently followed?
-- Are we actively working to prevent long pull/merge requests that can overwhelm reviewers and cause delays in the development process?
-- How do we ensure that feedback is received openly and viewed as an opportunity for growth rather than criticism?
-- Are we effectively utilizing checklists to conduct code reviews, and do they cover all relevant aspects of the evaluation process?
-- How often do we revisit and update our checklists based on feedback and lessons learned from previous reviews?
-- Are we using reliable tooling to speed up the review process? Is there more we could be doing on this front?
+* Do our reviewers have a clear understanding of the broader context surrounding code changes, including user requirements and project goals?
+* Are there opportunities for reviewers to engage in pair programming or collaborative discussions with developers to gain deeper insights into the code being reviewed?
+* How do we handle differing opinions among developers regarding code style, architecture, and implementation details during code reviews?
+* Do we have clear guidelines in place for review turnaround times, and are they being consistently followed?
+* Are we actively working to prevent long pull/merge requests that can overwhelm reviewers and cause delays in the development process?
+* How do we ensure that feedback is received openly and viewed as an opportunity for growth rather than criticism?
+* Are we effectively utilizing checklists to conduct code reviews, and do they cover all relevant aspects of the evaluation process?
+* How often do we revisit and update our checklists based on feedback and lessons learned from previous reviews?
+* Are we using reliable tooling to speed up the review process? Is there more we could be doing on this front?

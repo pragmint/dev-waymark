@@ -8,7 +8,7 @@ Lots of other patterns build on this same idea. Hexagonal, Onion, and Clean Arch
 
 - You are a developer and you are struggling to write isolated unit tests because the underlying system is very coupled.
 - You are a frontend developer and you need to keep UI rendering predictable while isolating browser events and API calls so the interface stays intuitive.
-- You are an architect and you need to organize systems so that they remain reliable, scalable, and easy to evolve as the business grows _without_ constant rewrites or coordination bottlenecks.
+- You are an architect and you need to organize systems so that they remain reliable, scalable, and easy to evolve as the business grows *without* constant rewrites or coordination bottlenecks.
 - You are a data engineer and you need to build testable, reusable, and replayable transformation pipelines.
 - You are an engineering leader and you need to accelerate delivery while improving stability so new developers can ramp up quickly, teams can ship safely, and the platform can scale without breaking.
 
@@ -50,9 +50,9 @@ Transitioning to the Functional Core, Imperative Shell pattern may present a ste
 
 ## Lessons From the Field
 
-- _Framework Gravity_ – Framework conventions naturally pull logic toward controllers, services, and models, blurring the line between pure and side-effecting code. Teams often think they’ve built a functional core when it still depends on framework helpers. Breaking free usually starts by isolating one rule or workflow outside the framework to prove the value of true independence.
+- *Framework Gravity* – Framework conventions naturally pull logic toward controllers, services, and models, blurring the line between pure and side-effecting code. Teams often think they’ve built a functional core when it still depends on framework helpers. Breaking free usually starts by isolating one rule or workflow outside the framework to prove the value of true independence.
 
-- _Fear of Architectural Overreach_ – Teams that have been burned by past "architecture experiments" often equate the Functional Core, Imperative Shell pattern with another dogmatism crusade. When the pattern is explained in abstract terms, skepticism has room to breathe; when it’s shown through concrete before-and-after examples of simpler testing or safer changes, the conversation shifts from ideology to practicality.
+- *Fear of Architectural Overreach* – Teams that have been burned by past "architecture experiments" often equate the Functional Core, Imperative Shell pattern with another dogmatism crusade. When the pattern is explained in abstract terms, skepticism has room to breathe; when it’s shown through concrete before-and-after examples of simpler testing or safer changes, the conversation shifts from ideology to practicality.
 
 ## Deciding to Pitch or Polish
 

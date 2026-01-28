@@ -1,0 +1,38 @@
+practice: enforce-types-with-a-linter
+hypothesis: If we enforce type-safety, we should eliminate a whole class of errors from happening right now and in the future.
+supporting-evidence:
+  - cm-ecosystem-linter-error-count:
+    - expected-impact: This should go down to zero.
+  - cm-known-bug-count-from-lack-of-type-safety:
+    - expected-impact: We expect to find over 20 bugs throughout this process.
+  - cm-dev-anecdotes-on-code-quality:
+    - expected-impact: We expect developers to enjoy the added type safety.
+start-date: "November 17, 2025"
+expected-duration-in-weeks: 12
+decision-roles:
+  - responsible:
+    - example-person-1
+    - example-person-2
+  - accountable:
+    - example-person-3
+  - consulted:
+  - informed:
+    - example-person-4
+    - example-person-5
+action-plan:
+  - title: Fix a vertical slice of linting errors in cm back-end
+    assigned-to: example-person-1
+    link: https://www.atlassian.com/software/jira
+    status: complete
+  - title: Configure linters to fail the build when there are errors in the fixed slice
+    assigned-to: example-person-1
+    link:
+    status: active
+  - title: Create and present a lightning talk to the team to showcase new changes
+    assigned-to: example-person-2
+    link:
+    status: backlog
+  - title: Present the linter error metric at each stand-up until the value gets to 0
+    assigned-to: example-person-2
+    link:
+    status: blocked

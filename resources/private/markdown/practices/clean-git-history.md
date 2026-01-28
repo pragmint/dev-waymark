@@ -55,33 +55,30 @@ Discuss as a team and adjust practices accordingly.
 ### [Start A Book Club](/practices/start-a-book-club.md)
 
 ### [Keep a Clean Git History](https://simplabs.com/blog/2021/05/26/keeping-a-clean-git-history/)
-
 Offers guidance on maintaining a clean Git commit history, emphasizing practices like squashing similar commits, crafting clear commit messages, and organizing changes logically to make the project's history navigable and understandable, crucial for effective code reviews and project oversight.
 
 ### [Staying Disciplined with Your Git History](https://8thlight.com/blog/makis-otman/2015/07/08/git-disciplined.html)
-
 Advocates for the disciplined management of Git history through methods like feature branching, minimizing the size of commits, and keeping branches updated via regular rebasing. Highlights the benefits of these practices for enhancing collaboration, facilitating project tracking, and simplifying code reversions.
 
 ### [Two Wrongs Can Make a Right (And Are Difficult to Fix)](https://github.com/97-things/97-things-every-programmer-should-know/tree/master/en/thing_86)
-
 Details strategies for properly amending Git history issues, such as errant commits or merge mistakes, without exacerbating problems. Includes practical advice and Git command examples for correcting history efficiently and effectively, focusing on common Git missteps and the complexities of rectifying them.
 
 ### [Host A Roundtable Discussion](/practices/host-a-roundtable-discussion.md)
 
 #### Commit Message Clarity and Relevance
 
-- Are our commit messages providing clear and relevant context, or do they risk becoming verbose or tangential?
-- How can we ensure that our commit messages strike the right balance between providing necessary context and avoiding unnecessary clutter?
+* Are our commit messages providing clear and relevant context, or do they risk becoming verbose or tangential?
+* How can we ensure that our commit messages strike the right balance between providing necessary context and avoiding unnecessary clutter?
 
 #### Collaborative Commit Practices
 
-- Do we have clear guidelines in place for committing changes in our collaborative environment?
-- Are we consistently following agreed-upon commit message formats, branch naming conventions, and merging strategies?
+* Do we have clear guidelines in place for committing changes in our collaborative environment?
+* Are we consistently following agreed-upon commit message formats, branch naming conventions, and merging strategies?
 
 #### Educating Team Members
 
-- Have we effectively communicated the benefits of clean Git history practices to all team members?
-- Are our team members equipped with the necessary training and tools to navigate Git history effectively?
+* Have we effectively communicated the benefits of clean Git history practices to all team members?
+* Are our team members equipped with the necessary training and tools to navigate Git history effectively?
 
 ## Supporting Capabilities
 
