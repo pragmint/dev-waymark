@@ -9,12 +9,18 @@ interface OverviewPageProps {
   teams: Team[];
   topThree: Capability[];
   capabilitiesByCategory: Record<string, Capability[]>;
+  summaryHtml: string;
+  summaryDate: string;
+  availableSummaryDates: string[];
 }
 
 export const OverviewPage: FC<OverviewPageProps> = ({
   teams,
   topThree,
   capabilitiesByCategory,
+  summaryHtml,
+  summaryDate,
+  availableSummaryDates,
 }) => {
   return (
     <Page title="Overview" heading="Overview" activePage="overview" teams={teams}>
@@ -43,7 +49,11 @@ export const OverviewPage: FC<OverviewPageProps> = ({
         </a>
       </div>
 
-      <ExecutiveSummary />
+      <ExecutiveSummary
+        htmlContent={summaryHtml}
+        currentDate={summaryDate}
+        availableDates={availableSummaryDates}
+      />
 
       <script src="/resources/public/overview.js"></script>
     </Page>

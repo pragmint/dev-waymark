@@ -1,68 +1,38 @@
 import type { FC } from 'hono/jsx';
+import { formatDateString } from '../core/utils/dateFormatter';
 
-export const ExecutiveSummary: FC = () => {
+export interface ExecutiveSummaryProps {
+  htmlContent: string;
+  currentDate: string;
+  availableDates: string[];
+}
+
+export const ExecutiveSummary: FC<ExecutiveSummaryProps> = ({
+  htmlContent,
+  currentDate,
+  availableDates,
+}) => {
   return (
     <div class="executive-summary">
-      <h2>Executive Summary</h2>
-      <div class="executive-summary-content">
-        <p>
-          <strong>Overview:</strong> Our organization continues to make steady progress across all
-          DORA capability areas. This quarter has seen particularly strong momentum in Fast Feedback
-          capabilities, with significant improvements in Continuous Integration and Test Automation.
-        </p>
-
-        <p>
-          <strong>Key Highlights:</strong>
-        </p>
-        <ul>
-          <li>
-            <strong>Continuous Integration</strong> has reached Level 4 maturity, with 8 teams now
-            fully utilizing automated build and test pipelines. This represents a major milestone in
-            our engineering excellence journey.
-          </li>
-
-          <li>
-            <strong>Version Control</strong> maintains its Level 4 status, demonstrating our
-            organization's commitment to fundamental engineering practices. All 8 teams are now
-            following standardized branching strategies.
-          </li>
-
-          <li>
-            <strong>Learning Culture</strong> shows positive trends with 8 teams actively investing
-            in continuous learning and professional development programs. This cultural shift is
-            laying the foundation for sustained improvement.
-          </li>
-        </ul>
-
-        <p>
-          <strong>Areas of Focus:</strong>
-        </p>
-        <ul>
-          <li>
-            <strong>Monitoring Systems to Inform Business Decisions</strong> remains at Level 1,
-            with only 2 teams currently working to improve this capability. This represents an
-            opportunity for significant business impact.
-          </li>
-
-          <li>
-            <strong>Test Data Management</strong> and <strong>Database Change Management</strong>{' '}
-            are seeing increased attention, with multiple teams beginning to adopt best practices in
-            these critical areas.
-          </li>
-
-          <li>
-            Several <strong>Climate for Learning</strong> capabilities are trending upward,
-            indicating growing organizational maturity and team empowerment.
-          </li>
-        </ul>
-
-        <p>
-          <strong>Next Steps:</strong> Leadership should consider prioritizing investment in
-          observability and monitoring capabilities to better leverage data-driven decision making.
-          The strong foundation in CI/CD and version control positions us well to accelerate
-          improvements across the entire capability spectrum.
-        </p>
+      <div class="executive-summary-header">
+        <h2>Executive Summary</h2>
+        {availableDates.length > 1 && (
+          <div class="summary-selector">
+            <select id="summary-date-select" data-current-date={currentDate}>
+              {availableDates.map((date, index) => (
+                <option value={date} selected={date === currentDate}>
+                  {formatDateString(date)}
+                  {index === 0 ? ' (latest)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+      <div
+        class="executive-summary-content"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+      />
     </div>
   );
 };

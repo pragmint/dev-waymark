@@ -10,6 +10,7 @@ import {
   loadPracticeFromFilesystem,
   loadAllPracticesFromFilesystem,
 } from './src/shell/loaders/practiceLoader';
+import { loadSummariesFromFilesystem } from './src/shell/loaders/summaryLoader';
 import { enrichCapabilitiesWithTeamData } from './src/core/data/capabilityAggregations';
 import { groupCapabilitiesByCategory, findCapabilityById } from './src/core/data/capabilityQueries';
 import { NotFoundError } from './src/core/errors';
@@ -28,6 +29,7 @@ import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDeta
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
 const teams = await loadTeamsFromFilesystem();
+const summaries = await loadSummariesFromFilesystem();
 
 // --- PURE TRANSFORMATION ---
 const capabilities = enrichCapabilitiesWithTeamData(rawCapabilities, teams);
@@ -43,7 +45,14 @@ app.use('/resources/*', serveStatic({ root: './' }));
 
 // Overview page
 app.get('/', c => {
-  const data = prepareOverviewData(teams, capabilities);
+  const data = prepareOverviewData(teams, capabilities, summaries);
+  return c.html(<OverviewPage {...data} />);
+});
+
+// Archive page - displays a specific summary by date
+app.get('/archive/:date/', c => {
+  const date = c.req.param('date');
+  const data = prepareOverviewData(teams, capabilities, summaries, date);
   return c.html(<OverviewPage {...data} />);
 });
 

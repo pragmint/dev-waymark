@@ -110,34 +110,126 @@
 
 /* Executive Summary */
 .executive-summary {
-  margin-top: 48px;
-  padding-top: 32px;
-  border-top: 2px solid #e0e0e0;
+  margin-top: 4.8rem;
+  padding-top: 3.2rem;
+  border-top: 0.2rem solid #e0e0e0;
+}
+
+.executive-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.4rem;
+  flex-wrap: wrap;
+  gap: 1.6rem;
 }
 
 .executive-summary h2 {
-  font-size: 24px;
-  margin-bottom: 16px;
+  font-size: 2.4rem;
+  margin: 0;
   color: #333;
+  font-weight: 600;
+}
+
+.summary-selector {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  background: white;
+  padding: 2rem;
+  border-radius: 0.8rem;
+  border: 0.1rem solid #e0e0e0;
+  box-shadow: 0 0.2rem 0.4rem rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  cursor: default;
+  margin-bottom: 1rem;
+}
+
+.summary-selector:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.1);
+  border-color: #007bff;
+}
+
+.summary-selector label {
+  font-size: 1.6rem;
+  color: #666;
+  white-space: nowrap;
+  line-height: 1.8;
+}
+
+.summary-selector select {
+  padding: 0.6rem 3rem 0.6rem 0.8rem;
+  font-size: 1.6rem;
+  border: none;
+  border-radius: 0.4rem;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.4rem center;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  line-height: 1.8;
+}
+
+.summary-selector select:hover {
+  color: #007bff;
+}
+
+.summary-selector select:focus {
+  outline: none;
+  color: #007bff;
 }
 
 .executive-summary-content {
-  font-size: 16px;
+  font-size: 1.6rem;
   line-height: 1.8;
   color: #666;
 }
 
 .executive-summary-content p {
-  margin-bottom: 16px;
+  margin-bottom: 1.6rem;
+}
+
+.executive-summary-content h1 {
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1.6rem;
+}
+
+.executive-summary-content h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1.2rem;
+}
+
+.executive-summary-content h3 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1rem;
 }
 
 .executive-summary-content ul {
-  margin: 16px 0;
-  padding-left: 24px;
+  margin: 1.6rem 0;
+  padding-left: 2.4rem;
+  list-style: disc;
 }
 
 .executive-summary-content li {
-  margin-bottom: 8px;
+  margin-bottom: 0.8rem;
+}
+
+.executive-summary-content strong {
+  font-weight: 600;
+  color: #333;
 }
 
 /* Expanded capabilities section */

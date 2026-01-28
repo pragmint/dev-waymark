@@ -37,4 +37,25 @@
       }
     });
   });
+
+  // Handle summary date selector dropdown
+  const summaryDateSelect = document.getElementById('summary-date-select');
+
+  if (summaryDateSelect) {
+    summaryDateSelect.addEventListener('change', function (e) {
+      const selectedDate = e.target.value;
+
+      // Get all options to find the most recent (first option)
+      const options = e.target.options;
+      const mostRecentDate = options[0].value;
+
+      if (selectedDate === mostRecentDate) {
+        // Navigate to the main overview page for the most recent summary
+        window.location.href = '/';
+      } else {
+        // Navigate to the archive page for older summaries
+        window.location.href = '/archive/' + selectedDate + '/';
+      }
+    });
+  }
 })();
