@@ -16,10 +16,7 @@ export function findExperimentById(
 /**
  * Find all experiments for a specific team
  */
-export function findExperimentsByTeamId(
-  experiments: Experiment[],
-  teamId: string
-): Experiment[] {
+export function findExperimentsByTeamId(experiments: Experiment[], teamId: string): Experiment[] {
   return experiments.filter(exp => exp.teamId === teamId);
 }
 

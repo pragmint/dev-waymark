@@ -54,9 +54,9 @@ async function loadExperimentFromFile(
       decisionRoles: experimentFile['decision-roles'],
     };
   } catch (error) {
-    if (error instanceof z.ZodError && error.errors) {
-      const details = error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ');
-      consoleLogger.error(`Validation error in ${filePath}`, { errors: error.errors });
+    if (error instanceof z.ZodError) {
+      const details = error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      consoleLogger.error(`Validation error in ${filePath}`, { errors: error.issues });
       throw new ValidationError('Experiment', filePath, details);
     }
     throw error;
@@ -103,14 +103,16 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
     }
 
     consoleLogger.info(
-      `Loaded ${experiments.length} experiments from ${teamDirs.filter(async d => {
-        try {
-          const stats = await stat(join(experimentsDir, d));
-          return stats.isDirectory();
-        } catch {
-          return false;
-        }
-      }).length} teams`
+      `Loaded ${experiments.length} experiments from ${
+        teamDirs.filter(async d => {
+          try {
+            const stats = await stat(join(experimentsDir, d));
+            return stats.isDirectory();
+          } catch {
+            return false;
+          }
+        }).length
+      } teams`
     );
     return experiments;
   } catch (error) {

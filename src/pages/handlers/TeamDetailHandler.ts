@@ -130,7 +130,7 @@ export async function prepareTeamDetailData(
       if (practice) {
         practiceMap.set(experiment.practice, practice);
       }
-    } catch (error) {
+    } catch {
       // Practice file doesn't exist - skip it
       // The UI will fall back to displaying the practice ID
     }
@@ -144,7 +144,7 @@ export async function prepareTeamDetailData(
         if (practice) {
           practiceMap.set(experiment.practiceId, practice);
         }
-      } catch (error) {
+      } catch {
         // Practice file doesn't exist - skip it
       }
     }

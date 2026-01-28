@@ -104,11 +104,7 @@ app.get('/catalog/capability/:capabilityId', async c => {
   const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
 
   return c.html(
-    <CapabilityDetailPage
-      teams={teams}
-      capability={filteredCapability}
-      selectedTeam={teamFilter}
-    />
+    <CapabilityDetailPage teams={teams} capability={filteredCapability} selectedTeam={teamFilter} />
   );
 });
 

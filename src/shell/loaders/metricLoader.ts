@@ -146,7 +146,7 @@ export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
             throw error;
           }
         }
-      } catch (err) {
+      } catch {
         // Skip if not a directory or can't read
         continue;
       }

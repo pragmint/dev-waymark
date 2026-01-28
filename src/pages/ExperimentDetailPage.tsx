@@ -1,7 +1,11 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../core/data/teamTypes';
-import type { Experiment, ExperimentActionItem, ExperimentDecisionRolesItem } from '../core/data/experimentTypes';
+import type {
+  Experiment,
+  ExperimentActionItem,
+  ExperimentDecisionRolesItem,
+} from '../core/data/experimentTypes';
 import { getStatusBadge, calculateEndDate } from '../core/rendering/htmlHelpers';
 
 interface ExperimentDetailPageProps {
@@ -138,7 +142,6 @@ const DecisionRolesSection: FC<{ roles?: ExperimentDecisionRolesItem[] }> = ({ r
   );
 };
 
-
 export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
   teams,
   team,
@@ -150,7 +153,9 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
     month: 'long',
     day: 'numeric',
   });
-  const duration = experiment.expectedDurationInWeeks ? `${experiment.expectedDurationInWeeks} weeks` : undefined;
+  const duration = experiment.expectedDurationInWeeks
+    ? `${experiment.expectedDurationInWeeks} weeks`
+    : undefined;
   const endDate = experiment.expectedDurationInWeeks
     ? calculateEndDate(experiment.startDate, duration)
     : 'Not specified';

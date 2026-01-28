@@ -30,11 +30,14 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
   return (
     <div class="experiment-card">
       <div class="experiment-header">
-        <h3><a href={`/experiment/${experiment.id}/`}>{experiment.title}</a></h3>
+        <h3>
+          <a href={`/experiment/${experiment.id}/`}>{experiment.title}</a>
+        </h3>
         <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
       </div>
       <div class="experiment-supporting-practice">
-        Supporting practice: <a href={`/catalog/practice/${experiment.practice}/`}>{practiceName}</a>
+        Supporting practice:{' '}
+        <a href={`/catalog/practice/${experiment.practice}/`}>{practiceName}</a>
       </div>
       <div class="experiment-meta">
         <span class="experiment-date">
@@ -66,7 +69,7 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teamCapabilityMap,
   practiceMap,
   experiments,
-  teamMetrics,
+  teamMetrics: _teamMetrics,
 }) => {
   return (
     <Page title={team.name} heading={team.name} activePage={team.id} teams={teams}>
@@ -90,14 +93,14 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
                   // Handle both string and object formats
                   const capabilityId = typeof tc === 'string' ? tc : tc.id;
                   const teamCapability =
-                    typeof tc === 'string'
-                      ? teamCapabilityMap.get(capabilityId)
-                      : tc;
+                    typeof tc === 'string' ? teamCapabilityMap.get(capabilityId) : tc;
 
                   const capability = capabilityMap.get(capabilityId);
 
                   if (!capability || !teamCapability) {
-                    return <div class="capability-tile error">Capability not found: {capabilityId}</div>;
+                    return (
+                      <div class="capability-tile error">Capability not found: {capabilityId}</div>
+                    );
                   }
 
                   return (

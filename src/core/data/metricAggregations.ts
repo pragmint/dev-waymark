@@ -196,7 +196,7 @@ function enrichTeamCapability(
  */
 export function enrichExperimentsWithMetrics(
   experiments: Experiment[],
-  teamMetrics: TeamMetric[]
+  _teamMetrics: TeamMetric[]
 ): Experiment[] {
   // No transformation needed for now - just pass through
   // In future, we could resolve metric references to include actual data
