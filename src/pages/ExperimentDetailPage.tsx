@@ -1,54 +1,53 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type {
-  Team,
-  ActiveExperiment,
-  SupportingEvidence,
-  ActionItem,
-  DecisionRoles,
-  ExpectedImpact,
-} from '../core/data/teamTypes';
+import type { Team } from '../core/data/teamTypes';
+import type { Experiment, ExperimentActionItem, ExperimentDecisionRolesItem } from '../core/data/experimentTypes';
 import { getStatusBadge, calculateEndDate } from '../core/rendering/htmlHelpers';
 
 interface ExperimentDetailPageProps {
   teams: Team[];
   team: Team;
-  experiment: ActiveExperiment;
+  experiment: Experiment;
   practiceName: string;
 }
 
-const SupportingEvidenceSection: FC<{ evidence?: SupportingEvidence }> = ({ evidence }) => {
-  if (!evidence || (!evidence.metrics?.length && !evidence.anecdotes?.length)) {
+const SupportingEvidenceSection: FC<{ evidence?: Experiment['supportingEvidence'] }> = ({
+  evidence,
+}) => {
+  if (!evidence || evidence.length === 0) {
     return <p class="empty-state">No supporting evidence documented yet.</p>;
   }
 
   return (
     <div class="supporting-evidence">
-      {evidence.metrics && evidence.metrics.length > 0 && (
-        <div class="evidence-subsection">
-          <h4>Metrics</h4>
-          <ul class="evidence-list">
-            {evidence.metrics.map(metric => (
-              <li>{metric}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {evidence.anecdotes && evidence.anecdotes.length > 0 && (
-        <div class="evidence-subsection">
-          <h4>Anecdotes</h4>
-          <ul class="evidence-list">
-            {evidence.anecdotes.map(anecdote => (
-              <li>{anecdote}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {evidence.map(evidenceItem => {
+        return Object.entries(evidenceItem).map(([metricRef, details]) => (
+          <div class="evidence-subsection">
+            <h4>Metric: {metricRef}</h4>
+            <ul class="evidence-list">
+              {details.map(detail => (
+                <li>
+                  {detail['expected-impact'] && (
+                    <div>
+                      <strong>Expected Impact:</strong> {detail['expected-impact']}
+                    </div>
+                  )}
+                  {detail['expected-duration'] && (
+                    <div>
+                      <strong>Expected Duration:</strong> {detail['expected-duration']}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ));
+      })}
     </div>
   );
 };
 
-const ActionPlanSection: FC<{ actionPlan?: ActionItem[] }> = ({ actionPlan }) => {
+const ActionPlanSection: FC<{ actionPlan?: ExperimentActionItem[] }> = ({ actionPlan }) => {
   if (!actionPlan || actionPlan.length === 0) {
     return <p class="empty-state">No action plan defined yet.</p>;
   }
@@ -59,63 +58,77 @@ const ActionPlanSection: FC<{ actionPlan?: ActionItem[] }> = ({ actionPlan }) =>
         <div class="action-item">
           <div class="action-item-header">
             <span class="action-item-number">{index + 1}</span>
-            <span class="action-item-task">{item.task}</span>
+            <span class="action-item-task">{item.title}</span>
+            <span class="action-item-status">{item.status}</span>
           </div>
           <div class="action-item-assignees">
-            <strong>Assigned to:</strong> {item.assignees.join(', ')}
+            <strong>Assigned to:</strong> {item['assigned-to']}
           </div>
+          {item.link && (
+            <div class="action-item-link">
+              <a href={item.link} target="_blank" rel="noopener noreferrer">
+                View task →
+              </a>
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 };
 
-const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
-  if (!roles) {
+const DecisionRolesSection: FC<{ roles?: ExperimentDecisionRolesItem[] }> = ({ roles }) => {
+  if (!roles || roles.length === 0) {
+    return <p class="empty-state">Decision roles not defined yet.</p>;
+  }
+
+  // Flatten roles array (it's an array of role objects)
+  const allRoles = roles[0];
+  if (!allRoles) {
     return <p class="empty-state">Decision roles not defined yet.</p>;
   }
 
   return (
     <div class="decision-roles">
-      {roles.decisionMaker && roles.decisionMaker.length > 0 && (
+      {allRoles.responsible && allRoles.responsible.length > 0 && (
         <div class="role-section">
-          <h4>Decision Maker</h4>
-          <p class="role-description">Final call on whether to adopt the practice</p>
-          <ul class="role-list">
-            {roles.decisionMaker.map(person => (
-              <li>{person}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {roles.contributors && roles.contributors.length > 0 && (
-        <div class="role-section">
-          <h4>Contributors / Implementers</h4>
+          <h4>Responsible</h4>
           <p class="role-description">Actively working on the experiment</p>
           <ul class="role-list">
-            {roles.contributors.map(person => (
+            {allRoles.responsible.map(person => (
               <li>{person}</li>
             ))}
           </ul>
         </div>
       )}
-      {roles.consulted && roles.consulted.length > 0 && (
+      {allRoles.accountable && allRoles.accountable.length > 0 && (
+        <div class="role-section">
+          <h4>Accountable</h4>
+          <p class="role-description">Final authority on decisions</p>
+          <ul class="role-list">
+            {allRoles.accountable.map(person => (
+              <li>{person}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {allRoles.consulted && allRoles.consulted.length > 0 && (
         <div class="role-section">
           <h4>Consulted</h4>
           <p class="role-description">Input sought before decisions are made</p>
           <ul class="role-list">
-            {roles.consulted.map(person => (
+            {allRoles.consulted.map(person => (
               <li>{person}</li>
             ))}
           </ul>
         </div>
       )}
-      {roles.informed && roles.informed.length > 0 && (
+      {allRoles.informed && allRoles.informed.length > 0 && (
         <div class="role-section">
           <h4>Informed</h4>
           <p class="role-description">Kept informed of progress and decisions</p>
           <ul class="role-list">
-            {roles.informed.map(person => (
+            {allRoles.informed.map(person => (
               <li>{person}</li>
             ))}
           </ul>
@@ -125,28 +138,6 @@ const DecisionRolesSection: FC<{ roles?: DecisionRoles }> = ({ roles }) => {
   );
 };
 
-const ExpectedImpactSection: FC<{ impact?: ExpectedImpact }> = ({ impact }) => {
-  if (!impact || (!impact.metrics && !impact.anecdotes)) {
-    return <p class="empty-state">Expected impact not documented yet.</p>;
-  }
-
-  return (
-    <div class="expected-impact">
-      {impact.metrics && (
-        <div class="impact-subsection">
-          <h4>Metrics Impact</h4>
-          <p>{impact.metrics}</p>
-        </div>
-      )}
-      {impact.anecdotes && (
-        <div class="impact-subsection">
-          <h4>Qualitative Impact</h4>
-          <p>{impact.anecdotes}</p>
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
   teams,
@@ -159,7 +150,10 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
     month: 'long',
     day: 'numeric',
   });
-  const endDate = calculateEndDate(experiment.startDate, experiment.duration);
+  const duration = experiment.expectedDurationInWeeks ? `${experiment.expectedDurationInWeeks} weeks` : undefined;
+  const endDate = experiment.expectedDurationInWeeks
+    ? calculateEndDate(experiment.startDate, duration)
+    : 'Not specified';
 
   return (
     <Page
@@ -186,7 +180,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
           </div>
           <div class="meta-item">
             <span class="meta-label">Practice:</span>
-            <a href={`/catalog/practice/${experiment.practiceId}/`} class="meta-value">
+            <a href={`/catalog/practice/${experiment.practice}/`} class="meta-value">
               {practiceName}
             </a>
           </div>
@@ -194,10 +188,12 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
             <span class="meta-label">Started:</span>
             <span class="meta-value">{startDate}</span>
           </div>
-          <div class="meta-item">
-            <span class="meta-label">Duration:</span>
-            <span class="meta-value">{experiment.duration || 'Not specified'}</span>
-          </div>
+          {duration && (
+            <div class="meta-item">
+              <span class="meta-label">Duration:</span>
+              <span class="meta-value">{duration}</span>
+            </div>
+          )}
           <div class="meta-item">
             <span class="meta-label">Expected End:</span>
             <span class="meta-value">{endDate}</span>
@@ -226,24 +222,18 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
         </section>
 
         <section class="experiment-section">
-          <h2>Decision-Making Roles</h2>
+          <h2>Decision-Making Roles (RACI)</h2>
           <p class="section-intro">
             Who has what role in the decision to adopt or abandon this practice.
           </p>
           <DecisionRolesSection roles={experiment.decisionRoles} />
         </section>
 
-        <section class="experiment-section">
-          <h2>Expected Impact</h2>
-          <p class="section-intro">What we expect to achieve if this experiment is successful.</p>
-          <ExpectedImpactSection impact={experiment.expectedImpact} />
-        </section>
-
         <div class="experiment-actions">
           <a href={`/team/${team.id}/`} class="btn btn-secondary">
             ← Back to {team.name}
           </a>
-          <a href={`/catalog/practice/${experiment.practiceId}/`} class="btn btn-primary">
+          <a href={`/catalog/practice/${experiment.practice}/`} class="btn btn-primary">
             View Practice Details
           </a>
         </div>

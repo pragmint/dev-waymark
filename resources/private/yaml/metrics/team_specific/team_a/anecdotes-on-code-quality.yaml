@@ -1,0 +1,5 @@
+data:
+  - date: 27.1.2026
+    value: The code quality seems to be getting in the way on a routine basis.
+  - date: 26.1.2026
+    value: Seemingly every time I run the tests, something new is broken.

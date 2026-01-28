@@ -1,9 +1,11 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, ActiveExperiment, TeamCapability } from '../core/data/teamTypes';
+import type { Team, TeamCapability } from '../core/data/teamTypes';
+import type { Experiment } from '../core/data/experimentTypes';
 import type { Capability } from '../core/data/capabilityTypes';
 import type { Practice } from '../shell/loaders/practiceLoader';
+import type { TeamMetric } from '../shell/loaders/metricLoader';
 import { getStatusBadge } from '../core/rendering/htmlHelpers';
 
 interface TeamDetailPageProps {
@@ -13,37 +15,46 @@ interface TeamDetailPageProps {
   capabilityMap: Map<string, Capability>;
   teamCapabilityMap: Map<string, TeamCapability>;
   practiceMap: Map<string, Practice>;
+  experiments: Experiment[];
+  teamMetrics: TeamMetric[];
 }
 
-const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }> = ({
+const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
   experiment,
   practiceName,
 }) => {
+  const duration = experiment.expectedDurationInWeeks
+    ? `${experiment.expectedDurationInWeeks} weeks`
+    : undefined;
+
   return (
-    <a href={`/experiment/${experiment.id}/`} class="experiment-card-link">
-      <div class="experiment-card">
-        <div class="experiment-header">
-          <h3>{practiceName}</h3>
-          <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
-        </div>
-        <div class="experiment-meta">
-          <span class="experiment-date">
-            Started:{' '}
-            {new Date(experiment.startDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </span>
-          {experiment.duration && <span class="experiment-duration">{experiment.duration}</span>}
-        </div>
-        <div class="experiment-hypothesis">
-          <strong>Hypothesis:</strong>
-          <p>{experiment.hypothesis}</p>
-        </div>
-        <div class="experiment-view-details">View Details →</div>
+    <div class="experiment-card">
+      <div class="experiment-header">
+        <h3><a href={`/experiment/${experiment.id}/`}>{experiment.title}</a></h3>
+        <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
       </div>
-    </a>
+      <div class="experiment-supporting-practice">
+        Supporting practice: <a href={`/catalog/practice/${experiment.practice}/`}>{practiceName}</a>
+      </div>
+      <div class="experiment-meta">
+        <span class="experiment-date">
+          Started:{' '}
+          {new Date(experiment.startDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </span>
+        {duration && <span class="experiment-duration">{duration}</span>}
+      </div>
+      <div class="experiment-hypothesis">
+        <strong>Hypothesis:</strong>
+        <p>{experiment.hypothesis}</p>
+      </div>
+      <div class="experiment-view-details">
+        <a href={`/experiment/${experiment.id}/`}>View Details →</a>
+      </div>
+    </div>
   );
 };
 
@@ -54,6 +65,8 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   capabilityMap,
   teamCapabilityMap,
   practiceMap,
+  experiments,
+  teamMetrics,
 }) => {
   return (
     <Page title={team.name} heading={team.name} activePage={team.id} teams={teams}>
@@ -119,11 +132,11 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
             Engineering practices the team is experimenting with to improve their delivery
             performance.
           </p>
-          {team.activeExperiments && team.activeExperiments.length > 0 ? (
+          {experiments && experiments.length > 0 ? (
             <div class="experiment-cards">
-              {team.activeExperiments.map(exp => {
-                const practice = practiceMap.get(exp.practiceId);
-                const practiceName = practice ? practice.title : exp.practiceId;
+              {experiments.map(exp => {
+                const practice = practiceMap.get(exp.practice);
+                const practiceName = practice ? practice.title : exp.practice;
                 return <ExperimentCard experiment={exp} practiceName={practiceName} />;
               })}
             </div>

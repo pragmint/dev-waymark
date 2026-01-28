@@ -98,18 +98,67 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<Metric[]> {
 
 /**
  * Pure I/O function - loads team-specific metrics from filesystem with validation
- * Each file contains metrics for a single team, filename pattern: {team-id}-{metric-name}.yaml
- * TODO: Implement when team metrics are needed in the UI
+ * Directory structure: metrics/team_specific/{team_id}/{metric-name}.yaml
  */
 export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
-  const dir = 'resources/private/yaml/metrics';
+  const baseDir = 'resources/private/yaml/metrics/team_specific';
 
-  // TODO: Implementation for future use
-  // 1. Read all .yaml files from the main metrics directory
-  // 2. Parse filename pattern to extract teamId and metricName
-  // 3. Validate using TeamMetricFileSchema
-  // 4. Return TeamMetric[] with team-specific data
+  try {
+    const teamDirs = await readdir(baseDir);
+    const teamMetrics: TeamMetric[] = [];
 
-  consoleLogger.info('Team metrics loader not yet implemented');
-  return [];
+    // Process each team directory
+    for (const teamDir of teamDirs) {
+      const teamDirPath = join(baseDir, teamDir);
+
+      // Skip non-directories
+      try {
+        const files = await readdir(teamDirPath);
+
+        // Convert team_a -> team-a
+        const teamId = teamDir.replace(/_/g, '-');
+
+        // Load each metric file
+        for (const file of files) {
+          if (!file.endsWith('.yaml')) continue;
+
+          const filePath = join(teamDirPath, file);
+          const metricName = file.replace('.yaml', '');
+
+          const content = await Bun.file(filePath).text();
+          const raw = parse(content);
+
+          try {
+            // Parse with runtime validation
+            const metricFile = TeamMetricFileSchema.parse(raw);
+
+            teamMetrics.push({
+              teamId,
+              metricName,
+              data: metricFile.data,
+            });
+          } catch (error) {
+            if (error instanceof z.ZodError && error.errors) {
+              const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+              consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
+              throw new ValidationError('TeamMetric', file, details);
+            }
+            throw error;
+          }
+        }
+      } catch (err) {
+        // Skip if not a directory or can't read
+        continue;
+      }
+    }
+
+    consoleLogger.info(`Loaded ${teamMetrics.length} team metrics`);
+    return teamMetrics;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      consoleLogger.warn('Team metrics directory not found, returning empty array');
+      return [];
+    }
+    throw error;
+  }
 }

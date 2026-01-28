@@ -1,8 +1,10 @@
 import type { Team, TeamCapability } from '../../core/data/teamTypes';
+import type { Experiment } from '../../core/data/experimentTypes';
 import type { Capability, TrendDirection } from '../../core/data/capabilityTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
-import type { Metric } from '../../shell/loaders/metricLoader';
+import type { Metric, TeamMetric } from '../../shell/loaders/metricLoader';
 import { findTeamById } from '../../core/data/teamQueries';
+import { findExperimentsByTeamId } from '../../core/data/experimentQueries';
 import { getAllCapabilities } from '../../core/data/capabilityQueries';
 import { loadPracticeFromFilesystem } from '../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../core/errors';
@@ -15,6 +17,8 @@ export interface TeamDetailPageData {
   capabilityMap: Map<string, Capability>;
   teamCapabilityMap: Map<string, TeamCapability>;
   practiceMap: Map<string, Practice>;
+  experiments: Experiment[];
+  teamMetrics: TeamMetric[];
 }
 
 /**
@@ -85,13 +89,21 @@ export async function prepareTeamDetailData(
   teamId: string,
   teams: Team[],
   capabilities: Capability[],
-  metrics: Metric[]
+  capabilityMetrics: Metric[],
+  allExperiments: Experiment[],
+  allTeamMetrics: TeamMetric[]
 ): Promise<TeamDetailPageData> {
   // Find the requested team
   const team = findTeamById(teams, teamId);
   if (!team) {
     throw new NotFoundError('Team', teamId);
   }
+
+  // Get experiments for this team
+  const experiments = findExperimentsByTeamId(allExperiments, teamId);
+
+  // Get team metrics for this team
+  const teamMetrics = allTeamMetrics.filter(m => m.teamId === teamId);
 
   // Prepare capability data for rendering
   const allCapabilities = getAllCapabilities(capabilities);
@@ -100,16 +112,41 @@ export async function prepareTeamDetailData(
   // Enrich all capabilities with team's metric data
   const teamCapabilityMap = new Map<string, TeamCapability>();
   for (const capability of allCapabilities) {
-    const enrichedCapability = enrichCapabilityWithTeamMetrics(capability.id, teamId, metrics);
+    const enrichedCapability = enrichCapabilityWithTeamMetrics(
+      capability.id,
+      teamId,
+      capabilityMetrics
+    );
     teamCapabilityMap.set(capability.id, enrichedCapability);
   }
 
-  // Load practices for all active experiments
+  // Load practices for all experiments (new and old format)
   const practiceMap = new Map<string, Practice>();
-  for (const experiment of team.activeExperiments) {
-    const practice = await loadPracticeFromFilesystem(experiment.practiceId);
-    if (practice) {
-      practiceMap.set(experiment.practiceId, practice);
+
+  // Load practices from new experiments
+  for (const experiment of experiments) {
+    try {
+      const practice = await loadPracticeFromFilesystem(experiment.practice);
+      if (practice) {
+        practiceMap.set(experiment.practice, practice);
+      }
+    } catch (error) {
+      // Practice file doesn't exist - skip it
+      // The UI will fall back to displaying the practice ID
+    }
+  }
+
+  // Load practices from old activeExperiments (if present)
+  if (team.activeExperiments) {
+    for (const experiment of team.activeExperiments) {
+      try {
+        const practice = await loadPracticeFromFilesystem(experiment.practiceId);
+        if (practice) {
+          practiceMap.set(experiment.practiceId, practice);
+        }
+      } catch (error) {
+        // Practice file doesn't exist - skip it
+      }
     }
   }
 
@@ -120,5 +157,7 @@ export async function prepareTeamDetailData(
     capabilityMap,
     teamCapabilityMap,
     practiceMap,
+    experiments,
+    teamMetrics,
   };
 }

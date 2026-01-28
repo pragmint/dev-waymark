@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'sass:color';
 
 /* Team Detail Page */
 .team-detail-container {
@@ -66,22 +67,6 @@
   gap: $spacing-xl;
 }
 
-.experiment-card-link {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  transition: transform $transition-fast;
-
-  &:hover {
-    transform: translateY(-0.2rem);
-
-    .experiment-card {
-      border-color: $primary-color;
-      box-shadow: 0 0.4rem 1.2rem rgba(0, 123, 255, 0.15);
-    }
-  }
-}
-
 .experiment-card {
   display: flex;
   flex-direction: column;
@@ -91,6 +76,11 @@
   padding: $spacing-xxl;
   box-shadow: $shadow-sm;
   transition: all $transition-fast;
+
+  &:hover {
+    border-color: $primary-color;
+    box-shadow: 0 0.4rem 1.2rem rgba(0, 123, 255, 0.15);
+  }
 }
 
 .experiment-header {
@@ -103,7 +93,6 @@
   h3 {
     flex: 1;
     font-size: $font-xl;
-    color: $text-primary;
     margin: 0;
     font-weight: 600;
     line-height: 1.3;
@@ -128,6 +117,24 @@
   font-size: 1.3rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.experiment-supporting-practice {
+  color: $text-secondary;
+  font-size: $font-sm;
+  margin-bottom: $spacing-md;
+  line-height: 1.5;
+
+  a {
+    color: $primary-color;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: color.adjust($primary-color, $lightness: -10%);
+      text-decoration: underline;
+    }
+  }
 }
 
 .experiment-meta {
@@ -158,9 +165,19 @@
   display: flex;
   justify-content: flex-end;
   margin-top: $spacing-lg;
-  color: $primary-color;
   font-size: $font-sm;
   font-weight: 600;
+
+  a {
+    color: $primary-color;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: color.adjust($primary-color, $lightness: -10%);
+      text-decoration: underline;
+    }
+  }
 }
 
 .experiment-hypothesis {

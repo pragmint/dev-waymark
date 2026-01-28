@@ -43,11 +43,21 @@ export const TeamCapabilitySchema = z.object({
   trend: TrendDirectionSchema.nullable().default(null),
 });
 
+// Support both old format (objects) and new format (strings) for capabilities
+export const TeamCapabilityReferenceSchema = z.string();
+
 export const TeamSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
-  targetedCapabilities: z.array(TeamCapabilitySchema).optional().default([]),
+  // Support both old and new formats during transition
+  targetedCapabilities: z
+    .union([
+      z.array(TeamCapabilitySchema), // Old format: objects with id, currentScore, trend
+      z.array(TeamCapabilityReferenceSchema), // New format: just capability IDs
+    ])
+    .optional()
+    .default([]),
   nonTargetedCapabilities: z.array(TeamCapabilitySchema).optional().default([]),
   activeExperiments: z.array(ActiveExperimentSchema).optional().default([]),
 });
@@ -60,3 +70,28 @@ export type DecisionRoles = z.infer<typeof DecisionRolesSchema>;
 export type ActiveExperiment = z.infer<typeof ActiveExperimentSchema>;
 export type TeamCapability = z.infer<typeof TeamCapabilitySchema>;
 export type Team = z.infer<typeof TeamSchema>;
+
+/**
+ * Normalizes team capabilities to consistent format
+ * Converts new format (strings) to old format (objects with null scores)
+ * This ensures internal data structure stays consistent
+ */
+export function normalizeTeamCapabilities(team: Team): TeamCapability[] {
+  if (!team.targetedCapabilities || team.targetedCapabilities.length === 0) {
+    return [];
+  }
+
+  const first = team.targetedCapabilities[0];
+
+  // Old format: objects with id, currentScore, trend
+  if (typeof first === 'object' && 'id' in first) {
+    return team.targetedCapabilities as TeamCapability[];
+  }
+
+  // New format: just strings - convert to objects with null scores
+  return (team.targetedCapabilities as string[]).map(id => ({
+    id,
+    currentScore: null,
+    trend: null,
+  }));
+}

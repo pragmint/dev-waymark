@@ -1,6 +1,8 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric } from '../../shell/loaders/metricLoader';
+import type { Metric, TeamMetric } from '../../shell/loaders/metricLoader';
 import type { Team, TeamCapability } from './teamTypes';
+import type { Experiment } from './experimentTypes';
+import { normalizeTeamCapabilities } from './teamSchemas';
 import { parseDate } from '../utils/dateFormatter';
 
 /**
@@ -20,7 +22,8 @@ export function enrichCapabilitiesWithMetrics(
   // Count teams that are actively targeting each capability
   const targetingCounts = new Map<string, number>();
   teams.forEach(team => {
-    team.targetedCapabilities?.forEach(tc => {
+    const normalizedCapabilities = normalizeTeamCapabilities(team);
+    normalizedCapabilities.forEach(tc => {
       targetingCounts.set(tc.id, (targetingCounts.get(tc.id) || 0) + 1);
     });
   });
@@ -99,6 +102,7 @@ export function enrichCapabilitiesWithMetrics(
 
 /**
  * Enriches teams with capability scores from metrics
+ * Now handles both old format (objects) and new format (strings)
  */
 export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[] {
   // Create a map of metrics by capability ID
@@ -108,19 +112,25 @@ export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[]
   });
 
   return teams.map(team => {
-    // Build maps for targeted and non-targeted capabilities
-    const targetedCapabilities = team.targetedCapabilities.map(tc =>
+    // Normalize capabilities to consistent format
+    const normalizedTargeted = normalizeTeamCapabilities(team);
+
+    // Enrich with metrics
+    const targetedCapabilities = normalizedTargeted.map(tc =>
       enrichTeamCapability(tc, team.id, metricsMap)
     );
 
-    const nonTargetedCapabilities = team.nonTargetedCapabilities.map(tc =>
-      enrichTeamCapability(tc, team.id, metricsMap)
-    );
+    // Handle nonTargetedCapabilities (may not exist in new format)
+    const nonTargetedCapabilities = team.nonTargetedCapabilities
+      ? team.nonTargetedCapabilities.map(tc => enrichTeamCapability(tc, team.id, metricsMap))
+      : [];
 
     return {
       ...team,
       targetedCapabilities,
       nonTargetedCapabilities,
+      // Keep activeExperiments for backward compatibility if present
+      activeExperiments: team.activeExperiments || [],
     };
   });
 }
@@ -178,4 +188,30 @@ function enrichTeamCapability(
     currentScore,
     trend,
   };
+}
+
+/**
+ * Enriches experiments with resolved metric data
+ * This allows the UI to display actual metric values referenced in experiments
+ */
+export function enrichExperimentsWithMetrics(
+  experiments: Experiment[],
+  teamMetrics: TeamMetric[]
+): Experiment[] {
+  // No transformation needed for now - just pass through
+  // In future, we could resolve metric references to include actual data
+  // For now, experiments just store the reference strings
+  return experiments;
+}
+
+/**
+ * Helper to resolve a metric reference from an experiment
+ * Returns the actual metric data for a given reference string
+ * Example: resolveMetricReference("team-a/linter-error-count", teamMetrics)
+ */
+export function resolveMetricReference(
+  metricRef: string,
+  teamMetrics: TeamMetric[]
+): TeamMetric | undefined {
+  return teamMetrics.find(m => `${m.teamId}/${m.metricName}` === metricRef);
 }

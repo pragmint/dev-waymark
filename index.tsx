@@ -11,10 +11,15 @@ import {
   loadAllPracticesFromFilesystem,
 } from './src/shell/loaders/practiceLoader';
 import { loadSummariesFromFilesystem } from './src/shell/loaders/summaryLoader';
-import { loadCapabilityMetricsFromFilesystem } from './src/shell/loaders/metricLoader';
+import {
+  loadCapabilityMetricsFromFilesystem,
+  loadTeamMetricsFromFilesystem,
+} from './src/shell/loaders/metricLoader';
+import { loadExperimentsFromFilesystem } from './src/shell/loaders/experimentLoader';
 import {
   enrichCapabilitiesWithMetrics,
   enrichTeamsWithMetrics,
+  enrichExperimentsWithMetrics,
 } from './src/core/data/metricAggregations';
 import { getAllCapabilities, findCapabilityById } from './src/core/data/capabilityQueries';
 import { NotFoundError } from './src/core/errors';
@@ -33,12 +38,15 @@ import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDeta
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
 const rawTeams = await loadTeamsFromFilesystem();
-const metrics = await loadCapabilityMetricsFromFilesystem();
+const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
+const teamMetrics = await loadTeamMetricsFromFilesystem();
+const experiments = await loadExperimentsFromFilesystem();
 const summaries = await loadSummariesFromFilesystem();
 
 // --- PURE TRANSFORMATION ---
-const teams = enrichTeamsWithMetrics(rawTeams, metrics);
-const capabilities = enrichCapabilitiesWithMetrics(rawCapabilities, metrics, teams);
+const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
+const capabilities = enrichCapabilitiesWithMetrics(rawCapabilities, capabilityMetrics, teams);
+const enrichedExperiments = enrichExperimentsWithMetrics(experiments, teamMetrics);
 
 // --- HONO APP SETUP ---
 const app = new Hono();
@@ -122,14 +130,21 @@ app.get('/catalog/resource/', c => {
 // Team detail page
 app.get('/team/:teamId/', async c => {
   const teamId = c.req.param('teamId');
-  const data = await prepareTeamDetailData(teamId, teams, capabilities, metrics);
+  const data = await prepareTeamDetailData(
+    teamId,
+    teams,
+    capabilities,
+    capabilityMetrics,
+    enrichedExperiments,
+    teamMetrics
+  );
   return c.html(<TeamDetailPage {...data} />);
 });
 
 // Experiment detail page
 app.get('/experiment/:experimentId/', async c => {
   const experimentId = c.req.param('experimentId');
-  const data = await prepareExperimentDetailData(experimentId, teams);
+  const data = await prepareExperimentDetailData(experimentId, teams, enrichedExperiments);
   return c.html(<ExperimentDetailPage {...data} />);
 });
 
