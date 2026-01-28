@@ -11,7 +11,7 @@ import {
   loadAllPracticesFromFilesystem,
 } from './src/shell/loaders/practiceLoader';
 import { loadSummariesFromFilesystem } from './src/shell/loaders/summaryLoader';
-import { loadMetricsFromFilesystem } from './src/shell/loaders/metricLoader';
+import { loadCapabilityMetricsFromFilesystem } from './src/shell/loaders/metricLoader';
 import {
   enrichCapabilitiesWithMetrics,
   enrichTeamsWithMetrics,
@@ -33,7 +33,7 @@ import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDeta
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
 const rawTeams = await loadTeamsFromFilesystem();
-const metrics = await loadMetricsFromFilesystem();
+const metrics = await loadCapabilityMetricsFromFilesystem();
 const summaries = await loadSummariesFromFilesystem();
 
 // --- PURE TRANSFORMATION ---

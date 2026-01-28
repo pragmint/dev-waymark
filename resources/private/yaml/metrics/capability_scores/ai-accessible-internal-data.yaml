@@ -1,7 +1,7 @@
 data:
   - team: team-a
     date: 28.1.2026
-    value: 1
+    value: 1.5
   - team: team-a
     date: 27.1.2026
     value: 2

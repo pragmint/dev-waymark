@@ -5,11 +5,11 @@ import { z } from 'zod';
 import { ValidationError } from '../../core/errors';
 import { consoleLogger } from '../../core/logger';
 
-// Zod schemas for metric data validation
+// Zod schemas for capability metric data validation
 export const MetricDataPointSchema = z.object({
-  team: z.string(),
+  team: z.string().optional(),
   date: z.string(), // Format: yy.m.dd or similar
-  value: z.number().min(0).max(4),
+  value: z.union([z.number(), z.string()]), // Can be number (capability scores) or string (anecdotes, etc)
 });
 
 export const MetricFileSchema = z.object({
@@ -24,12 +24,32 @@ export interface Metric {
   data: MetricDataPoint[];
 }
 
+// Zod schemas for team metric data validation
+export const TeamMetricDataPointSchema = z.object({
+  date: z.string(),
+  value: z.union([z.number(), z.string()]),
+  // No team field - team is derived from filename
+});
+
+export const TeamMetricFileSchema = z.object({
+  data: z.array(TeamMetricDataPointSchema),
+});
+
+export type TeamMetricDataPoint = z.infer<typeof TeamMetricDataPointSchema>;
+export type TeamMetricFile = z.infer<typeof TeamMetricFileSchema>;
+
+export interface TeamMetric {
+  teamId: string;
+  metricName: string;
+  data: TeamMetricDataPoint[];
+}
+
 /**
- * Pure I/O function - loads metrics from filesystem with validation
+ * Pure I/O function - loads capability metrics from filesystem with validation
  * Each file corresponds to a capability and contains team scores over time
  */
-export async function loadMetricsFromFilesystem(): Promise<Metric[]> {
-  const dir = 'resources/private/yaml/metrics';
+export async function loadCapabilityMetricsFromFilesystem(): Promise<Metric[]> {
+  const dir = 'resources/private/yaml/metrics/capability_scores';
 
   try {
     const files = await readdir(dir);
@@ -54,7 +74,7 @@ export async function loadMetricsFromFilesystem(): Promise<Metric[]> {
               data: metricFile.data,
             };
           } catch (error) {
-            if (error instanceof z.ZodError) {
+            if (error instanceof z.ZodError && error.errors) {
               const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
               consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
               throw new ValidationError('Metric', file, details);
@@ -64,14 +84,32 @@ export async function loadMetricsFromFilesystem(): Promise<Metric[]> {
         })
     );
 
-    consoleLogger.info(`Loaded ${metrics.length} metrics`);
+    consoleLogger.info(`Loaded ${metrics.length} capability metrics`);
 
     return metrics;
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      consoleLogger.warn('Metrics directory not found, returning empty array');
+      consoleLogger.warn('Capability metrics directory not found, returning empty array');
       return [];
     }
     throw error;
   }
+}
+
+/**
+ * Pure I/O function - loads team-specific metrics from filesystem with validation
+ * Each file contains metrics for a single team, filename pattern: {team-id}-{metric-name}.yaml
+ * TODO: Implement when team metrics are needed in the UI
+ */
+export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
+  const dir = 'resources/private/yaml/metrics';
+
+  // TODO: Implementation for future use
+  // 1. Read all .yaml files from the main metrics directory
+  // 2. Parse filename pattern to extract teamId and metricName
+  // 3. Validate using TeamMetricFileSchema
+  // 4. Return TeamMetric[] with team-specific data
+
+  consoleLogger.info('Team metrics loader not yet implemented');
+  return [];
 }
