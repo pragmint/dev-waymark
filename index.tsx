@@ -5,7 +5,10 @@ import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { errorHandler } from './src/shell/middleware/errorHandler';
 import { loadTeamsFromFilesystem } from './src/shell/loaders/teamLoader';
-import { loadCapabilitiesFromFilesystem } from './src/shell/loaders/capabilityLoader';
+import {
+  loadCapabilitiesFromFilesystem,
+  enrichCapabilitiesWithAssessment,
+} from './src/shell/loaders/capabilityLoader';
 import {
   loadPracticeFromFilesystem,
   loadAllPracticesFromFilesystem,
@@ -41,6 +44,7 @@ import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDeta
 
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
+const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(rawCapabilities);
 const rawTeams = await loadTeamsFromFilesystem();
 const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
 const teamMetrics = await loadTeamMetricsFromFilesystem();
@@ -49,7 +53,11 @@ const summaries = await loadSummariesFromFilesystem();
 
 // --- PURE TRANSFORMATION ---
 const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
-const capabilities = enrichCapabilitiesWithMetrics(rawCapabilities, capabilityMetrics, teams);
+const capabilities = enrichCapabilitiesWithMetrics(
+  capabilitiesWithAssessment,
+  capabilityMetrics,
+  teams
+);
 const enrichedExperiments = enrichExperimentsWithMetrics(experiments, teamMetrics);
 
 // --- HONO APP SETUP ---

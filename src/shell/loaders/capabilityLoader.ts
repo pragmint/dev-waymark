@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import type { Capability } from '../../core/data/capabilityTypes';
 import { filenameToTitle } from '../../core/utils/stringUtils';
+import { parseAssessmentMarkdown } from './assessmentParser';
 
 /**
  * Pure I/O function - loads capabilities from markdown files
@@ -33,4 +34,24 @@ export async function loadCapabilitiesFromFilesystem(): Promise<Capability[]> {
     });
 
   return capabilities;
+}
+
+/**
+ * Enriches capabilities with maturity level descriptions from the assessment markdown
+ */
+export async function enrichCapabilitiesWithAssessment(
+  capabilities: Capability[]
+): Promise<Capability[]> {
+  const assessmentData = await parseAssessmentMarkdown();
+
+  return capabilities.map(capability => {
+    const maturityLevels = assessmentData.get(capability.id);
+    if (maturityLevels) {
+      return {
+        ...capability,
+        maturityLevels,
+      };
+    }
+    return capability;
+  });
 }

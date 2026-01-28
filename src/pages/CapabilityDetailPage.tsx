@@ -1,13 +1,94 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../core/data/teamTypes';
-import type { Capability } from '../core/data/capabilityTypes';
+import type { Capability, MaturityLevel } from '../core/data/capabilityTypes';
 import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../core/rendering/htmlHelpers';
 
 interface CapabilityDetailPageProps {
   teams: Team[];
   capability: Capability;
   selectedTeam: string;
+}
+
+/**
+ * Group maturity levels by dimension
+ */
+function groupByDimension(
+  maturityLevels: MaturityLevel[]
+): Map<string | undefined, MaturityLevel[]> {
+  const grouped = new Map<string | undefined, MaturityLevel[]>();
+
+  for (const level of maturityLevels) {
+    const dimension = level.dimension;
+    if (!grouped.has(dimension)) {
+      grouped.set(dimension, []);
+    }
+    grouped.get(dimension)!.push(level);
+  }
+
+  // Sort levels within each dimension
+  for (const levels of grouped.values()) {
+    levels.sort((a, b) => a.level - b.level);
+  }
+
+  return grouped;
+}
+
+/**
+ * Render maturity level cards
+ */
+function renderMaturityLevels(capability: Capability) {
+  if (!capability.maturityLevels || capability.maturityLevels.length === 0) {
+    return null;
+  }
+
+  const grouped = groupByDimension(capability.maturityLevels);
+  const hasMultipleDimensions =
+    grouped.size > 1 || (grouped.size === 1 && grouped.keys().next().value !== undefined);
+
+  return (
+    <div class="maturity-display">
+      {hasMultipleDimensions && (
+        <div class="dimension-note">
+          <strong>ℹ️ Note:</strong> This capability is assessed across multiple dimensions. Your
+          current score of <strong>{capability.currentScore}</strong> is an average across all
+          dimensions.
+        </div>
+      )}
+
+      {Array.from(grouped.entries()).map(([dimension, levels]) => (
+        <div class="maturity-dimensions">
+          {dimension && <h3 class="dimension-header">{dimension}</h3>}
+          <div class="maturity-grid">
+            {levels.map(level => {
+              // Only highlight if score is a whole number matching this level
+              const isExactMatch = capability.currentScore === level.level;
+              // Check if this level is part of an approaching state (decimal score)
+              const isDecimalScore = capability.currentScore % 1 !== 0;
+              const isApproaching =
+                isDecimalScore &&
+                capability.currentScore > level.level - 1 &&
+                capability.currentScore <= level.level;
+
+              return (
+                <div
+                  class={`maturity-card ${isExactMatch ? 'current' : ''} ${isApproaching ? 'approaching' : ''}`}
+                >
+                  <div class="maturity-card-header">
+                    <span class="maturity-card-level">Level {level.level}</span>
+                    {isExactMatch && <span class="current-badge">Current</span>}
+                    {isApproaching && <span class="approaching-badge">Approaching</span>}
+                  </div>
+                  <h4 class="maturity-card-title">{level.title}</h4>
+                  <p class="maturity-card-description">{level.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
@@ -79,33 +160,47 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
 
           <section class="capability-section">
             <h2>Current State</h2>
-            <div class="maturity-level">
-              <div class="maturity-level-header">
-                <h3>Maturity Level: {capability.currentScore}</h3>
-                <span class="maturity-level-label">
-                  {getMaturityLevelLabel(capability.currentScore)}
-                </span>
-              </div>
-              <div class="maturity-progress">
-                <div class="maturity-progress-bar">
-                  <div
-                    class="maturity-progress-fill"
-                    style={`width: ${(capability.currentScore / 4) * 100}%`}
-                  ></div>
+            {capability.maturityLevels && capability.maturityLevels.length > 0 ? (
+              renderMaturityLevels(capability)
+            ) : (
+              <div>
+                <div class="maturity-level">
+                  <div class="maturity-level-header">
+                    <h3>Maturity Level: {capability.currentScore}</h3>
+                    <span class="maturity-level-label">
+                      {getMaturityLevelLabel(capability.currentScore)}
+                    </span>
+                  </div>
+                  <div class="maturity-progress">
+                    <div class="maturity-progress-bar">
+                      <div
+                        class="maturity-progress-fill"
+                        style={`width: ${(capability.currentScore / 4) * 100}%`}
+                      ></div>
+                    </div>
+                    <div class="maturity-levels">
+                      <span class={`level ${capability.currentScore >= 1 ? 'achieved' : ''}`}>
+                        1
+                      </span>
+                      <span class={`level ${capability.currentScore >= 2 ? 'achieved' : ''}`}>
+                        2
+                      </span>
+                      <span class={`level ${capability.currentScore >= 3 ? 'achieved' : ''}`}>
+                        3
+                      </span>
+                      <span class={`level ${capability.currentScore >= 4 ? 'achieved' : ''}`}>
+                        4
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div class="maturity-levels">
-                  <span class={`level ${capability.currentScore >= 1 ? 'achieved' : ''}`}>1</span>
-                  <span class={`level ${capability.currentScore >= 2 ? 'achieved' : ''}`}>2</span>
-                  <span class={`level ${capability.currentScore >= 3 ? 'achieved' : ''}`}>3</span>
-                  <span class={`level ${capability.currentScore >= 4 ? 'achieved' : ''}`}>4</span>
-                </div>
+                <p>
+                  The organization is currently at level {capability.currentScore}, demonstrating{' '}
+                  {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of
+                  this capability.
+                </p>
               </div>
-            </div>
-            <p>
-              The organization is currently at level {capability.currentScore}, demonstrating{' '}
-              {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of this
-              capability.
-            </p>
+            )}
           </section>
 
           <section class="capability-section">
