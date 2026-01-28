@@ -1,14 +1,12 @@
 (function () {
-  'use strict';
-
   // Handle expand/collapse of capabilities view
   const toggleViewLink = document.getElementById('toggle-view');
   const topCapabilities = document.getElementById('top-capabilities');
   const expandedCapabilities = document.getElementById('expanded-capabilities');
   let isExpanded = false;
 
-  if (toggleViewLink) {
-    toggleViewLink.addEventListener('click', function (e) {
+  if (toggleViewLink && topCapabilities && expandedCapabilities) {
+    toggleViewLink.addEventListener('click', (e: Event) => {
       e.preventDefault();
 
       isExpanded = !isExpanded;
@@ -26,35 +24,31 @@
   }
 
   // Handle capability tile clicks - navigate to capability catalog page
-  const capabilityTiles = document.querySelectorAll('.capability-tile');
+  const capabilityTiles = document.querySelectorAll<HTMLElement>('.capability-tile');
 
-  capabilityTiles.forEach(function (tile) {
-    tile.addEventListener('click', function () {
+  capabilityTiles.forEach((tile) => {
+    tile.addEventListener('click', () => {
       const capabilityId = tile.getAttribute('data-capability-id');
       if (capabilityId) {
-        // Navigate to the capability's catalog page
-        window.location.href = '/catalog/capability/' + capabilityId;
+        window.location.href = `/catalog/capability/${capabilityId}`;
       }
     });
   });
 
   // Handle summary date selector dropdown
-  const summaryDateSelect = document.getElementById('summary-date-select');
+  const summaryDateSelect = document.getElementById('summary-date-select') as HTMLSelectElement | null;
 
   if (summaryDateSelect) {
-    summaryDateSelect.addEventListener('change', function (e) {
-      const selectedDate = e.target.value;
-
-      // Get all options to find the most recent (first option)
-      const options = e.target.options;
+    summaryDateSelect.addEventListener('change', (e: Event) => {
+      const target = e.target as HTMLSelectElement;
+      const selectedDate = target.value;
+      const options = target.options;
       const mostRecentDate = options[0].value;
 
       if (selectedDate === mostRecentDate) {
-        // Navigate to the main overview page for the most recent summary
         window.location.href = '/';
       } else {
-        // Navigate to the archive page for older summaries
-        window.location.href = '/archive/' + selectedDate + '/';
+        window.location.href = `/archive/${selectedDate}/`;
       }
     });
   }

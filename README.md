@@ -5,8 +5,8 @@ A simple website that helps software and data engineering teams continuously exp
 ## Getting Started
 
 ```bash
-# Start the server
-bun start
+# Build the js/css
+bun run build
 
 # Development with hot reload
 bun run dev

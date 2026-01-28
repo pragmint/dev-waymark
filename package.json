@@ -5,7 +5,9 @@
   "scripts": {
     "start": "bun run index.tsx",
     "dev": "bun --watch index.tsx",
+    "build": "bun run build:css && bun run build:js",
     "build:css": "sass src/styles/main.scss:resources/public/style.css",
+    "build:js": "for file in src/scripts/*.ts; do bun build \"$file\" --outfile \"resources/public/$(basename \"$file\" .ts).js\"; done",
     "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
