@@ -7,15 +7,49 @@ import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../core/rend
 interface CapabilityDetailPageProps {
   teams: Team[];
   capability: Capability;
+  selectedTeam: string;
 }
 
-export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, capability }) => {
+export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
+  teams,
+  capability,
+  selectedTeam,
+}) => {
   const trendIcon = getTrendIcon(capability.trend);
   const trendLabel = getTrendLabel(capability.trend);
 
+  // Build team options for dropdown
+  const teamOptions = [
+    { value: 'all', label: 'Average' },
+    ...teams.map(team => ({
+      value: team.id,
+      label: team.name,
+    })),
+  ];
+
   return (
-    <Page title={capability.name} heading={capability.name} activePage="capabilities" teams={teams}>
+    <Page title={capability.name} heading="" activePage="capabilities" teams={teams}>
       <div class="capability-detail-container">
+        {/* Custom header with dropdown */}
+        <div class="capability-page-header">
+          <h1>{capability.name}</h1>
+          <div class="capability-filter">
+            <label for="team-filter" class="filter-label">
+              View score for:
+            </label>
+            <select
+              id="team-filter"
+              class="team-filter-dropdown"
+              onchange="window.location.href = window.location.pathname + (this.value === 'all' ? '' : '?team=' + this.value)"
+            >
+              {teamOptions.map(option => (
+                <option value={option.value} selected={option.value === selectedTeam}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div class="capability-header">
           <div class="capability-header-main">
             <div class="capability-meta">

@@ -87,11 +87,26 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
             {team.targetedCapabilities && team.targetedCapabilities.length > 0 ? (
               <div id="targeted-capabilities" class="capability-tiles-grid">
                 {team.targetedCapabilities.map(tc => {
-                  const capability = capabilityMap.get(tc.id);
-                  if (!capability) {
-                    return <div class="capability-tile error">Capability not found: {tc.id}</div>;
+                  // Handle both string and object formats
+                  const capabilityId = typeof tc === 'string' ? tc : tc.id;
+                  const teamCapability =
+                    typeof tc === 'string'
+                      ? teamCapabilityMap.get(capabilityId)
+                      : tc;
+
+                  const capability = capabilityMap.get(capabilityId);
+
+                  if (!capability || !teamCapability) {
+                    return <div class="capability-tile error">Capability not found: {capabilityId}</div>;
                   }
-                  return <TeamCapabilityTile teamCapability={tc} capability={capability} />;
+
+                  return (
+                    <TeamCapabilityTile
+                      teamCapability={teamCapability}
+                      capability={capability}
+                      teamId={team.id}
+                    />
+                  );
                 })}
               </div>
             ) : (
@@ -110,11 +125,16 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
                       <TeamCapabilityTile
                         teamCapability={{ id: capability.id, currentScore: null, trend: null }}
                         capability={capability}
+                        teamId={team.id}
                       />
                     );
                   }
                   return (
-                    <TeamCapabilityTile teamCapability={teamCapability} capability={capability} />
+                    <TeamCapabilityTile
+                      teamCapability={teamCapability}
+                      capability={capability}
+                      teamId={team.id}
+                    />
                   );
                 })}
               </div>

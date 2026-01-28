@@ -21,7 +21,11 @@ import {
   enrichTeamsWithMetrics,
   enrichExperimentsWithMetrics,
 } from './src/core/data/metricAggregations';
-import { getAllCapabilities, findCapabilityById } from './src/core/data/capabilityQueries';
+import {
+  getAllCapabilities,
+  findCapabilityById,
+  getCapabilityScoreForTeam,
+} from './src/core/data/capabilityQueries';
 import { NotFoundError } from './src/core/errors';
 import { OverviewPage } from './src/pages/OverviewPage';
 import { ComingSoonPage } from './src/pages/ComingSoonPage';
@@ -93,7 +97,19 @@ app.get('/catalog/capability/:capabilityId', async c => {
     throw new NotFoundError('Capability', capabilityId);
   }
 
-  return c.html(<CapabilityDetailPage teams={teams} capability={capability} />);
+  // Get team filter from query string
+  const teamFilter = c.req.query('team') || 'all';
+
+  // Calculate team-specific score
+  const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
+
+  return c.html(
+    <CapabilityDetailPage
+      teams={teams}
+      capability={filteredCapability}
+      selectedTeam={teamFilter}
+    />
+  );
 });
 
 // Practice catalog page

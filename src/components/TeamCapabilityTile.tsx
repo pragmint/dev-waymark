@@ -6,14 +6,24 @@ import { getTrendIcon } from '../core/rendering/htmlHelpers';
 interface TeamCapabilityTileProps {
   teamCapability: TeamCapability;
   capability: Capability;
+  teamId?: string;
 }
 
-export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({ teamCapability, capability }) => {
+export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({
+  teamCapability,
+  capability,
+  teamId,
+}) => {
   const scoreDisplay = teamCapability.currentScore !== null ? teamCapability.currentScore : '-';
   const trendIcon = teamCapability.trend !== null ? getTrendIcon(teamCapability.trend) : '';
 
+  // Build URL with team query parameter if teamId is provided
+  const capabilityUrl = teamId
+    ? `/catalog/capability/${capability.id}?team=${teamId}`
+    : `/catalog/capability/${capability.id}`;
+
   return (
-    <a href={`/catalog/capability/${capability.id}`} style="text-decoration: none; color: inherit;">
+    <a href={capabilityUrl} style="text-decoration: none; color: inherit;">
       <div class="capability-tile" data-capability-id={capability.id}>
         <div class="capability-tile-header">
           <h3 class="capability-tile-name">{capability.name}</h3>
