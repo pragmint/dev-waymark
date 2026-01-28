@@ -122,7 +122,7 @@ app.get('/catalog/resource/', c => {
 // Team detail page
 app.get('/team/:teamId/', async c => {
   const teamId = c.req.param('teamId');
-  const data = await prepareTeamDetailData(teamId, teams, capabilities);
+  const data = await prepareTeamDetailData(teamId, teams, capabilities, metrics);
   return c.html(<TeamDetailPage {...data} />);
 });
 

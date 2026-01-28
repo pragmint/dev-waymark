@@ -6,13 +6,7 @@ import type { Summary } from '../../core/data/summaryTypes';
 import { SummaryDateSchema } from '../../core/data/summaryTypes';
 import { ValidationError } from '../../core/errors';
 import { consoleLogger } from '../../core/logger';
-
-// Parse date string in dd.mm.yyyy format to a Date object
-function parseSummaryDate(dateString: string): Date {
-  const [day, month, year] = dateString.split('.');
-  // Month is 0-indexed in JavaScript Date
-  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-}
+import { parseDate } from '../../core/utils/dateFormatter';
 
 // Pure I/O function - loads summaries from filesystem
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
@@ -58,8 +52,8 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
 
     // Sort summaries by date, most recent first
     summaries.sort((a: Summary, b: Summary) => {
-      const dateA = parseSummaryDate(a.dateString);
-      const dateB = parseSummaryDate(b.dateString);
+      const dateA = parseDate(a.dateString);
+      const dateB = parseDate(b.dateString);
       return dateB.getTime() - dateA.getTime();
     });
 

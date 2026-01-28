@@ -9,20 +9,22 @@ interface TeamCapabilityTileProps {
 }
 
 export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({ teamCapability, capability }) => {
-  const trendIcon = getTrendIcon(teamCapability.trend);
+  const scoreDisplay = teamCapability.currentScore !== null ? teamCapability.currentScore : '-';
+  const trendIcon = teamCapability.trend !== null ? getTrendIcon(teamCapability.trend) : '';
 
   return (
     <a href={`/catalog/capability/${capability.id}`} style="text-decoration: none; color: inherit;">
       <div class="capability-tile" data-capability-id={capability.id}>
         <div class="capability-tile-header">
           <h3 class="capability-tile-name">{capability.name}</h3>
-          <span class={`capability-tile-trend ${teamCapability.trend}`}>{trendIcon}</span>
+          {teamCapability.trend !== null && (
+            <span class={`capability-tile-trend ${teamCapability.trend}`}>{trendIcon}</span>
+          )}
         </div>
         <div class="capability-tile-score">
-          <span class="capability-tile-score-current">{teamCapability.currentScore}</span>
+          <span class="capability-tile-score-current">{scoreDisplay}</span>
           <span class="capability-tile-score-max">/ 4</span>
         </div>
-        <div class="capability-tile-category">{capability.category}</div>
       </div>
     </a>
   );

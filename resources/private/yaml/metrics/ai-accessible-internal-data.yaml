@@ -1,10 +1,13 @@
 data:
   - team: team-a
-    date: 27.1.26
+    date: 28.1.2026
     value: 1
+  - team: team-a
+    date: 27.1.2026
+    value: 2
   - team: team-b
-    date: 27.1.26
+    date: 27.1.2026
     value: 2
   - team: team-c
-    date: 27.1.26
+    date: 27.1.2026
     value: 2

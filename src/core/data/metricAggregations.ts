@@ -1,6 +1,7 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
 import type { Metric } from '../../shell/loaders/metricLoader';
 import type { Team, TeamCapability } from './teamTypes';
+import { parseDate } from '../utils/dateFormatter';
 
 /**
  * Aggregates metrics to enrich capabilities with computed scores and trends
@@ -28,34 +29,50 @@ export function enrichCapabilitiesWithMetrics(
     const metric = metricsMap.get(capability.id);
 
     if (metric && metric.data.length > 0) {
-      // Calculate average score across all teams from the most recent data
-      // Group by date and take the most recent
-      const mostRecentDate = metric.data
-        .map(d => d.date)
-        .sort()
-        .reverse()[0];
-      const recentData = metric.data.filter(d => d.date === mostRecentDate);
+      // Calculate average score across all teams using each team's most recent value
+      // Group data by team
+      const teamDataMap = new Map<string, typeof metric.data>();
+      metric.data.forEach(dataPoint => {
+        if (!teamDataMap.has(dataPoint.team)) {
+          teamDataMap.set(dataPoint.team, []);
+        }
+        teamDataMap.get(dataPoint.team)!.push(dataPoint);
+      });
 
-      const avgScore = recentData.reduce((sum, d) => sum + d.value, 0) / recentData.length;
+      // Get most recent value for each team
+      const currentTeamValues: number[] = [];
+      const previousTeamValues: number[] = [];
+
+      teamDataMap.forEach(teamData => {
+        // Sort team's data by date (most recent first)
+        const sortedTeamData = teamData.sort(
+          (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
+        );
+
+        // Get current (most recent) value
+        currentTeamValues.push(sortedTeamData[0].value);
+
+        // Get previous value if it exists
+        if (sortedTeamData.length >= 2) {
+          previousTeamValues.push(sortedTeamData[1].value);
+        }
+      });
+
+      // Calculate average of all teams' most recent values
+      const avgScore = currentTeamValues.reduce((sum, v) => sum + v, 0) / currentTeamValues.length;
       const currentScore = Math.round(avgScore * 10) / 10;
 
-      // Calculate trend by comparing with previous data
-      const dates = [...new Set(metric.data.map(d => d.date))].sort().reverse();
+      // Calculate trend by comparing current average with previous average
       let trend: TrendDirection = 'stable';
 
-      if (dates.length >= 2) {
-        const previousDate = dates[1];
-        const previousData = metric.data.filter(d => d.date === previousDate);
+      if (previousTeamValues.length > 0) {
+        const prevAvg = previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
+        const scoreDiff = avgScore - prevAvg;
 
-        if (previousData.length > 0) {
-          const prevAvg = previousData.reduce((sum, d) => sum + d.value, 0) / previousData.length;
-          const scoreDiff = avgScore - prevAvg;
-
-          if (scoreDiff > 0.1) {
-            trend = 'up';
-          } else if (scoreDiff < -0.1) {
-            trend = 'down';
-          }
+        if (scoreDiff > 0.1) {
+          trend = 'up';
+        } else if (scoreDiff < -0.1) {
+          trend = 'down';
         }
       }
 
@@ -139,7 +156,7 @@ function enrichTeamCapability(
   }
 
   // Get most recent score
-  const sortedData = teamData.sort((a, b) => b.date.localeCompare(a.date));
+  const sortedData = teamData.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
   const currentScore = sortedData[0].value;
 
   // Calculate trend

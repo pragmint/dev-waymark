@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, ActiveExperiment } from '../core/data/teamTypes';
+import type { Team, ActiveExperiment, TeamCapability } from '../core/data/teamTypes';
 import type { Capability } from '../core/data/capabilityTypes';
 import type { Practice } from '../shell/loaders/practiceLoader';
 import { getStatusBadge } from '../core/rendering/htmlHelpers';
@@ -11,6 +11,7 @@ interface TeamDetailPageProps {
   team: Team;
   allCapabilities: Capability[];
   capabilityMap: Map<string, Capability>;
+  teamCapabilityMap: Map<string, TeamCapability>;
   practiceMap: Map<string, Practice>;
 }
 
@@ -51,11 +52,9 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   team,
   allCapabilities,
   capabilityMap,
+  teamCapabilityMap,
   practiceMap,
 }) => {
-  // Combine targeted and non-targeted capabilities
-  const allTeamCapabilities = [...team.targetedCapabilities, ...team.nonTargetedCapabilities];
-  const teamCapabilityMap = new Map(allTeamCapabilities.map(tc => [tc.id, tc]));
 
   return (
     <Page title={team.name} heading={team.name} activePage={team.id} teams={teams}>
@@ -92,11 +91,9 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
               <div class="capability-tiles-grid">
                 {allCapabilities.map(capability => {
                   const teamCapability = teamCapabilityMap.get(capability.id);
-                  if (teamCapability) {
-                    return (
-                      <TeamCapabilityTile teamCapability={teamCapability} capability={capability} />
-                    );
-                  } else {
+                  // teamCapabilityMap is always populated by the handler, so teamCapability should exist
+                  if (!teamCapability) {
+                    // Fallback (should not happen)
                     return (
                       <TeamCapabilityTile
                         teamCapability={{ id: capability.id, currentScore: null, trend: null }}
@@ -104,6 +101,9 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
                       />
                     );
                   }
+                  return (
+                    <TeamCapabilityTile teamCapability={teamCapability} capability={capability} />
+                  );
                 })}
               </div>
             </div>
