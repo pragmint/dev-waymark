@@ -18,7 +18,6 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({ teams, cap
       <div class="capability-detail-container">
         <div class="capability-header">
           <div class="capability-header-main">
-            <div class="capability-category-badge">{capability.category}</div>
             <div class="capability-meta">
               <div class="capability-score-large">
                 <span class="score-current">{capability.currentScore}</span>
