@@ -9,7 +9,7 @@ import { getStatusBadge } from '../core/rendering/htmlHelpers';
 interface TeamDetailPageProps {
   teams: Team[];
   team: Team;
-  capabilitiesByCategory: Record<string, Capability[]>;
+  allCapabilities: Capability[];
   capabilityMap: Map<string, Capability>;
   practiceMap: Map<string, Practice>;
 }
@@ -49,7 +49,7 @@ const ExperimentCard: FC<{ experiment: ActiveExperiment; practiceName: string }>
 export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teams,
   team,
-  capabilitiesByCategory,
+  allCapabilities,
   capabilityMap,
   practiceMap,
 }) => {
@@ -89,31 +89,23 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
 
             {/* Expanded capabilities */}
             <div id="expanded-capabilities" class="expanded-capabilities">
-              {Object.entries(capabilitiesByCategory).map(([category, capabilities]) => (
-                <div class="capability-category-section">
-                  <h3 class="capability-category-title">{category}</h3>
-                  <div class="capability-tiles-grid">
-                    {capabilities.map(capability => {
-                      const teamCapability = teamCapabilityMap.get(capability.id);
-                      if (teamCapability) {
-                        return (
-                          <TeamCapabilityTile
-                            teamCapability={teamCapability}
-                            capability={capability}
-                          />
-                        );
-                      } else {
-                        return (
-                          <TeamCapabilityTile
-                            teamCapability={{ id: capability.id, currentScore: 0, trend: 'stable' }}
-                            capability={capability}
-                          />
-                        );
-                      }
-                    })}
-                  </div>
-                </div>
-              ))}
+              <div class="capability-tiles-grid">
+                {allCapabilities.map(capability => {
+                  const teamCapability = teamCapabilityMap.get(capability.id);
+                  if (teamCapability) {
+                    return (
+                      <TeamCapabilityTile teamCapability={teamCapability} capability={capability} />
+                    );
+                  } else {
+                    return (
+                      <TeamCapabilityTile
+                        teamCapability={{ id: capability.id, currentScore: null, trend: null }}
+                        capability={capability}
+                      />
+                    );
+                  }
+                })}
+              </div>
             </div>
 
             <a class="toggle-view-link" id="toggle-view" href="#">

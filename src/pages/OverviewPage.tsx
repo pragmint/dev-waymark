@@ -8,7 +8,7 @@ import type { Capability } from '../core/data/capabilityTypes';
 interface OverviewPageProps {
   teams: Team[];
   topThree: Capability[];
-  capabilitiesByCategory: Record<string, Capability[]>;
+  allCapabilities: Capability[];
   summaryHtml: string;
   summaryDate: string;
   availableSummaryDates: string[];
@@ -17,7 +17,7 @@ interface OverviewPageProps {
 export const OverviewPage: FC<OverviewPageProps> = ({
   teams,
   topThree,
-  capabilitiesByCategory,
+  allCapabilities,
   summaryHtml,
   summaryDate,
   availableSummaryDates,
@@ -32,16 +32,11 @@ export const OverviewPage: FC<OverviewPageProps> = ({
         </div>
 
         <div id="expanded-capabilities" class="expanded-capabilities">
-          {Object.entries(capabilitiesByCategory).map(([category, capabilities]) => (
-            <div class="capability-category-section">
-              <h3 class="capability-category-title">{category}</h3>
-              <div class="capability-tiles-grid">
-                {capabilities.map(capability => (
-                  <CapabilityTile capability={capability} />
-                ))}
-              </div>
-            </div>
-          ))}
+          <div class="capability-tiles-grid">
+            {allCapabilities.map(capability => (
+              <CapabilityTile capability={capability} />
+            ))}
+          </div>
         </div>
 
         <a class="toggle-view-link" id="toggle-view" href="#">

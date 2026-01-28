@@ -1,9 +1,0 @@
-id: trunk-based-development
-name: Trunk-Based Development
-category: Fast Flow
-currentScore: 3
-trend: up
-teamsTargeting: 5
-description: >
-  Trunk-Based Development is a branching model where developers work in short-lived branches
-  or directly on the main branch. This practice reduces merge conflicts and enables faster integration.

@@ -1,16 +1,13 @@
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Summary } from '../../core/data/summaryTypes';
-import {
-  getTopThreeCapabilities,
-  groupCapabilitiesByCategory,
-} from '../../core/data/capabilityQueries';
+import { getTopThreeCapabilities, getAllCapabilities } from '../../core/data/capabilityQueries';
 import { getMostRecentSummary, getSummaryByDate } from '../../shell/loaders/summaryLoader';
 
 export interface OverviewPageData {
   teams: Team[];
   topThree: Capability[];
-  capabilitiesByCategory: Record<string, Capability[]>;
+  allCapabilities: Capability[];
   summaryHtml: string;
   summaryDate: string;
   availableSummaryDates: string[];
@@ -27,7 +24,7 @@ export function prepareOverviewData(
   requestedDate?: string
 ): OverviewPageData {
   const topThree = getTopThreeCapabilities(capabilities);
-  const capabilitiesByCategory = groupCapabilitiesByCategory(capabilities);
+  const allCapabilities = getAllCapabilities(capabilities);
 
   // Get the summary to display
   let selectedSummary: Summary | null;
@@ -45,7 +42,7 @@ export function prepareOverviewData(
   return {
     teams,
     topThree,
-    capabilitiesByCategory,
+    allCapabilities,
     summaryHtml,
     summaryDate,
     availableSummaryDates,

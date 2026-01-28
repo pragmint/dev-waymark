@@ -2,14 +2,14 @@ import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
 import { findTeamById } from '../../core/data/teamQueries';
-import { groupCapabilitiesByCategory } from '../../core/data/capabilityQueries';
+import { getAllCapabilities } from '../../core/data/capabilityQueries';
 import { loadPracticeFromFilesystem } from '../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../core/errors';
 
 export interface TeamDetailPageData {
   teams: Team[];
   team: Team;
-  capabilitiesByCategory: Record<string, Capability[]>;
+  allCapabilities: Capability[];
   capabilityMap: Map<string, Capability>;
   practiceMap: Map<string, Practice>;
 }
@@ -31,7 +31,7 @@ export async function prepareTeamDetailData(
   }
 
   // Prepare capability data for rendering
-  const capabilitiesByCategory = groupCapabilitiesByCategory(capabilities);
+  const allCapabilities = getAllCapabilities(capabilities);
   const capabilityMap = new Map(capabilities.map(cap => [cap.id, cap]));
 
   // Load practices for all active experiments
@@ -46,7 +46,7 @@ export async function prepareTeamDetailData(
   return {
     teams,
     team,
-    capabilitiesByCategory,
+    allCapabilities,
     capabilityMap,
     practiceMap,
   };

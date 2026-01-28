@@ -1,9 +1,0 @@
-id: test-automation
-name: Test Automation
-category: Fast Feedback
-currentScore: 3
-trend: up
-teamsTargeting: 7
-description: >
-  Test Automation replaces manual testing with automated tests that run quickly and reliably.
-  This capability includes unit tests, integration tests, and end-to-end tests.

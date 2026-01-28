@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import { enrichCapabilitiesWithTeamData } from '../src/core/data/capabilityAggregations';
 import {
   getTopThreeCapabilities,
-  groupCapabilitiesByCategory,
+  getAllCapabilities,
   findCapabilityById,
 } from '../src/core/data/capabilityQueries';
 import type { Capability } from '../src/core/data/capabilityTypes';
@@ -13,7 +13,6 @@ describe('Capability Data Transformations', () => {
     {
       id: 'cap-1',
       name: 'Continuous Integration',
-      category: 'Fast Flow',
       currentScore: 0,
       trend: 'stable',
       teamsTargeting: 0,
@@ -21,7 +20,6 @@ describe('Capability Data Transformations', () => {
     {
       id: 'cap-2',
       name: 'Automated Testing',
-      category: 'Fast Feedback',
       currentScore: 0,
       trend: 'stable',
       teamsTargeting: 0,
@@ -29,7 +27,6 @@ describe('Capability Data Transformations', () => {
     {
       id: 'cap-3',
       name: 'Learning Culture',
-      category: 'Climate for Learning',
       currentScore: 0,
       trend: 'stable',
       teamsTargeting: 0,
@@ -103,13 +100,14 @@ describe('Capability Data Transformations', () => {
     expect(topThree[2].currentScore).toBe(1.5);
   });
 
-  test('groupCapabilitiesByCategory organizes by category', () => {
+  test('getAllCapabilities returns capabilities sorted alphabetically', () => {
     const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
-    const grouped = groupCapabilitiesByCategory(enriched);
+    const sorted = getAllCapabilities(enriched);
 
-    expect(grouped['Fast Flow']).toHaveLength(1);
-    expect(grouped['Fast Feedback']).toHaveLength(1);
-    expect(grouped['Climate for Learning']).toHaveLength(1);
+    expect(sorted).toHaveLength(3);
+    expect(sorted[0].name).toBe('Automated Testing');
+    expect(sorted[1].name).toBe('Continuous Integration');
+    expect(sorted[2].name).toBe('Learning Culture');
   });
 
   test('findCapabilityById returns correct capability', () => {

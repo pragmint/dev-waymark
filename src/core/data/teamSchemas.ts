@@ -39,8 +39,8 @@ export const ActiveExperimentSchema = z.object({
 
 export const TeamCapabilitySchema = z.object({
   id: z.string(),
-  currentScore: z.number().min(0).max(4),
-  trend: TrendDirectionSchema,
+  currentScore: z.number().min(0).max(4).nullable().default(null),
+  trend: TrendDirectionSchema.nullable().default(null),
 });
 
 export const TeamSchema = z.object({

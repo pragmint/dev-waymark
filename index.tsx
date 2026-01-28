@@ -11,8 +11,12 @@ import {
   loadAllPracticesFromFilesystem,
 } from './src/shell/loaders/practiceLoader';
 import { loadSummariesFromFilesystem } from './src/shell/loaders/summaryLoader';
-import { enrichCapabilitiesWithTeamData } from './src/core/data/capabilityAggregations';
-import { groupCapabilitiesByCategory, findCapabilityById } from './src/core/data/capabilityQueries';
+import { loadMetricsFromFilesystem } from './src/shell/loaders/metricLoader';
+import {
+  enrichCapabilitiesWithMetrics,
+  enrichTeamsWithMetrics,
+} from './src/core/data/metricAggregations';
+import { getAllCapabilities, findCapabilityById } from './src/core/data/capabilityQueries';
 import { NotFoundError } from './src/core/errors';
 import { OverviewPage } from './src/pages/OverviewPage';
 import { ComingSoonPage } from './src/pages/ComingSoonPage';
@@ -28,11 +32,13 @@ import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDeta
 
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
-const teams = await loadTeamsFromFilesystem();
+const rawTeams = await loadTeamsFromFilesystem();
+const metrics = await loadMetricsFromFilesystem();
 const summaries = await loadSummariesFromFilesystem();
 
 // --- PURE TRANSFORMATION ---
-const capabilities = enrichCapabilitiesWithTeamData(rawCapabilities, teams);
+const teams = enrichTeamsWithMetrics(rawTeams, metrics);
+const capabilities = enrichCapabilitiesWithMetrics(rawCapabilities, metrics, teams);
 
 // --- HONO APP SETUP ---
 const app = new Hono();
@@ -65,11 +71,9 @@ app.get('/insight/', c => {
 
 // Capability catalog page
 app.get('/catalog/capability/', c => {
-  const capabilitiesByCategory = groupCapabilitiesByCategory(capabilities);
+  const allCapabilities = getAllCapabilities(capabilities);
 
-  return c.html(
-    <CapabilityCatalogPage teams={teams} capabilitiesByCategory={capabilitiesByCategory} />
-  );
+  return c.html(<CapabilityCatalogPage teams={teams} allCapabilities={allCapabilities} />);
 });
 
 // Capability detail page

@@ -1,9 +1,0 @@
-id: continuous-delivery
-name: Continuous Delivery
-category: Fast Flow
-currentScore: 3
-trend: up
-teamsTargeting: 7
-description: >
-  Continuous Delivery is the ability to get changes of all types into production safely
-  and quickly in a sustainable way. It builds on CI by ensuring code is always in a deployable state.

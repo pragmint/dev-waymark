@@ -1,9 +1,0 @@
-id: version-control
-name: Version Control
-category: Fast Flow
-currentScore: 4
-trend: stable
-teamsTargeting: 8
-description: >
-  Version Control is the practice of tracking and managing changes to code over time.
-  It enables collaboration, maintains history, and supports parallel development efforts.

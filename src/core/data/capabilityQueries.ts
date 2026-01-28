@@ -1,4 +1,4 @@
-import type { Capability, CapabilityCategory } from './capabilityTypes';
+import type { Capability } from './capabilityTypes';
 
 // Pure query functions - no I/O, no mutation
 
@@ -18,23 +18,7 @@ export function getTopThreeCapabilities(capabilities: Capability[]): Capability[
     .slice(0, 3);
 }
 
-export function groupCapabilitiesByCategory(
-  capabilities: Capability[]
-): Record<CapabilityCategory, Capability[]> {
-  const result: Record<CapabilityCategory, Capability[]> = {
-    'Climate for Learning': [],
-    'Fast Flow': [],
-    'Fast Feedback': [],
-  };
-
-  capabilities.forEach(cap => {
-    result[cap.category].push(cap);
-  });
-
-  // Sort each category alphabetically
-  Object.keys(result).forEach(key => {
-    result[key as CapabilityCategory].sort((a, b) => a.name.localeCompare(b.name));
-  });
-
-  return result;
+export function getAllCapabilities(capabilities: Capability[]): Capability[] {
+  // Return all capabilities sorted alphabetically by name
+  return [...capabilities].sort((a, b) => a.name.localeCompare(b.name));
 }

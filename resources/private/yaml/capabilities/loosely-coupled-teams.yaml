@@ -1,9 +1,0 @@
-id: loosely-coupled-teams
-name: Loosely Coupled Teams
-category: Fast Flow
-currentScore: 2
-trend: up
-teamsTargeting: 5
-description: >
-  Loosely Coupled Teams can work independently without excessive coordination or handoffs.
-  This capability requires well-defined interfaces, clear ownership, and minimal dependencies.

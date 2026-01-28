@@ -1,40 +1,69 @@
-import { parse } from 'yaml';
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import { z } from 'zod';
 import type { Capability } from '../../core/data/capabilityTypes';
-import { CapabilitySchema } from '../../core/data/capabilityTypes';
-import { ValidationError } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 
-// Pure I/O function - loads capabilities from filesystem with validation
+/**
+ * Converts a kebab-case filename to Title Case
+ * Example: "code-maintainability" -> "Code Maintainability"
+ * Special rules:
+ * - "ai" becomes "AI" (anywhere in the title)
+ * - Articles and prepositions (the, and, to, of, in) stay lowercase (except at position 0)
+ */
+function filenameToTitle(filename: string): string {
+  const lowercaseWords = new Set(['the', 'and', 'to', 'of', 'in']);
+
+  return filename
+    .split('-')
+    .map((word, index) => {
+      // Special case for "ai" - always uppercase
+      if (word === 'ai') {
+        return 'AI';
+      }
+
+      // First word is always capitalized (even if it's an article/preposition)
+      if (index === 0) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+
+      // Lowercase words stay lowercase
+      if (lowercaseWords.has(word)) {
+        return word;
+      }
+
+      // Regular title case
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+/**
+ * Pure I/O function - loads capabilities from markdown files
+ * Discovers all capabilities from the markdown directory
+ */
 export async function loadCapabilitiesFromFilesystem(): Promise<Capability[]> {
-  const dir = 'resources/private/yaml/capabilities';
-  const files = await readdir(dir);
+  const markdownDir = 'resources/private/markdown/capabilities';
 
-  const capabilities = await Promise.all(
-    files
-      .filter(file => file.endsWith('.yaml'))
-      .map(async file => {
-        const filePath = join(dir, file);
-        const content = await Bun.file(filePath).text();
-        const raw = parse(content);
+  const files = await readdir(markdownDir);
 
-        try {
-          // Parse with runtime validation
-          return CapabilitySchema.parse(raw);
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-            consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
-            throw new ValidationError('Capability', file, details);
-          }
-          throw error;
-        }
-      })
-  );
+  const capabilities = files
+    .filter(file => file.endsWith('.md'))
+    .map(file => {
+      // Extract capability ID from filename (remove .md extension)
+      const capabilityId = file.replace('.md', '');
 
-  consoleLogger.info(`Loaded ${capabilities.length} capabilities`);
+      // Convert filename to human-readable name
+      const name = filenameToTitle(capabilityId);
+
+      // Create capability object with defaults
+      // Note: currentScore, trend, and teamsTargeting will be set
+      // by aggregation logic based on metrics
+      return {
+        id: capabilityId,
+        name,
+        currentScore: 0,
+        trend: 'stable' as const,
+        teamsTargeting: 0,
+      };
+    });
 
   return capabilities;
 }

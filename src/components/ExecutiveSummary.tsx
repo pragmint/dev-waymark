@@ -29,10 +29,7 @@ export const ExecutiveSummary: FC<ExecutiveSummaryProps> = ({
           </div>
         )}
       </div>
-      <div
-        class="executive-summary-content"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-      />
+      <div class="executive-summary-content" dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </div>
   );
 };

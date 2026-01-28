@@ -26,7 +26,7 @@
   // Handle capability tile clicks - navigate to capability catalog page
   const capabilityTiles = document.querySelectorAll<HTMLElement>('.capability-tile');
 
-  capabilityTiles.forEach((tile) => {
+  capabilityTiles.forEach(tile => {
     tile.addEventListener('click', () => {
       const capabilityId = tile.getAttribute('data-capability-id');
       if (capabilityId) {
@@ -36,7 +36,9 @@
   });
 
   // Handle summary date selector dropdown
-  const summaryDateSelect = document.getElementById('summary-date-select') as HTMLSelectElement | null;
+  const summaryDateSelect = document.getElementById(
+    'summary-date-select'
+  ) as HTMLSelectElement | null;
 
   if (summaryDateSelect) {
     summaryDateSelect.addEventListener('change', (e: Event) => {
