@@ -8,6 +8,7 @@ interface CapabilityDetailPageProps {
   teams: Team[];
   capability: Capability;
   selectedTeam: string;
+  markdownContent: string | null;
 }
 
 /**
@@ -95,6 +96,7 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
   teams,
   capability,
   selectedTeam,
+  markdownContent,
 }) => {
   const trendIcon = getTrendIcon(capability.trend);
   const trendLabel = getTrendLabel(capability.trend);
@@ -203,43 +205,12 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
             )}
           </section>
 
-          <section class="capability-section">
-            <h2>Teams Working On This</h2>
-            <p>
-              {capability.teamsTargeting} team{capability.teamsTargeting !== 1 ? 's are' : ' is'}{' '}
-              actively working to improve this capability. Teams targeting this capability are
-              focused on implementing best practices and measuring their progress.
-            </p>
-            <div class="placeholder-note">
-              <em>Team-specific details and progress will be displayed here.</em>
-            </div>
-          </section>
-
-          <section class="capability-section">
-            <h2>Key Practices</h2>
-            <div class="placeholder-note">
-              <em>
-                Recommended practices and implementation guidance for this capability will be
-                displayed here.
-              </em>
-            </div>
-          </section>
-
-          <section class="capability-section">
-            <h2>Related Resources</h2>
-            <div class="placeholder-note">
-              <em>Links to documentation, tools, and learning resources will be displayed here.</em>
-            </div>
-          </section>
-
-          <section class="capability-section">
-            <h2>Success Stories</h2>
-            <div class="placeholder-note">
-              <em>
-                Examples of successful implementations and lessons learned will be displayed here.
-              </em>
-            </div>
-          </section>
+          {markdownContent && (
+            <div
+              class="markdown-content"
+              dangerouslySetInnerHTML={{ __html: markdownContent }}
+            />
+          )}
         </div>
 
         <div class="capability-actions">

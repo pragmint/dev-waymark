@@ -8,6 +8,7 @@ import { loadTeamsFromFilesystem } from './src/shell/loaders/teamLoader';
 import {
   loadCapabilitiesFromFilesystem,
   enrichCapabilitiesWithAssessment,
+  loadCapabilityMarkdown,
 } from './src/shell/loaders/capabilityLoader';
 import {
   loadPracticeFromFilesystem,
@@ -111,8 +112,16 @@ app.get('/catalog/capability/:capabilityId', async c => {
   // Calculate team-specific score
   const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
 
+  // Load capability markdown content
+  const markdownContent = await loadCapabilityMarkdown(capabilityId);
+
   return c.html(
-    <CapabilityDetailPage teams={teams} capability={filteredCapability} selectedTeam={teamFilter} />
+    <CapabilityDetailPage
+      teams={teams}
+      capability={filteredCapability}
+      selectedTeam={teamFilter}
+      markdownContent={markdownContent}
+    />
   );
 });
 
