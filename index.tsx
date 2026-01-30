@@ -87,16 +87,6 @@ const handleArchive = (c: Context) => {
 app.get('/archive/:date', handleArchive);
 app.get('/archive/:date/', handleArchive);
 
-// Coming soon pages
-const handleInsight = (c: Context) => {
-  return c.html(
-    <ComingSoonPage teams={teams} title="Insights" heading="Insights" activePage="insights" />
-  );
-};
-
-app.get('/insight', handleInsight);
-app.get('/insight/', handleInsight);
-
 // Capability catalog page
 const handleCapabilityCatalog = (c: Context) => {
   const allCapabilities = getAllCapabilities(capabilities);
