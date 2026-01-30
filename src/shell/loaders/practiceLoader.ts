@@ -41,6 +41,19 @@ function transformCapabilityLinks(html: string): string {
   return html.replace(/href="\/capabilities\/([a-z0-9-]+)\.md"/g, 'href="/catalog/capability/$1/"');
 }
 
+// Pure function - transforms practice links from markdown format to web format
+function transformPracticeLinks(html: string): string {
+  return html.replace(/href="\/practices\/([a-z0-9-]+)\.md"/g, 'href="/catalog/practice/$1/"');
+}
+
+// Pure function - transforms resource links to GitHub URLs
+function transformResourceLinks(html: string): string {
+  return html.replace(
+    /href="\/resources\/(.+?)\.md"/g,
+    'href="https://github.com/pragmint/open-practices/blob/main/resources/$1.md"'
+  );
+}
+
 // Composed function - loads and parses a single practice
 export async function loadPracticeFromFilesystem(
   practiceId: string,
@@ -54,7 +67,9 @@ export async function loadPracticeFromFilesystem(
     const rawHtml = await parseMarkdown(markdown);
 
     // Transform links
-    const html = transformCapabilityLinks(rawHtml);
+    let html = transformCapabilityLinks(rawHtml);
+    html = transformPracticeLinks(html);
+    html = transformResourceLinks(html);
 
     // Extract metadata
     const title = extractTitle(markdown, practiceId);
@@ -92,4 +107,4 @@ export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
 }
 
 // Export individual functions for testing/reuse
-export { extractTitle, transformCapabilityLinks, parseMarkdown };
+export { extractTitle, transformCapabilityLinks, transformPracticeLinks, transformResourceLinks, parseMarkdown };
