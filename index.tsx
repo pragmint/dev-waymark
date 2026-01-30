@@ -33,7 +33,6 @@ import {
 } from './src/core/data/capabilityQueries';
 import { NotFoundError } from './src/core/errors';
 import { OverviewPage } from './src/pages/OverviewPage';
-import { ComingSoonPage } from './src/pages/ComingSoonPage';
 import { CapabilityCatalogPage } from './src/pages/CapabilityCatalogPage';
 import { CapabilityDetailPage } from './src/pages/CapabilityDetailPage';
 import { PracticesCatalogPage } from './src/pages/PracticesCatalogPage';

@@ -152,8 +152,8 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
         <section class="team-section">
           <h2>Experiments</h2>
           <p class="section-intro">
-            Engineering practices the team is considering experimenting with to improve
-            their delivery performance.
+            Engineering practices the team is considering experimenting with to improve their
+            delivery performance.
           </p>
           {experiments && experiments.length > 0 ? (
             <div class="experiment-cards">
