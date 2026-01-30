@@ -139,8 +139,6 @@
   }
 
   ul, ol {
-    display: flex;
-    flex-direction: column;
     margin: $spacing-lg 0;
     padding-left: $spacing-xxxl;
     line-height: 1.7;
@@ -148,6 +146,7 @@
     li {
       margin-bottom: $spacing-sm;
       color: $text-secondary;
+      font-size: $font-base;
     }
   }
 
@@ -194,6 +193,10 @@
   strong {
     font-weight: 600;
     color: $text-primary;
+  }
+
+  em, i {
+    font-style: italic;
   }
 
   a {

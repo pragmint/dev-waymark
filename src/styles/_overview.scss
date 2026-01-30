@@ -207,8 +207,6 @@
   }
 
   ul {
-    display: flex;
-    flex-direction: column;
     margin: $spacing-lg 0;
     padding-left: $spacing-xxl;
     list-style: disc;
@@ -217,11 +215,16 @@
   li {
     margin-bottom: $spacing-sm;
     line-height: 1.6;
+    font-size: $font-base;
   }
 
   strong {
     font-weight: 600;
     color: $text-primary;
+  }
+
+  em, i {
+    font-style: italic;
   }
 }
 
