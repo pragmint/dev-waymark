@@ -77,15 +77,6 @@ export const Sidebar: FC<SidebarProps> = ({ teams, activePage }) => {
               Practices
             </a>
           </li>
-          <li>
-            <a
-              href="/catalog/resource/"
-              data-page="resources"
-              class={activePage === 'resources' ? 'active' : ''}
-            >
-              Resources
-            </a>
-          </li>
         </ul>
       </div>
 

@@ -164,21 +164,6 @@ const handlePracticeDetail = async (c: Context) => {
 app.get('/catalog/practice/:practiceId', handlePracticeDetail);
 app.get('/catalog/practice/:practiceId/', handlePracticeDetail);
 
-// Resources catalog (coming soon)
-const handleResourceCatalog = (c: Context) => {
-  return c.html(
-    <ComingSoonPage
-      teams={teams}
-      title="Resources Catalog"
-      heading="Resources"
-      activePage="resources"
-    />
-  );
-};
-
-app.get('/catalog/resource', handleResourceCatalog);
-app.get('/catalog/resource/', handleResourceCatalog);
-
 // Team detail page
 const handleTeamDetail = async (c: Context) => {
   const teamId = c.req.param('teamId');
