@@ -206,10 +206,7 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
           </section>
 
           {markdownContent && (
-            <div
-              class="markdown-content"
-              dangerouslySetInnerHTML={{ __html: markdownContent }}
-            />
+            <div class="markdown-content" dangerouslySetInnerHTML={{ __html: markdownContent }} />
           )}
         </div>
 

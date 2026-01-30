@@ -2,6 +2,7 @@
 // Core business logic is imported as pure functions
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { errorHandler } from './src/shell/middleware/errorHandler';
 import { loadTeamsFromFilesystem } from './src/shell/loaders/teamLoader';
@@ -77,28 +78,37 @@ app.get('/', c => {
 });
 
 // Archive page - displays a specific summary by date
-app.get('/archive/:date/', c => {
+const handleArchive = (c: Context) => {
   const date = c.req.param('date');
   const data = prepareOverviewData(teams, capabilities, summaries, date);
   return c.html(<OverviewPage {...data} />);
-});
+};
+
+app.get('/archive/:date', handleArchive);
+app.get('/archive/:date/', handleArchive);
 
 // Coming soon pages
-app.get('/insight/', c => {
+const handleInsight = (c: Context) => {
   return c.html(
     <ComingSoonPage teams={teams} title="Insights" heading="Insights" activePage="insights" />
   );
-});
+};
+
+app.get('/insight', handleInsight);
+app.get('/insight/', handleInsight);
 
 // Capability catalog page
-app.get('/catalog/capability/', c => {
+const handleCapabilityCatalog = (c: Context) => {
   const allCapabilities = getAllCapabilities(capabilities);
 
   return c.html(<CapabilityCatalogPage teams={teams} allCapabilities={allCapabilities} />);
-});
+};
 
-// Capability detail page
-app.get('/catalog/capability/:capabilityId', async c => {
+app.get('/catalog/capability', handleCapabilityCatalog);
+app.get('/catalog/capability/', handleCapabilityCatalog);
+
+// Capability detail page handler (shared logic)
+const handleCapabilityDetail = async (c: Context) => {
   const capabilityId = c.req.param('capabilityId');
   const capability = findCapabilityById(capabilities, capabilityId);
 
@@ -123,17 +133,24 @@ app.get('/catalog/capability/:capabilityId', async c => {
       markdownContent={markdownContent}
     />
   );
-});
+};
+
+// Capability detail page (with and without trailing slash)
+app.get('/catalog/capability/:capabilityId', handleCapabilityDetail);
+app.get('/catalog/capability/:capabilityId/', handleCapabilityDetail);
 
 // Practice catalog page
-app.get('/catalog/practice/', async c => {
+const handlePracticeCatalog = async (c: Context) => {
   const practices = await loadAllPracticesFromFilesystem();
 
   return c.html(<PracticesCatalogPage teams={teams} practices={practices} />);
-});
+};
+
+app.get('/catalog/practice', handlePracticeCatalog);
+app.get('/catalog/practice/', handlePracticeCatalog);
 
 // Practice detail page
-app.get('/catalog/practice/:practiceId/', async c => {
+const handlePracticeDetail = async (c: Context) => {
   const practiceId = c.req.param('practiceId');
   const practice = await loadPracticeFromFilesystem(practiceId);
 
@@ -142,10 +159,13 @@ app.get('/catalog/practice/:practiceId/', async c => {
   }
 
   return c.html(<PracticeDetailPage teams={teams} practice={practice} />);
-});
+};
+
+app.get('/catalog/practice/:practiceId', handlePracticeDetail);
+app.get('/catalog/practice/:practiceId/', handlePracticeDetail);
 
 // Resources catalog (coming soon)
-app.get('/catalog/resource/', c => {
+const handleResourceCatalog = (c: Context) => {
   return c.html(
     <ComingSoonPage
       teams={teams}
@@ -154,10 +174,13 @@ app.get('/catalog/resource/', c => {
       activePage="resources"
     />
   );
-});
+};
+
+app.get('/catalog/resource', handleResourceCatalog);
+app.get('/catalog/resource/', handleResourceCatalog);
 
 // Team detail page
-app.get('/team/:teamId/', async c => {
+const handleTeamDetail = async (c: Context) => {
   const teamId = c.req.param('teamId');
   const data = await prepareTeamDetailData(
     teamId,
@@ -168,14 +191,20 @@ app.get('/team/:teamId/', async c => {
     teamMetrics
   );
   return c.html(<TeamDetailPage {...data} />);
-});
+};
+
+app.get('/team/:teamId', handleTeamDetail);
+app.get('/team/:teamId/', handleTeamDetail);
 
 // Experiment detail page
-app.get('/experiment/:experimentId/', async c => {
+const handleExperimentDetail = async (c: Context) => {
   const experimentId = c.req.param('experimentId');
   const data = await prepareExperimentDetailData(experimentId, teams, enrichedExperiments);
   return c.html(<ExperimentDetailPage {...data} />);
-});
+};
+
+app.get('/experiment/:experimentId', handleExperimentDetail);
+app.get('/experiment/:experimentId/', handleExperimentDetail);
 
 // --- HTTP SERVER (I/O) ---
 export default {
