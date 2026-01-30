@@ -2,13 +2,36 @@ import type { Team, TeamCapability } from '../../core/data/teamTypes';
 import type { Experiment } from '../../core/data/experimentTypes';
 import type { Capability, TrendDirection } from '../../core/data/capabilityTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
-import type { Metric, TeamMetric } from '../../shell/loaders/metricLoader';
+import type { Metric, TeamMetric, MetricValue } from '../../shell/loaders/metricLoader';
 import { findTeamById } from '../../core/data/teamQueries';
 import { findExperimentsByTeamId } from '../../core/data/experimentQueries';
 import { getAllCapabilities } from '../../core/data/capabilityQueries';
 import { loadPracticeFromFilesystem } from '../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../core/errors';
 import { parseDate } from '../../core/utils/dateFormatter';
+
+/**
+ * Helper function to check if a value is a dimension score object
+ */
+function isDimensionScore(value: MetricValue): value is Record<string, number> {
+  return typeof value === 'object' && !Array.isArray(value) && value !== null;
+}
+
+/**
+ * Helper function to calculate average score from a metric value
+ * If the value is a dimension score object, returns the average across all dimensions
+ * Otherwise, returns the value as-is if it's a number, or 0 if it's a string
+ */
+function getNumericScore(value: MetricValue): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (isDimensionScore(value)) {
+    const scores = Object.values(value);
+    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  }
+  return 0; // String values or other types default to 0
+}
 
 export interface TeamDetailPageData {
   teams: Team[];
@@ -57,12 +80,14 @@ function enrichCapabilityWithTeamMetrics(
   const sortedData = teamData.sort(
     (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
   );
-  const currentScore = sortedData[0].value;
+  const currentScore = getNumericScore(sortedData[0].value);
 
   // Calculate trend
   let trend: TrendDirection | null = 'stable';
   if (sortedData.length >= 2) {
-    const scoreDiff = sortedData[0].value - sortedData[1].value;
+    const currentValue = getNumericScore(sortedData[0].value);
+    const previousValue = getNumericScore(sortedData[1].value);
+    const scoreDiff = currentValue - previousValue;
     if (scoreDiff > 0) {
       trend = 'up';
     } else if (scoreDiff < 0) {

@@ -6,17 +6,42 @@ import { ValidationError } from '../../core/errors';
 import { consoleLogger } from '../../core/logger';
 
 // Zod schemas for capability metric data validation
-export const MetricDataPointSchema = z.object({
-  team: z.string().optional(),
-  date: z.string(), // Format: yy.m.dd or similar
-  value: z.union([z.number(), z.string()]), // Can be number (capability scores) or string (anecdotes, etc)
-});
+// Value can be:
+// - A number (simple score)
+// - A string (anecdotes)
+// - An array of single-key objects (dimension scores from YAML)
+// - A record object (dimension scores)
+const DimensionScoreSchema = z.record(z.string(), z.number());
+const DimensionScoreArraySchema = z.array(z.record(z.string(), z.number()));
+
+export const MetricDataPointSchema = z
+  .object({
+    team: z.string().optional(),
+    date: z.string(), // Format: yy.m.dd or similar
+    value: z.union([z.number(), z.string(), DimensionScoreArraySchema, DimensionScoreSchema]),
+  })
+  .transform(data => {
+    // Normalize dimension score arrays to single objects
+    // YAML arrays like [{"new-code": 1}, {"old-code": 2}] -> {"new-code": 1, "old-code": 2}
+    if (Array.isArray(data.value)) {
+      const normalized: Record<string, number> = {};
+      for (const item of data.value) {
+        Object.assign(normalized, item);
+      }
+      return {
+        ...data,
+        value: normalized,
+      };
+    }
+    return data;
+  });
 
 export const MetricFileSchema = z.object({
   data: z.array(MetricDataPointSchema),
 });
 
 export type MetricDataPoint = z.infer<typeof MetricDataPointSchema>;
+export type MetricValue = number | string | Record<string, number>;
 export type MetricFile = z.infer<typeof MetricFileSchema>;
 
 export interface Metric {

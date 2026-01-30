@@ -18,6 +18,8 @@ export const CapabilitySchema = z.object({
   teamsTargeting: z.number().min(0).optional().default(0),
   description: z.string().optional(),
   maturityLevels: z.array(MaturityLevelSchema).optional(),
+  // Dimension-specific scores (e.g., { "new-code": 2, "previously-written-code": 3 })
+  dimensionScores: z.record(z.number()).optional(),
 });
 
 // Derive TypeScript types from schemas (single source of truth)

@@ -36,6 +36,32 @@ function groupByDimension(
 }
 
 /**
+ * Helper to convert dimension name to kebab-case key
+ * e.g., "New Code" -> "new-code"
+ */
+function dimensionToKey(dimension: string): string {
+  return dimension.toLowerCase().replace(/\s+/g, '-');
+}
+
+/**
+ * Get the score for a specific dimension
+ */
+function getDimensionScore(capability: Capability, dimension: string | undefined): number {
+  if (!dimension) {
+    return capability.currentScore;
+  }
+
+  // If we have dimension-specific scores, use them
+  if (capability.dimensionScores) {
+    const key = dimensionToKey(dimension);
+    return capability.dimensionScores[key] ?? capability.currentScore;
+  }
+
+  // Otherwise, use the overall score
+  return capability.currentScore;
+}
+
+/**
  * Render maturity level cards
  */
 function renderMaturityLevels(capability: Capability) {
@@ -52,42 +78,47 @@ function renderMaturityLevels(capability: Capability) {
       {hasMultipleDimensions && (
         <div class="dimension-note">
           <strong>ℹ️ Note:</strong> This capability is assessed across multiple dimensions. Your
-          current score of <strong>{capability.currentScore}</strong> is an average across all
-          dimensions.
+          current score of&nbsp;<strong>{capability.currentScore}</strong>&nbsp;is an average across
+          all dimensions.
         </div>
       )}
 
-      {Array.from(grouped.entries()).map(([dimension, levels]) => (
-        <div class="maturity-dimensions">
-          {dimension && <h3 class="dimension-header">{dimension}</h3>}
-          <div class="maturity-grid">
-            {levels.map(level => {
-              // Only highlight if score is a whole number matching this level
-              const isExactMatch = capability.currentScore === level.level;
-              // Check if this level is part of an approaching state (decimal score)
-              const isDecimalScore = capability.currentScore % 1 !== 0;
-              const isApproaching =
-                isDecimalScore &&
-                capability.currentScore > level.level - 1 &&
-                capability.currentScore <= level.level;
+      {Array.from(grouped.entries()).map(([dimension, levels]) => {
+        // Get the score for this specific dimension
+        const dimensionScore = getDimensionScore(capability, dimension);
 
-              return (
-                <div
-                  class={`maturity-card ${isExactMatch ? 'current' : ''} ${isApproaching ? 'approaching' : ''}`}
-                >
-                  <div class="maturity-card-header">
-                    <span class="maturity-card-level">Level {level.level}</span>
-                    {isExactMatch && <span class="current-badge">Current</span>}
-                    {isApproaching && <span class="approaching-badge">Approaching</span>}
+        return (
+          <div class="maturity-dimensions">
+            {dimension && <h3 class="dimension-header">{dimension}</h3>}
+            <div class="maturity-grid">
+              {levels.map(level => {
+                // Only highlight if score is a whole number matching this level
+                const isExactMatch = dimensionScore === level.level;
+                // Check if this level is part of an approaching state (decimal score)
+                const isDecimalScore = dimensionScore % 1 !== 0;
+                const isApproaching =
+                  isDecimalScore &&
+                  dimensionScore > level.level - 1 &&
+                  dimensionScore <= level.level;
+
+                return (
+                  <div
+                    class={`maturity-card ${isExactMatch ? 'current' : ''} ${isApproaching ? 'approaching' : ''}`}
+                  >
+                    <div class="maturity-card-header">
+                      <span class="maturity-card-level">Level {level.level}</span>
+                      {isExactMatch && <span class="current-badge">Current</span>}
+                      {isApproaching && <span class="approaching-badge">Approaching</span>}
+                    </div>
+                    <h4 class="maturity-card-title">{level.title}</h4>
+                    <p class="maturity-card-description">{level.description}</p>
                   </div>
-                  <h4 class="maturity-card-title">{level.title}</h4>
-                  <p class="maturity-card-description">{level.description}</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

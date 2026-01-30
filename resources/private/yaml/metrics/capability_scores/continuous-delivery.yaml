@@ -1,10 +1,22 @@
 data:
   - team: team-a
     date: 27.1.2026
-    value: 1
+    value:
+      - value-delivery-frequency: 1
+      - lead-time-for-changes: 1
+      - change-failure-rate: 1
+      - time-to-restore-service: 1
   - team: team-b
     date: 27.1.2026
-    value: 2
+    value:
+      - value-delivery-frequency: 1
+      - lead-time-for-changes: 2
+      - change-failure-rate: 3
+      - time-to-restore-service: 1
   - team: team-c
     date: 27.1.2026
-    value: 2
+    value:
+      - value-delivery-frequency: 2
+      - lead-time-for-changes: 1
+      - change-failure-rate: 2
+      - time-to-restore-service: 3

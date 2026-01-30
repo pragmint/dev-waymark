@@ -1,9 +1,32 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric, TeamMetric } from '../../shell/loaders/metricLoader';
+import type { Metric, TeamMetric, MetricValue } from '../../shell/loaders/metricLoader';
 import type { Team, TeamCapability } from './teamTypes';
 import type { Experiment } from './experimentTypes';
 import { normalizeTeamCapabilities } from './teamSchemas';
 import { parseDate } from '../utils/dateFormatter';
+
+/**
+ * Helper function to check if a value is a dimension score object
+ */
+function isDimensionScore(value: MetricValue): value is Record<string, number> {
+  return typeof value === 'object' && !Array.isArray(value) && value !== null;
+}
+
+/**
+ * Helper function to calculate average score from a metric value
+ * If the value is a dimension score object, returns the average across all dimensions
+ * Otherwise, returns the value as-is if it's a number, or 0 if it's a string
+ */
+function getNumericScore(value: MetricValue): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (isDimensionScore(value)) {
+    const scores = Object.values(value);
+    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  }
+  return 0; // String values or other types default to 0
+}
 
 /**
  * Aggregates metrics to enrich capabilities with computed scores and trends
@@ -52,12 +75,16 @@ export function enrichCapabilitiesWithMetrics(
           (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
         );
 
-        // Get current (most recent) value
-        currentTeamValues.push(sortedTeamData[0].value);
+        // Get current (most recent) value - convert to numeric score
+        const currentValue = getNumericScore(sortedTeamData[0].value);
+        currentTeamValues.push(currentValue);
 
-        // Get previous value if it exists
+        // Get previous value if it exists, otherwise use current value (no change)
         if (sortedTeamData.length >= 2) {
-          previousTeamValues.push(sortedTeamData[1].value);
+          previousTeamValues.push(getNumericScore(sortedTeamData[1].value));
+        } else {
+          // Team only has one data point - treat as no change
+          previousTeamValues.push(currentValue);
         }
       });
 
@@ -68,16 +95,14 @@ export function enrichCapabilitiesWithMetrics(
       // Calculate trend by comparing current average with previous average
       let trend: TrendDirection = 'stable';
 
-      if (previousTeamValues.length > 0) {
-        const prevAvg =
-          previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
-        const scoreDiff = avgScore - prevAvg;
+      // Both arrays now have the same length
+      const prevAvg = previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
+      const scoreDiff = avgScore - prevAvg;
 
-        if (scoreDiff > 0.1) {
-          trend = 'up';
-        } else if (scoreDiff < -0.1) {
-          trend = 'down';
-        }
+      if (scoreDiff > 0.1) {
+        trend = 'up';
+      } else if (scoreDiff < -0.1) {
+        trend = 'down';
       }
 
       const teamsTargeting = targetingCounts.get(capability.id) || 0;
@@ -170,12 +195,14 @@ function enrichTeamCapability(
   const sortedData = teamData.sort(
     (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
   );
-  const currentScore = sortedData[0].value;
+  const currentScore = getNumericScore(sortedData[0].value);
 
   // Calculate trend
   let trend: TrendDirection = 'stable';
   if (sortedData.length >= 2) {
-    const scoreDiff = sortedData[0].value - sortedData[1].value;
+    const currentValue = getNumericScore(sortedData[0].value);
+    const previousValue = getNumericScore(sortedData[1].value);
+    const scoreDiff = currentValue - previousValue;
     if (scoreDiff > 0) {
       trend = 'up';
     } else if (scoreDiff < 0) {

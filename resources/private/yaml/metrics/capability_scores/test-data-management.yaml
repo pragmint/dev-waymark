@@ -1,10 +1,16 @@
 data:
   - team: team-a
     date: 27.1.2026
-    value: 1
+    value:
+      - manual-test-data-management: 1
+      - automated-test-data-management: 1
   - team: team-b
     date: 27.1.2026
-    value: 2
+    value:
+      - manual-test-data-management: 1
+      - automated-test-data-management: 3
   - team: team-c
     date: 27.1.2026
-    value: 2
+    value:
+      - manual-test-data-management: 2
+      - automated-test-data-management: 2

@@ -107,4 +107,10 @@ export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
 }
 
 // Export individual functions for testing/reuse
-export { extractTitle, transformCapabilityLinks, transformPracticeLinks, transformResourceLinks, parseMarkdown };
+export {
+  extractTitle,
+  transformCapabilityLinks,
+  transformPracticeLinks,
+  transformResourceLinks,
+  parseMarkdown,
+};

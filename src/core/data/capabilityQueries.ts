@@ -1,8 +1,31 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric } from '../../shell/loaders/metricLoader';
+import type { Metric, MetricValue } from '../../shell/loaders/metricLoader';
 import { parseDate } from '../utils/dateFormatter';
 
 // Pure query functions - no I/O, no mutation
+
+/**
+ * Helper function to check if a value is a dimension score object
+ */
+function isDimensionScore(value: MetricValue): value is Record<string, number> {
+  return typeof value === 'object' && !Array.isArray(value) && value !== null;
+}
+
+/**
+ * Helper function to calculate average score from a metric value
+ * If the value is a dimension score object, returns the average across all dimensions
+ * Otherwise, returns the value as-is if it's a number, or 0 if it's a string
+ */
+function getNumericScore(value: MetricValue): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (isDimensionScore(value)) {
+    const scores = Object.values(value);
+    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  }
+  return 0; // String values or other types default to 0
+}
 
 export function findCapabilityById(capabilities: Capability[], id: string): Capability | undefined {
   return capabilities.find(c => c.id === id);
@@ -49,14 +72,17 @@ export function getCapabilityScoreForTeam(
     (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
   );
 
-  // Get current score
-  const currentScore = typeof sortedData[0].value === 'number' ? sortedData[0].value : 0;
+  // Get current score - convert to numeric score (handles dimension scores)
+  const currentScore = getNumericScore(sortedData[0].value);
+
+  // Extract dimension scores if present
+  const dimensionScores = isDimensionScore(sortedData[0].value) ? sortedData[0].value : undefined;
 
   // Calculate trend
   let trend: TrendDirection = 'stable';
   if (sortedData.length >= 2) {
-    const currentValue = typeof sortedData[0].value === 'number' ? sortedData[0].value : 0;
-    const previousValue = typeof sortedData[1].value === 'number' ? sortedData[1].value : 0;
+    const currentValue = getNumericScore(sortedData[0].value);
+    const previousValue = getNumericScore(sortedData[1].value);
     const scoreDiff = currentValue - previousValue;
 
     if (scoreDiff > 0) {
@@ -70,6 +96,7 @@ export function getCapabilityScoreForTeam(
     ...capability,
     currentScore,
     trend,
+    dimensionScores,
   };
 }
 
