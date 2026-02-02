@@ -6,7 +6,7 @@ import type {
   ExperimentActionItem,
   ExperimentDecisionRolesItem,
 } from '../core/data/experimentTypes';
-import { getStatusBadge, calculateEndDate } from '../core/rendering/htmlHelpers';
+import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../core/rendering/htmlHelpers';
 
 interface ExperimentDetailPageProps {
   teams: Team[];
@@ -148,11 +148,14 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
   experiment,
   practiceName,
 }) => {
-  const startDate = new Date(experiment.startDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const parsedStartDate = parseFlexibleDate(experiment.startDate);
+  const startDate = parsedStartDate
+    ? parsedStartDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Invalid Date';
   const duration = experiment.expectedDurationInWeeks
     ? `${experiment.expectedDurationInWeeks} weeks`
     : undefined;

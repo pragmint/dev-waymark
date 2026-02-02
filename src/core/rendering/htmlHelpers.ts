@@ -1,5 +1,33 @@
 // Pure helper functions for HTML generation
 
+/**
+ * Parses a date string that may be in various formats (European DD.M.YYYY, ISO, etc.)
+ * Returns a valid Date object or null if parsing fails
+ */
+export function parseFlexibleDate(dateString: string): Date | null {
+  if (!dateString) return null;
+
+  // Try parsing as-is first (handles ISO format, US format, etc.)
+  let date = new Date(dateString);
+  if (!isNaN(date.getTime())) {
+    return date;
+  }
+
+  // Try European format: DD.M.YYYY or DD.MM.YYYY or D.M.YYYY
+  const europeanMatch = dateString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (europeanMatch) {
+    const day = parseInt(europeanMatch[1], 10);
+    const month = parseInt(europeanMatch[2], 10) - 1; // JavaScript months are 0-indexed
+    const year = parseInt(europeanMatch[3], 10);
+    date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  return null;
+}
+
 export function getTrendIcon(trend: string): string {
   switch (trend) {
     case 'up':
@@ -59,7 +87,9 @@ export function getMaturityLevelLabel(level: number): string {
 export function calculateEndDate(startDate: string, duration?: string): string {
   if (!duration) return 'TBD';
 
-  const start = new Date(startDate);
+  const start = parseFlexibleDate(startDate);
+  if (!start) return 'Invalid Date';
+
   const durationMatch = duration.match(/(\d+)\s*(week|month|day)/i);
 
   if (!durationMatch) return 'TBD';
