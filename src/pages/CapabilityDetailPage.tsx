@@ -178,22 +178,24 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
         {/* Custom header with dropdown */}
         <div class="capability-page-header">
           <h1>{capability.name}</h1>
-          <div class="capability-filter">
-            <label for="team-filter" class="filter-label">
-              View score for:
-            </label>
-            <select
-              id="team-filter"
-              class="team-filter-dropdown"
-              onchange="window.location.href = window.location.pathname + (this.value === 'all' ? '' : '?team=' + this.value)"
-            >
-              {teamOptions.map(option => (
-                <option value={option.value} selected={option.value === selectedTeam}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {teams.length > 1 && (
+            <div class="capability-filter">
+              <label for="team-filter" class="filter-label">
+                View score for:
+              </label>
+              <select
+                id="team-filter"
+                class="team-filter-dropdown"
+                onchange="window.location.href = window.location.pathname + (this.value === 'all' ? '' : '?team=' + this.value)"
+              >
+                {teamOptions.map(option => (
+                  <option value={option.value} selected={option.value === selectedTeam}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div class="capability-header">
           <div class="capability-header-main">

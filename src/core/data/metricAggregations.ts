@@ -51,18 +51,24 @@ export function enrichCapabilitiesWithMetrics(
     });
   });
 
+  // Create a set of valid team IDs (teams that have files in the filesystem)
+  const validTeamIds = new Set(teams.map(team => team.id));
+
   return capabilities.map(capability => {
     const metric = metricsMap.get(capability.id);
 
     if (metric && metric.data.length > 0) {
       // Calculate average score across all teams using each team's most recent value
-      // Group data by team
+      // Group data by team, filtering to only include teams with files in the filesystem
       const teamDataMap = new Map<string, typeof metric.data>();
       metric.data.forEach(dataPoint => {
-        if (!teamDataMap.has(dataPoint.team)) {
-          teamDataMap.set(dataPoint.team, []);
+        // Only include teams that have files in resources/private/yaml/teams/
+        if (validTeamIds.has(dataPoint.team)) {
+          if (!teamDataMap.has(dataPoint.team)) {
+            teamDataMap.set(dataPoint.team, []);
+          }
+          teamDataMap.get(dataPoint.team)!.push(dataPoint);
         }
-        teamDataMap.get(dataPoint.team)!.push(dataPoint);
       });
 
       // Get most recent value for each team
@@ -87,6 +93,16 @@ export function enrichCapabilitiesWithMetrics(
           previousTeamValues.push(currentValue);
         }
       });
+
+      // If no valid teams have data after filtering, treat as no metrics
+      if (currentTeamValues.length === 0) {
+        return {
+          ...capability,
+          currentScore: 0,
+          trend: 'stable' as TrendDirection,
+          teamsTargeting: targetingCounts.get(capability.id) || 0,
+        };
+      }
 
       // Calculate average of all teams' most recent values
       const avgScore = currentTeamValues.reduce((sum, v) => sum + v, 0) / currentTeamValues.length;

@@ -253,7 +253,22 @@ describe('Metric Aggregations - Multiple Submissions', () => {
       },
     ];
 
-    const teams: Team[] = [];
+    const teams: Team[] = [
+      {
+        id: 'team-a',
+        name: 'Team A',
+        targetedCapabilities: [],
+        nonTargetedCapabilities: [],
+        activeExperiments: [],
+      },
+      {
+        id: 'team-b',
+        name: 'Team B',
+        targetedCapabilities: [],
+        nonTargetedCapabilities: [],
+        activeExperiments: [],
+      },
+    ];
 
     const metrics: Metric[] = [
       {
@@ -289,7 +304,15 @@ describe('Metric Aggregations - Multiple Submissions', () => {
       },
     ];
 
-    const teams: Team[] = [];
+    const teams: Team[] = [
+      {
+        id: 'team-a',
+        name: 'Team A',
+        targetedCapabilities: [],
+        nonTargetedCapabilities: [],
+        activeExperiments: [],
+      },
+    ];
 
     const metrics: Metric[] = [
       {

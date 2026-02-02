@@ -106,7 +106,13 @@ const handleCapabilityDetail = async (c: Context) => {
   }
 
   // Get team filter from query string
-  const teamFilter = c.req.query('team') || 'all';
+  let teamFilter = c.req.query('team') || 'all';
+
+  // If there's only one team, automatically show that team's score
+  if (teams.length === 1 && teamFilter === 'all') {
+    const singleTeamId = teams[0].id;
+    return c.redirect(`/catalog/capability/${capabilityId}?team=${singleTeamId}`);
+  }
 
   // Calculate team-specific score
   const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
