@@ -3,14 +3,22 @@ data:
     date: 27.1.2026
     value:
       - manual-test-data-management: 1
+        justification: Sample justification.
       - automated-test-data-management: 1
+        justification: Sample justification.
   - team: team-b
     date: 27.1.2026
     value:
       - manual-test-data-management: 1
+        justification: Sample justification.
       - automated-test-data-management: 3
+        justification: |-
+          There is clear evidence of multiple approaches to automated test data management across the codebase. Some tests fully manage their own state by creating required data as part of test setup, often using in-memory databases, mocks, or API-driven creation flows. These tests are isolated, repeatable, and can run independently of shared environment data, particularly in unit, integration, and controller-level tests.
+          However, automated test data management is not applied consistently across the ecosystem. Some automated tests rely on shared environment state and pre-existing reference data. Interviews did not indicate a shared strategy for managing data for their automated testing suite.
   - team: team-c
     date: 27.1.2026
     value:
       - manual-test-data-management: 2
+        justification: Sample justification.
       - automated-test-data-management: 2
+        justification: Sample justification.

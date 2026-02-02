@@ -62,6 +62,26 @@ function getDimensionScore(capability: Capability, dimension: string | undefined
 }
 
 /**
+ * Get the justification for a specific dimension
+ */
+function getDimensionJustification(
+  capability: Capability,
+  dimension: string | undefined
+): string | undefined {
+  if (!dimension) {
+    return capability.justification;
+  }
+
+  // If we have dimension-specific justifications, use them
+  if (capability.dimensionJustifications) {
+    const key = dimensionToKey(dimension);
+    return capability.dimensionJustifications[key];
+  }
+
+  return undefined;
+}
+
+/**
  * Render maturity level cards
  */
 function renderMaturityLevels(capability: Capability) {
@@ -86,6 +106,7 @@ function renderMaturityLevels(capability: Capability) {
       {Array.from(grouped.entries()).map(([dimension, levels]) => {
         // Get the score for this specific dimension
         const dimensionScore = getDimensionScore(capability, dimension);
+        const dimensionJustification = getDimensionJustification(capability, dimension);
 
         return (
           <div class="maturity-dimensions">
@@ -116,6 +137,16 @@ function renderMaturityLevels(capability: Capability) {
                 );
               })}
             </div>
+            {dimensionJustification && (
+              <div class="justification-section">
+                <h4 class="justification-header">Justification</h4>
+                <div class="justification-text">
+                  {dimensionJustification.split('\n').map((paragraph, i) => (
+                    <p key={i}>{paragraph}</p>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -232,6 +263,16 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
                   {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of
                   this capability.
                 </p>
+                {capability.justification && (
+                  <div class="justification-section">
+                    <h4 class="justification-header">Justification</h4>
+                    <div class="justification-text">
+                      {capability.justification.split('\n').map((paragraph, i) => (
+                        <p key={i}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>

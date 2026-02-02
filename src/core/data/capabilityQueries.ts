@@ -78,6 +78,10 @@ export function getCapabilityScoreForTeam(
   // Extract dimension scores if present
   const dimensionScores = isDimensionScore(sortedData[0].value) ? sortedData[0].value : undefined;
 
+  // Extract justifications
+  const justification = sortedData[0].justification;
+  const dimensionJustifications = sortedData[0].dimensionJustifications;
+
   // Calculate trend
   let trend: TrendDirection = 'stable';
   if (sortedData.length >= 2) {
@@ -97,6 +101,8 @@ export function getCapabilityScoreForTeam(
     currentScore,
     trend,
     dimensionScores,
+    justification,
+    dimensionJustifications,
   };
 }
 

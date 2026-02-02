@@ -447,6 +447,39 @@
   margin: 0;
 }
 
+/* Justification Section */
+.justification-section {
+  margin-top: $spacing-xl;
+  padding: $spacing-lg;
+  background-color: #f9f9f9;
+  border-left: 0.4rem solid $primary-color;
+  border-radius: $border-radius-sm;
+}
+
+.justification-header {
+  font-size: $font-sm;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 $spacing-sm 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.justification-text {
+  font-size: $font-sm;
+  color: $text-secondary;
+  line-height: 1.6;
+  margin: 0;
+
+  p {
+    margin: 0 0 $spacing-md 0;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
 /* Action Buttons */
 .capability-actions,
 .experiment-actions,

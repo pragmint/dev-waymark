@@ -19,7 +19,11 @@ export const CapabilitySchema = z.object({
   description: z.string().optional(),
   maturityLevels: z.array(MaturityLevelSchema).optional(),
   // Dimension-specific scores (e.g., { "new-code": 2, "previously-written-code": 3 })
-  dimensionScores: z.record(z.number()).optional(),
+  dimensionScores: z.record(z.string(), z.number()).optional(),
+  // Justification for the overall score (when not using dimensions)
+  justification: z.string().optional(),
+  // Justifications for individual dimensions (e.g., { "new-code": "justification text" })
+  dimensionJustifications: z.record(z.string(), z.string()).optional(),
 });
 
 // Derive TypeScript types from schemas (single source of truth)
