@@ -36,7 +36,7 @@ export const ExperimentInterventionSchema = z.object({
   description: z.string(),
   success_criteria: z.array(ExperimentSuccessCriteriaItemSchema).optional(),
   status: z.enum(['active', 'backlog', 'blocked', 'pitch', 'polish']),
-  'start-date': z.string(),
+  'start-date': z.string().nullable().optional(),
   'expected-duration-in-weeks': z.number().optional(),
   'action-plan': z.array(ExperimentActionItemSchema).optional(),
 });
@@ -81,7 +81,7 @@ export interface Experiment {
   successCriteria?: ExperimentSuccessCriteriaItem[];
   status: 'active' | 'backlog' | 'blocked' | 'pitch' | 'polish';
   actionPlan?: ExperimentActionItem[];
-  startDate: string;
+  startDate?: string | null;
   expectedDurationInWeeks?: number;
   decisionRoles?: ExperimentDecisionRolesItem[];
 }

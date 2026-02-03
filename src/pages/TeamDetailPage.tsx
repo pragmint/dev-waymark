@@ -7,6 +7,7 @@ import type { Capability } from '../core/data/capabilityTypes';
 import type { Practice } from '../shell/loaders/practiceLoader';
 import type { TeamMetric } from '../shell/loaders/metricLoader';
 import { getStatusBadge } from '../core/rendering/htmlHelpers';
+import { parseDate } from '../core/utils/dateFormatter';
 
 interface TeamDetailPageProps {
   teams: Team[];
@@ -44,11 +45,13 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
       <div class="experiment-meta">
         <span class="experiment-date">
           Started:{' '}
-          {new Date(experiment.startDate).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
+          {experiment.startDate
+            ? parseDate(experiment.startDate).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })
+            : 'TBD'}
         </span>
         {duration && <span class="experiment-duration">{duration}</span>}
       </div>
@@ -160,8 +163,8 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
           {experiments && experiments.length > 0 ? (
             <div class="experiment-cards">
               {experiments.map(exp => {
-                const practice = practiceMap.get(exp.practice);
-                const practiceName = practice ? practice.title : exp.practice;
+                const practice = practiceMap.get(exp.intervention.practiceUnderTest);
+                const practiceName = practice ? practice.title : exp.intervention.practiceUnderTest;
                 return <ExperimentCard experiment={exp} practiceName={practiceName} />;
               })}
             </div>
