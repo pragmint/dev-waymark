@@ -110,7 +110,11 @@ function renderMaturityLevels(capability: Capability) {
 
         return (
           <div class="maturity-dimensions">
-            {dimension && <h3 class="dimension-header">{dimension}</h3>}
+            {dimension && (
+              <h3 class="dimension-header">
+                {dimension} <span class="dimension-score">&nbsp;-&nbsp;({dimensionScore}/4)</span>
+              </h3>
+            )}
             <div class="maturity-grid">
               {levels.map(level => {
                 // Only highlight if score is a whole number matching this level
