@@ -5,6 +5,7 @@ import type {
   Experiment,
   ExperimentActionItem,
   ExperimentDecisionRolesItem,
+  ExperimentSuccessCriteriaItem,
 } from '../core/data/experimentTypes';
 import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../core/rendering/htmlHelpers';
 
@@ -15,38 +16,35 @@ interface ExperimentDetailPageProps {
   practiceName: string;
 }
 
-const SupportingEvidenceSection: FC<{ evidence?: Experiment['supportingEvidence'] }> = ({
-  evidence,
+const SuccessCriteriaSection: FC<{ criteria?: ExperimentSuccessCriteriaItem[] }> = ({
+  criteria,
 }) => {
-  if (!evidence || evidence.length === 0) {
-    return <p class="empty-state">No supporting evidence documented yet.</p>;
+  if (!criteria || criteria.length === 0) {
+    return <p class="empty-state">No success criteria defined yet.</p>;
   }
 
   return (
-    <div class="supporting-evidence">
-      {evidence.map(evidenceItem => {
-        return Object.entries(evidenceItem).map(([metricRef, details]) => (
-          <div class="evidence-subsection">
-            <h4>Metric: {metricRef}</h4>
-            <ul class="evidence-list">
-              {details.map(detail => (
-                <li>
-                  {detail['expected-impact'] && (
-                    <div>
-                      <strong>Expected Impact:</strong> {detail['expected-impact']}
-                    </div>
-                  )}
-                  {detail['expected-duration'] && (
-                    <div>
-                      <strong>Expected Duration:</strong> {detail['expected-duration']}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+    <div class="success-criteria">
+      {criteria.map(item => (
+        <div class="criteria-item">
+          <div class="criteria-header">
+            <strong>Metric:</strong> {item.metric}
           </div>
-        ));
-      })}
+          <div class="criteria-details">
+            <div class="criteria-detail">
+              <strong>Target:</strong> {item.target}
+            </div>
+            <div class="criteria-detail">
+              <strong>Measurement Window:</strong> {item.measurement_window.replace(/_/g, ' ')}
+            </div>
+            {item.notes && (
+              <div class="criteria-notes">
+                <strong>Notes:</strong> {item.notes}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -65,9 +63,11 @@ const ActionPlanSection: FC<{ actionPlan?: ExperimentActionItem[] }> = ({ action
             <span class="action-item-task">{item.title}</span>
             <span class="action-item-status">{item.status}</span>
           </div>
-          <div class="action-item-assignees">
-            <strong>Assigned to:</strong> {item['assigned-to']}
-          </div>
+          {item['assigned-to'] && item['assigned-to'].length > 0 && (
+            <div class="action-item-assignees">
+              <strong>Assigned to:</strong> {item['assigned-to'].join(', ')}
+            </div>
+          )}
           {item.link && (
             <div class="action-item-link">
               <a href={item.link} target="_blank" rel="noopener noreferrer">
@@ -82,62 +82,77 @@ const ActionPlanSection: FC<{ actionPlan?: ExperimentActionItem[] }> = ({ action
 };
 
 const DecisionRolesSection: FC<{ roles?: ExperimentDecisionRolesItem[] }> = ({ roles }) => {
-  if (!roles || roles.length === 0) {
-    return <p class="empty-state">Decision roles not defined yet.</p>;
-  }
-
-  // Flatten roles array (it's an array of role objects)
-  const allRoles = roles[0];
-  if (!allRoles) {
-    return <p class="empty-state">Decision roles not defined yet.</p>;
-  }
+  // Merge all objects in the roles array to get all role assignments
+  const allRoles =
+    roles && roles.length > 0
+      ? roles.reduce(
+          (acc, roleObj) => ({
+            responsible: [...(acc.responsible || []), ...(roleObj.responsible || [])],
+            accountable: [...(acc.accountable || []), ...(roleObj.accountable || [])],
+            consulted: [...(acc.consulted || []), ...(roleObj.consulted || [])],
+            informed: [...(acc.informed || []), ...(roleObj.informed || [])],
+          }),
+          {} as ExperimentDecisionRolesItem
+        )
+      : {};
 
   return (
     <div class="decision-roles">
-      {allRoles.responsible && allRoles.responsible.length > 0 && (
-        <div class="role-section">
-          <h4>Responsible</h4>
-          <p class="role-description">Actively working on the experiment</p>
+      <div class="role-section">
+        <h4>Responsible</h4>
+        <p class="role-description">Actively working on the experiment</p>
+        {allRoles.responsible && allRoles.responsible.length > 0 ? (
           <ul class="role-list">
             {allRoles.responsible.map(person => (
               <li>{person}</li>
             ))}
           </ul>
-        </div>
-      )}
-      {allRoles.accountable && allRoles.accountable.length > 0 && (
-        <div class="role-section">
-          <h4>Accountable</h4>
-          <p class="role-description">Final authority on decisions</p>
+        ) : (
+          <p class="role-empty">Not assigned</p>
+        )}
+      </div>
+
+      <div class="role-section">
+        <h4>Accountable</h4>
+        <p class="role-description">Final authority on decisions</p>
+        {allRoles.accountable && allRoles.accountable.length > 0 ? (
           <ul class="role-list">
             {allRoles.accountable.map(person => (
               <li>{person}</li>
             ))}
           </ul>
-        </div>
-      )}
-      {allRoles.consulted && allRoles.consulted.length > 0 && (
-        <div class="role-section">
-          <h4>Consulted</h4>
-          <p class="role-description">Input sought before decisions are made</p>
+        ) : (
+          <p class="role-empty">Not assigned</p>
+        )}
+      </div>
+
+      <div class="role-section">
+        <h4>Consulted</h4>
+        <p class="role-description">Input sought before decisions are made</p>
+        {allRoles.consulted && allRoles.consulted.length > 0 ? (
           <ul class="role-list">
             {allRoles.consulted.map(person => (
               <li>{person}</li>
             ))}
           </ul>
-        </div>
-      )}
-      {allRoles.informed && allRoles.informed.length > 0 && (
-        <div class="role-section">
-          <h4>Informed</h4>
-          <p class="role-description">Kept informed of progress and decisions</p>
+        ) : (
+          <p class="role-empty">Not assigned</p>
+        )}
+      </div>
+
+      <div class="role-section">
+        <h4>Informed</h4>
+        <p class="role-description">Kept informed of progress and decisions</p>
+        {allRoles.informed && allRoles.informed.length > 0 ? (
           <ul class="role-list">
             {allRoles.informed.map(person => (
               <li>{person}</li>
             ))}
           </ul>
-        </div>
-      )}
+        ) : (
+          <p class="role-empty">Not assigned</p>
+        )}
+      </div>
     </div>
   );
 };
@@ -188,7 +203,10 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
           </div>
           <div class="meta-item">
             <span class="meta-label">Practice:</span>
-            <a href={`/catalog/practice/${experiment.practice}/`} class="meta-value">
+            <a
+              href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}
+              class="meta-value"
+            >
               {practiceName}
             </a>
           </div>
@@ -209,31 +227,90 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
         </div>
 
         <section class="experiment-section">
-          <h2>Hypothesis</h2>
-          <div class="hypothesis-content">
-            <p>{experiment.hypothesis}</p>
+          <h2>Context</h2>
+          <div class="context-content">
+            <div class="context-item">
+              <h3>Problem Statement</h3>
+              <p>{experiment.context.problemStatement}</p>
+            </div>
+            <div class="context-item">
+              <h3>Desired Outcome</h3>
+              <p>{experiment.context.desiredOutcome}</p>
+            </div>
           </div>
         </section>
 
         <section class="experiment-section">
-          <h2>Supporting Evidence</h2>
-          <p class="section-intro">
-            Current metrics and observations that motivated this experiment.
-          </p>
-          <SupportingEvidenceSection evidence={experiment.supportingEvidence} />
+          <h2>Hypothesis</h2>
+          <div class="hypothesis-content">
+            <div class="hypothesis-statement">
+              <h3>Statement</h3>
+              <p>{experiment.hypothesis.statement}</p>
+            </div>
+            {experiment.hypothesis.assumptions && experiment.hypothesis.assumptions.length > 0 && (
+              <div class="hypothesis-item">
+                <h3>Assumptions</h3>
+                <ul>
+                  {experiment.hypothesis.assumptions.map(assumption => (
+                    <li>{assumption}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {experiment.hypothesis.risks && experiment.hypothesis.risks.length > 0 && (
+              <div class="hypothesis-item">
+                <h3>Risks</h3>
+                <ul>
+                  {experiment.hypothesis.risks.map(risk => (
+                    <li>{risk}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {experiment.hypothesis.riskMitigations &&
+              experiment.hypothesis.riskMitigations.length > 0 && (
+                <div class="hypothesis-item">
+                  <h3>Risk Mitigations</h3>
+                  <ul>
+                    {experiment.hypothesis.riskMitigations.map(mitigation => (
+                      <li>{mitigation}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+          </div>
         </section>
 
         <section class="experiment-section">
-          <h2>Action Plan</h2>
-          <p class="section-intro">Tasks and assignments for executing this experiment.</p>
-          <ActionPlanSection actionPlan={experiment.actionPlan} />
+          <h2>Intervention</h2>
+          <div class="intervention-content">
+            <div class="intervention-item">
+              <h3>Practice Under Test</h3>
+              <p>
+                <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
+                  {practiceName}
+                </a>
+              </p>
+            </div>
+            <div class="intervention-item">
+              <h3>Description</h3>
+              <p>{experiment.intervention.description}</p>
+            </div>
+
+            <div class="intervention-subsection">
+              <h3>Success Criteria</h3>
+              <SuccessCriteriaSection criteria={experiment.successCriteria} />
+            </div>
+
+            <div class="intervention-subsection">
+              <h3>Action Plan</h3>
+              <ActionPlanSection actionPlan={experiment.actionPlan} />
+            </div>
+          </div>
         </section>
 
         <section class="experiment-section">
           <h2>Decision-Making Roles (RACI)</h2>
-          <p class="section-intro">
-            Who has what role in the decision to adopt or abandon this practice.
-          </p>
           <DecisionRolesSection roles={experiment.decisionRoles} />
         </section>
 
@@ -241,7 +318,10 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
           <a href={`/team/${team.id}/`} class="btn btn-secondary">
             ← Back to {team.name}
           </a>
-          <a href={`/catalog/practice/${experiment.practice}/`} class="btn btn-primary">
+          <a
+            href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}
+            class="btn btn-primary"
+          >
             View Practice Details
           </a>
         </div>

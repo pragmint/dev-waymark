@@ -151,9 +151,9 @@ export async function prepareTeamDetailData(
   // Load practices from new experiments
   for (const experiment of experiments) {
     try {
-      const practice = await loadPracticeFromFilesystem(experiment.practice);
+      const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
       if (practice) {
-        practiceMap.set(experiment.practice, practice);
+        practiceMap.set(experiment.intervention.practiceUnderTest, practice);
       }
     } catch {
       // Practice file doesn't exist - skip it

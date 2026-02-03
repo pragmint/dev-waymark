@@ -39,18 +39,33 @@ async function loadExperimentFromFile(
     // Parse with runtime validation
     const experimentFile = ExperimentFileSchema.parse(raw);
 
+    // Extract intervention fields
+    const intervention = experimentFile.intervention;
+
     // Transform YAML structure to runtime Experiment structure
     return {
       id: experimentId,
       teamId: teamId,
       title: filenameToTitle(experimentId), // Title is always inferred from filename
-      practice: experimentFile.practice,
-      hypothesis: experimentFile.hypothesis,
-      status: experimentFile.status,
-      supportingEvidence: experimentFile['supporting-evidence'],
-      actionPlan: experimentFile['action-plan'],
-      startDate: experimentFile['start-date'],
-      expectedDurationInWeeks: experimentFile['expected-duration-in-weeks'],
+      context: {
+        problemStatement: experimentFile.context.problem_statement,
+        desiredOutcome: experimentFile.context.desired_outcome,
+      },
+      hypothesis: {
+        statement: experimentFile.hypothesis.statement,
+        assumptions: experimentFile.hypothesis.assumptions,
+        risks: experimentFile.hypothesis.risks,
+        riskMitigations: experimentFile.hypothesis.risk_mitigations,
+      },
+      intervention: {
+        practiceUnderTest: intervention.practice_under_test,
+        description: intervention.description,
+      },
+      successCriteria: intervention.success_criteria,
+      status: intervention.status,
+      actionPlan: intervention['action-plan'],
+      startDate: intervention['start-date'],
+      expectedDurationInWeeks: intervention['expected-duration-in-weeks'],
       decisionRoles: experimentFile['decision-roles'],
     };
   } catch (error) {

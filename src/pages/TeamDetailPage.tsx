@@ -37,7 +37,9 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
       </div>
       <div class="experiment-supporting-practice">
         Supporting practice:{' '}
-        <a href={`/catalog/practice/${experiment.practice}/`}>{practiceName}</a>
+        <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
+          {practiceName}
+        </a>
       </div>
       <div class="experiment-meta">
         <span class="experiment-date">
@@ -52,7 +54,7 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
       </div>
       <div class="experiment-hypothesis">
         <strong>Hypothesis:</strong>
-        <p>{experiment.hypothesis}</p>
+        <p>{experiment.hypothesis.statement}</p>
       </div>
       <div class="experiment-view-details">
         <a href={`/experiment/${experiment.id}/`}>View Details →</a>

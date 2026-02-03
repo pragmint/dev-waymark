@@ -1,27 +1,45 @@
 import { z } from 'zod';
 
+// Context schema - problem statement and desired outcome
+export const ExperimentContextSchema = z.object({
+  problem_statement: z.string(),
+  desired_outcome: z.string(),
+});
+
+// Hypothesis schema - statement with assumptions, risks, and mitigations
+export const ExperimentHypothesisSchema = z.object({
+  statement: z.string(),
+  assumptions: z.array(z.string()).optional(),
+  risks: z.array(z.string()).optional(),
+  risk_mitigations: z.array(z.string()).optional(),
+});
+
 // Action plan schema for experiments
 export const ExperimentActionItemSchema = z.object({
   title: z.string(),
-  'assigned-to': z.string(),
+  'assigned-to': z.array(z.string()).optional(),
   link: z.string().nullable().optional(),
   status: z.enum(['active', 'backlog', 'blocked', 'complete']),
 });
 
-// Supporting evidence schema - array of objects with metric references
-// Each metric reference can have multiple detail objects
-// Format: [{team_id/metric-name: [{"expected-impact": "..."}, {"expected-duration": "..."}]}]
-export const ExperimentEvidenceDetailSchema = z.object({
-  'expected-impact': z.string().optional(),
-  'expected-duration': z.string().optional(),
+// Success criteria schema - metrics with targets
+export const ExperimentSuccessCriteriaItemSchema = z.object({
+  metric: z.string(),
+  target: z.string(),
+  measurement_window: z.enum(['during_experiment', 'after_experiment', 'continuous']),
+  notes: z.string().optional(),
 });
 
-export const ExperimentEvidenceMetricSchema = z.record(
-  z.string(), // Key: team_id/metric-name
-  z.array(ExperimentEvidenceDetailSchema)
-);
-
-export const ExperimentSupportingEvidenceSchema = z.array(ExperimentEvidenceMetricSchema);
+// Intervention schema - practice under test, description, and execution details
+export const ExperimentInterventionSchema = z.object({
+  practice_under_test: z.string(),
+  description: z.string(),
+  success_criteria: z.array(ExperimentSuccessCriteriaItemSchema).optional(),
+  status: z.enum(['active', 'backlog', 'blocked', 'pitch', 'polish']),
+  'start-date': z.string(),
+  'expected-duration-in-weeks': z.number().optional(),
+  'action-plan': z.array(ExperimentActionItemSchema).optional(),
+});
 
 // Decision roles schema (RACI-based)
 export const ExperimentDecisionRolesItemSchema = z.object({
@@ -35,13 +53,9 @@ export const ExperimentDecisionRolesSchema = z.array(ExperimentDecisionRolesItem
 
 // Main experiment file schema (for standalone YAML files)
 export const ExperimentFileSchema = z.object({
-  practice: z.string(),
-  hypothesis: z.string(),
-  status: z.enum(['active', 'backlog', 'blocked', 'pitch', 'polish']),
-  'supporting-evidence': ExperimentSupportingEvidenceSchema.optional(),
-  'action-plan': z.array(ExperimentActionItemSchema).optional(),
-  'start-date': z.string(),
-  'expected-duration-in-weeks': z.number().optional(),
+  context: ExperimentContextSchema,
+  hypothesis: ExperimentHypothesisSchema,
+  intervention: ExperimentInterventionSchema,
   'decision-roles': ExperimentDecisionRolesSchema.optional(),
 });
 
@@ -50,10 +64,22 @@ export interface Experiment {
   id: string; // Derived from filename
   teamId: string; // Derived from directory
   title: string;
-  practice: string;
-  hypothesis: string;
+  context: {
+    problemStatement: string;
+    desiredOutcome: string;
+  };
+  hypothesis: {
+    statement: string;
+    assumptions?: string[];
+    risks?: string[];
+    riskMitigations?: string[];
+  };
+  intervention: {
+    practiceUnderTest: string;
+    description: string;
+  };
+  successCriteria?: ExperimentSuccessCriteriaItem[];
   status: 'active' | 'backlog' | 'blocked' | 'pitch' | 'polish';
-  supportingEvidence?: z.infer<typeof ExperimentEvidenceMetricSchema>[];
   actionPlan?: ExperimentActionItem[];
   startDate: string;
   expectedDurationInWeeks?: number;
@@ -63,4 +89,5 @@ export interface Experiment {
 // Derive TypeScript types from schemas
 export type ExperimentActionItem = z.infer<typeof ExperimentActionItemSchema>;
 export type ExperimentDecisionRolesItem = z.infer<typeof ExperimentDecisionRolesItemSchema>;
+export type ExperimentSuccessCriteriaItem = z.infer<typeof ExperimentSuccessCriteriaItemSchema>;
 export type ExperimentFile = z.infer<typeof ExperimentFileSchema>;

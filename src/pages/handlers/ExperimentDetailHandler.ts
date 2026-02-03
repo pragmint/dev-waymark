@@ -30,9 +30,8 @@ export async function prepareExperimentDetailData(
   const { team, experiment } = result;
 
   // Load the practice to get its display name
-  // Note: experiment.practice is the new field name (was practiceId)
-  const practice = await loadPracticeFromFilesystem(experiment.practice);
-  const practiceName = practice ? practice.title : experiment.practice;
+  const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
+  const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
 
   return {
     teams,
