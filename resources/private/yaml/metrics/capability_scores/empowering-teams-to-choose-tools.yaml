@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Decisions about infrastructure, CI systems, environment configuration, and core tooling are largely guided by leadership. Teams rarely evaluate or select tools independently, based on their specific workflows and constraints.
+      Teams are able to influence tool decisions when they present a compelling case. Several engineers noted that leadership is open to feedback and willing to adjust decisions based on practitioner input. However, this influence is informal and episodic rather than part of a defined process for evaluating, piloting, and adopting tools.
+      There is no clearly articulated baseline toolset owned and reviewed by practitioners across teams, nor is there a consistent mechanism for periodically assessing whether current tools are effective, creating space for experimentation, or documenting exceptions when teams diverge from standard tools. As a result, tool usage tends to default to what is already in place rather than what best supports the work.

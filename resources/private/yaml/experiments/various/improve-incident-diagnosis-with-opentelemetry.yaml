@@ -1,0 +1,96 @@
+context:
+  problem_statement: >
+    When production issues occur, we lack fast, trustworthy
+    signals that explain what happened, where it happened, and why—leading to
+    longer incident duration and higher cognitive load. Deployment frequency and
+    system complexity have increased. The existing observability approach is
+    becoming a constraint on reliability and response.
+  desired_outcome: >
+    Make incident diagnosis faster and more reliable by
+    standardizing telemetry (traces + key metrics) using OpenTelemetry for a
+    high-value slice of the system.
+hypothesis:
+  statement: >
+    If we instrument one critical service using OpenTelemetry standards
+    and provide a minimal, practical workflow for using traces during incidents,
+    then engineers will reduce time-to-diagnose production issues for that
+    service and report higher confidence in root cause analysis.
+  assumptions:
+    - The selected service is involved in a meaningful share of incidents or
+      high-impact failures.
+    - Engineers will use traces during incident response if the workflow is easy
+      and documented.
+    - Our current observability backend can ingest and visualize traces with
+      acceptable latency.
+  risks:
+    - Instrumentation effort exceeds the timebox due to legacy patterns or deep
+      call stacks.
+    - Trace data is noisy, poorly attributed, or missing key spans, reducing
+      usefulness.
+    - Performance overhead or increased resource usage impacts production.
+    - The increase in telemetry volume (sampling, attribute hygiene) creates
+      additional cost/noise.
+    - Team does not adopt the “use traces first” workflow during real incidents.
+  risk_mitigations:
+    - Start with auto-instrumentation where feasible; hand-instrument only the
+      top pain points.
+    - Define a small set of required attributes and semantic conventions up
+      front.
+    - Use conservative sampling and explicit high-cardinality guardrails.
+    - Add a lightweight incident playbook and do at least one tabletop exercise.
+intervention:
+  practice_under_test: adopt-the-opentelemetry-standard
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 12
+  description: >
+    Introduce standardized, service-level tracing and a small set of
+    operational metrics using OpenTelemetry for a single high-value service.
+    Focus on the ability to diagnose incidents quickly (workflow + signal
+    quality), not on platform perfection or broad rollout.
+  success_criteria:
+    - metric: mean_time_to_diagnose_minutes
+      target: -20%
+      measurement_window: during_experiment
+      notes: >
+        Use incident timelines; if data is sparse, use median or per-incident
+        comparison.
+    - metric: time_to_first_useful_signal_minutes
+      target: <= 5
+      measurement_window: during_experiment
+      notes: >
+        Defined as time from incident start/alert to the first signal that
+        narrows the hypothesis space.
+    - metric: engineer_confidence_in_root_cause_analysis
+      target: improved confidence
+      measurement_window: after_experiment
+      notes: >
+        We expect to see developers more routinely express confidence in the
+        tooling's ability to quickly surface the root cause of issues.
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Identify and scope the high-value service for initial OpenTelemetry
+        instrumentation
+      assigned-to:
+        - Example Person 1
+      link: https://www.atlassian.com/software/jira
+      status: backlog
+    - title: Implement baseline OpenTelemetry tracing with agreed semantic conventions
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Define and document the incident-response workflow using traces
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Validate trace signal quality and cost controls under realistic load
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog

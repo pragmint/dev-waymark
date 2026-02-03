@@ -1,10 +1,9 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Build and test automation exists and teams are integrating changes through PR workflows. However, the feedback loop is often not fast or reliable enough to function as true continuous integration.
+      Multiple engineers reported CI outcomes that require repeated reruns with no code changes. This points to flaky builds or flaky tests, which reduces trust in the signal and slows integration. In these cases, the practical “fix” is often to retry the job rather than identify and remove the underlying cause.
+      Additionally, key automated quality checks that previously supported integration confidence are not consistently in place today. For example, quality checks associated with SonarQube were described as having been left behind during migrations, which weakens the test and validation layer that CI depends on.
+      Finally, the organization appears constrained in its ability to treat broken builds as a top priority because teams do not always have the access or ownership needed to repair the CI system. At least one team described recurring pipeline failures where remediation requires manual intervention, but the engineers closest to the work lack permissions to implement a durable fix.

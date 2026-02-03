@@ -1,0 +1,83 @@
+context:
+  problem_statement: >
+    Teams lack consistent, shared dashboards that provide trustworthy service
+    health signals. This contributes to slower incident diagnosis, reliance on
+    tribal knowledge, and broad swarming. Basic service dashboards were called out
+    as missing, and observability is uneven across services.
+  desired_outcome: >
+    Improve incident confidence and reduce coordination overhead by enabling
+    teams to own self-service dashboards that surface service health, customer
+    symptoms, and key operational indicators.
+hypothesis:
+  statement: >
+    If the team creates and owns a small set of service dashboards with agreed
+    definitions (golden signals + customer symptoms) and uses them during incidents,
+    then incident response will become more targeted and engineers will report
+    higher confidence diagnosing and mitigating failures.
+  assumptions:
+    - Data sources (logs/metrics/traces) exist sufficiently for basic dashboards.
+    - Teams can access the tooling needed to build and maintain dashboards.
+    - A small, opinionated dashboard set is preferable to many bespoke views.
+  risks:
+    - Dashboards become vanity metrics and don’t support real diagnosis.
+    - Teams don’t trust the data due to inconsistency or missing context.
+    - Ownership is unclear; dashboards drift and become outdated.
+    - Dashboard creation becomes a large, open-ended project.
+    - Access restrictions prevent responders from using dashboards in real time.
+  risk_mitigations:
+    - Start with one service and 5–8 core charts; iterate based on incident use.
+    - Define metric semantics and dashboard “contract” (names, units, tags).
+    - Assign explicit ownership and a monthly review of dashboard usefulness.
+    - Tie dashboard work to recent incident learnings and symptom alerts.
+intervention:
+  practice_under_test: enable-self-service-monitoring-dashboards
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 10
+  description: >
+    Build a “minimum viable” set of team-owned dashboards for one critical service:
+    golden signals (latency, traffic, errors, saturation), customer symptoms,
+    and key dependencies. Document where the dashboards live, who owns them,
+    and how they’re used during incidents and releases.
+  success_criteria:
+    - metric: time_to_first_shared_diagnosis_minutes
+      target: -20%
+      measurement_window: during_experiment
+      notes: >
+        Measure time from incident start to the first agreed hypothesis of where the problem is.
+    - metric: dashboard_usage_during_incidents_percent
+      target: ">= 80%"
+      measurement_window: during_experiment
+      notes: >
+        Track whether responders referenced dashboards in incident timelines or post-incident notes.
+    - metric: engineer_confidence_in_operational_signals
+      target: improved confidence
+      measurement_window: after_experiment
+      notes: >
+        Pulse survey focused on “I can quickly see service health and likely causes.”
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Select the initial service and define the dashboard “contract” (signals + definitions)
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Build the minimum viable dashboards and validate data correctness
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Document how dashboards are used during incidents and releases
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Run an incident tabletop or drill using the dashboards and refine
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

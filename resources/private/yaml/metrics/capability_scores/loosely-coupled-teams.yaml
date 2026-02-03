@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 1
-  - team: team-b
-    date: 27.1.2026
-    value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Deployment and release are not consistently on-demand and independent. A typical production or training release includes multiple approvers and manual gates, including product, engineering leadership, QA, and security. This approval chain is described as adding days to lead time, including for hotfixes.
+      Environment configuration creates a recurring dependency on SRE or DevOps. Developers reported they cannot directly read or change environment variables and secrets. Changes require submitting requests that are applied manually across environments. Teams also reported production issues that emerge from configuration drift between environments, including feature flags and environment variables, as well as technical coupling that increases cross-team coordination and handoffs. Examples include shared database tables changed by multiple repositories using different migration approaches, and features that require changes across many microfrontends or services. Engineers also described cases where ownership boundaries were unclear, and where fixes were delayed because work moved between teams before landing.
+      Testing and validation are still dependent on shared environments for key stages. Teams described long-lived shared environments such as dev, QA, training, and prod. Training is used for demos and in some cases as the primary place for QA-style validation. This reduces the ability for teams to test on-demand in isolation.

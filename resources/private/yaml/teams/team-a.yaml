@@ -1,8 +1,0 @@
-id: team-a
-name: Team A
-description: >
-  Platform Engineering team focused on building internal developer tools and improving deployment infrastructure.
-targetedCapabilities:
-  - continuous-delivery
-  - deployment-automation
-  - flexible-infrastructure

@@ -1,0 +1,84 @@
+context:
+  problem_statement: >
+    Environment configuration is a recurring production failure mode. Environment
+    variables and secrets are often managed via forms and manual application by
+    SRE/DevOps, and feature flag configuration differs across environments with
+    limited visibility. This leads to “works in lower env, fails in prod” incidents
+    and reinforces risk-averse release practices.
+  desired_outcome: >
+    Improve environment parity and reduce configuration-driven incidents by
+    versioning configuration (and promotion rules) so environments can be
+    reproduced and differences are intentional, reviewable, and auditable.
+hypothesis:
+  statement: >
+    If we separate configuration from code and manage environment configuration
+    as versioned artifacts with clear promotion rules, then configuration drift
+    will decrease and production incidents caused by configuration differences
+    will be reduced.
+  assumptions:
+    - We can identify a bounded slice of config that most often causes drift.
+    - There is a workable mechanism to store and promote config changes.
+    - SRE/DevOps will support shifting changes from manual forms to versioned flow.
+  risks:
+    - Secrets handling becomes a blocker if not designed carefully.
+    - The change introduces friction for urgent hotfix configuration changes.
+    - Teams version config but continue to apply manual overrides in prod.
+    - Tooling mismatches (flags, env vars, Kubernetes config) complicate standardization.
+    - The scope balloons beyond the timebox.
+  risk_mitigations:
+    - Start with non-secret config and one environment-variable-heavy service.
+    - Define the “golden path” for config changes and keep a break-glass path.
+    - Add drift detection to flag manual divergence from versioned state.
+    - Pilot with one service and one config domain before expanding.
+intervention:
+  practice_under_test: separate-config-from-code
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 12
+  description: >
+    Introduce a versioned configuration approach for a selected service, including
+    environment variables and non-secret operational settings. Define promotion
+    and review workflow so that config changes move through environments with
+    traceability and minimal manual intervention.
+  success_criteria:
+    - metric: configuration_related_incidents_per_month
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Tag incidents with “config drift” or “env mismatch” to track impact.
+    - metric: time_to_apply_config_change_days
+      target: -20%
+      measurement_window: during_experiment
+      notes: >
+        Measure from requested config change to applied in production via the new workflow.
+    - metric: environment_drift_events_detected
+      target: -50%
+      measurement_window: during_experiment
+      notes: >
+        Count detected differences between intended versioned state and actual state.
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Identify the highest-impact config failure modes and select pilot service
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Define versioned config format and promotion workflow (including break-glass)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Implement versioned config and drift detection for the pilot service
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Run a production change using the new workflow and capture learnings
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

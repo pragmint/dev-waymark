@@ -1,10 +1,7 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      The organization shows signs of small-batch delivery in some areas. Frontend teams report a pattern of shipping incremental changes behind feature flags, with a stated goal of completing work in short cycles. Platform work also includes frequent promotion into lower environments, which can support faster feedback when changes stay independent and verifiable.
+      Downstream handoffs and coordination costs often regroup work into larger batches before it reaches production and real feedback.

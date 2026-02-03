@@ -1,9 +1,0 @@
-id: team-b
-name: Team B
-description: >
-  Customer-facing web application team responsible for the main e-commerce platform.
-targetedCapabilities:
-  - continuous-integration
-  - test-automation
-  - trunk-based-development
-  - monitoring-and-observability

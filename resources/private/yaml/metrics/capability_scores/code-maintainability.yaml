@@ -1,26 +1,14 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value:
-      - new-code: 1
-      - previously-written-code: 2
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value:
       - new-code: 2
+        justification: |-
+          Recent pull requests show mixed signals in how new code is being introduced. In several cases, new behavior is added by extending existing methods that are already over 100 lines long, primarily through additional conditional logic rather than extracting smaller, focused abstractions. This results in large service objects with nested if statements that are harder for other engineers to understand, reuse, and modify safely.
+          There is also evidence of artifacts that exist in the codebase but do not reliably communicate behavior or validate correctness. This includes documentation that does not accurately reflect actual behavior and automated tests that execute code paths without asserting outcomes. These patterns reduce the usefulness of the codebase as a source of reliable examples and weaken the automated feedback developers rely on when making changes.
+          At the same time, there are positive signals that support maintainability in new code. Pull request feedback is increasingly bolstered by AI tools, which has improved the volume and timeliness of review comments. Linters are in use and help enforce baseline consistency in formatting and structure. And a pull request template encourages developers to add tests alongside code changes.
+          Taken together, these practices indicate emerging alignment on how new code should be reviewed and shared. However, additional guidance and reinforcement would be needed for these practices to consistently result in code that is easy for others to find, reuse, and modify.
       - previously-written-code: 2
-  - team: team-c
-    date: 27.1.2026
-    value:
-      - new-code: 2
-      - previously-written-code: 3
-  - team: team-b
-    date: 20.1.2026
-    value:
-      - new-code: 2
-      - previously-written-code: 2
-  - team: team-c
-    date: 20.1.2026
-    value:
-      - new-code: 1
-      - previously-written-code: 3
+        justification: |-
+          Recent consolidation efforts have improved developers' ability to find related code and reuse patterns. Several engineers described the “Unified Core” and monorepo direction as making it simpler to locate the right place to make changes and reducing the need to coordinate across many separate codebases for a single feature. Teams are generally able to make changes to existing code when required, and fixes for narrowly scoped issues can move quickly when ownership is clear and dependencies are limited. Some engineers described examples where individual contributors were able to deliver end-to-end changes efficiently under these conditions. However, these successes are not consistent across the codebase.
+          Engineers don't have reliable signals to assess the impact of their changes. Limited and uneven test coverage, combined with inconsistent observability and documentation, reduces confidence when modifying behavior outside an engineer's area of expertise. As a result, changes to previously written code often rely on manual verification, deep personal knowledge, or trial-and-error in shared environments rather than fast, reliable feedback from tooling.

@@ -1,0 +1,84 @@
+context:
+  problem_statement: >
+    Automated testing is often treated as a merge gate rather than a risk-reduction
+    mechanism. Teams report low confidence in test suites, and there is evidence
+    of tests that execute paths without asserting outcomes. This reduces trust in
+    the feedback loop and shifts risk downstream into manual QA, approvals,
+    hotfixes, and production incidents.
+  desired_outcome: >
+    Improve signal quality and developer confidence by rebalancing the test
+    pyramid toward fast, reliable tests that validate observable behavior, with
+    clear guidance for what belongs in unit vs integration vs end-to-end suites.
+hypothesis:
+  statement: >
+    If the team establishes a consistent testing strategy and rebalances effort
+    toward high-signal unit and integration tests (with meaningful assertions),
+    then CI feedback will become more trustworthy and the team will reduce
+    late-cycle defects and rework associated with fragile or low-value tests.
+  assumptions:
+    - A meaningful slice of defects can be caught earlier with better tests.
+    - The team can agree on what “good” tests look like (assertions, isolation, determinism).
+    - CI can run the fast layers frequently without becoming a bottleneck.
+  risks:
+    - The strategy stays theoretical and does not change day-to-day test choices.
+    - Teams create more tests but not better tests (still low signal).
+    - Integration boundaries are unclear, making integration tests brittle.
+    - Effort to improve tests competes with delivery and gets deprioritized.
+    - CI remains flaky due to infra, masking test quality improvements.
+  risk_mitigations:
+    - Start with one repo/service and define a small, opinionated strategy.
+    - Add “assertion quality” checks in reviews (tests must assert outcomes).
+    - Track flaky tests and require fixes/removal before adding new ones.
+    - Timebox improvements to the highest-change areas (hot code paths).
+intervention:
+  practice_under_test: build-consistent-testing-strategy
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 12
+  description: >
+    Define and adopt a testing strategy that clarifies the purpose and standards
+    of each layer of the test pyramid. Improve existing tests in a targeted area
+    to increase determinism and assertion quality, and adjust CI to emphasize fast,
+    reliable feedback.
+  success_criteria:
+    - metric: flaky_test_failures_per_week
+      target: -50%
+      measurement_window: during_experiment
+      notes: >
+        Track failures that pass on rerun without code changes as a primary signal.
+    - metric: defect_escape_rate_to_qa_or_prod
+      target: -20%
+      measurement_window: during_experiment
+      notes: >
+        Use a consistent definition of “escaped defect” (found after merge gate).
+    - metric: engineer_confidence_in_tests
+      target: improved confidence
+      measurement_window: after_experiment
+      notes: >
+        Pulse survey: “Tests catch real issues” and “Failing tests are actionable.”
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Define the testing strategy (layers, standards, examples, what not to do)
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Select a high-change area and refactor tests to improve assertions and determinism
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Identify and eliminate top flaky tests and unstable fixtures
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Update CI to prioritize fast feedback and publish a weekly test health report
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

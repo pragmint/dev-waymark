@@ -1,0 +1,9 @@
+id: various
+name: Various Teams
+description: >
+  We didn't asses teams individually for this engagement. Scores are based on interviews from an assortment of teams and a code review of multiple repositories.
+targetedCapabilities:
+  - visibility-of-work-in-the-value-stream
+  - work-in-process-limits
+  - streamline-change-approval
+  - visual-management

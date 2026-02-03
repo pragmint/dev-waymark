@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 1
-  - team: team-b
-    date: 27.1.2026
-    value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Interview data indicates that information flow is uneven and often reactive. Teams commonly rely on chat escalation and broad incident swarming to surface problems, rather than on shared, routine mechanisms that enable timely and targeted information sharing across roles.
+      Cooperation and shared responsibility are hampered by unclear ownership and cross-team dependencies. Several workflows require coordination across multiple roles and approval points, which delays decisions and increases the likelihood that critical context is lost or arrives late.
+      When failures occur, the primary focus is on restoring service through interruption and coordination. But failures do not consistently lead to inquiry that improves how information is shared or how responsibilities are structured. As a result, similar issues reoccur across delivery cycles.

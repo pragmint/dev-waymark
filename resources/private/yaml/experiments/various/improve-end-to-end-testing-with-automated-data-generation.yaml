@@ -1,0 +1,83 @@
+context:
+  problem_statement: >
+    Teams struggle to work with production-like data due to PII constraints and
+    lack of standardized dataset generation. Some automated tests depend on shared
+    environment state and pre-existing reference data, which reduces repeatability
+    and limits confidence in end-to-end validation.
+  desired_outcome: >
+    Improve end-to-end test reliability and usefulness by automating test data
+    generation so tests can create representative, isolated scenarios on-demand
+    without relying on long-lived shared state.
+hypothesis:
+  statement: >
+    If we introduce automated test data generation for a high-value end-to-end
+    workflow and integrate it into the test harness, then end-to-end tests will
+    become more repeatable and actionable, reducing failures caused by missing
+    or stale shared data and increasing confidence in release readiness.
+  assumptions:
+    - We can define a small set of representative scenarios for the chosen workflow.
+    - There is an accessible mechanism to seed data (APIs, fixtures, factories).
+    - The team can isolate test runs enough to avoid cross-test interference.
+  risks:
+    - Data generation becomes complex and time-consuming to maintain.
+    - Test environments lack isolation, causing collisions and flaky failures.
+    - Generated data is unrealistic and fails to represent actual edge cases.
+    - E2E suites become slower, worsening feedback cycles.
+    - Ownership is unclear and the tooling degrades over time.
+  risk_mitigations:
+    - Start with 1–3 critical scenarios and iterate.
+    - Use unique namespaces/identifiers per test run to avoid collisions.
+    - Prefer API-driven setup over direct DB writes where possible.
+    - Track E2E duration and cap growth with a strict performance budget.
+intervention:
+  practice_under_test: use-data-generation-tools
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 12
+  description: >
+    Implement automated data generation for a selected end-to-end workflow,
+    enabling tests to create their own prerequisites and clean up after execution.
+    Focus on repeatability, isolation, and actionable failure diagnostics so E2E
+    tests validate real behavior rather than shared environment state.
+  success_criteria:
+    - metric: end_to_end_test_flakiness_rate
+      target: -40%
+      measurement_window: during_experiment
+      notes: >
+        Track failures that pass on rerun with no code changes or are caused by missing data.
+    - metric: percent_of_e2e_tests_with_self_managed_data
+      target: ">= 70%"
+      measurement_window: during_experiment
+      notes: >
+        Measure how many E2E tests create required data as part of setup.
+    - metric: time_spent_on_manual_test_data_setup_hours_per_week
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Use a lightweight self-report or tag time entries for test data setup activities.
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Select the pilot end-to-end workflow and define representative scenarios
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Choose data generation approach (factories/fixtures/APIs) and implement for scenarios
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Integrate data generation into E2E harness with isolation and cleanup
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Add diagnostics for failed scenarios and review E2E reliability weekly
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

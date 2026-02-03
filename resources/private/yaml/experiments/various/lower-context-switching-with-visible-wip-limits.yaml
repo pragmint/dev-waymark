@@ -1,0 +1,83 @@
+context:
+  problem_statement: >
+    Incident response patterns are interrupt-driven and “swarm-only,” and teams
+    are frequently pulled into shared channels without triage. This drives
+    high context switching, long-lived work, and hidden queues. Without explicit
+    WIP limits, work continues to accumulate instead of exposing constraints.
+  desired_outcome: >
+    Reduce context switching and improve throughput by introducing visible WIP
+    limits and clear policies that prioritize finishing work over starting more.
+hypothesis:
+  statement: >
+    If the team sets and enforces visible WIP limits per workflow stage and
+    establishes a simple “stop starting, start finishing” policy, then cycle time
+    will decrease and engineers will report fewer interruptions and lower
+    cognitive load during delivery weeks.
+  assumptions:
+    - Work is already tracked in a board that can surface WIP by stage.
+    - The team can negotiate intake policies with stakeholders.
+    - A small amount of friction (limits) will be tolerated to reduce chaos.
+  risks:
+    - Limits are set too high to matter or too low to be workable.
+    - Stakeholders route around limits, creating shadow queues.
+    - The board does not reflect reality, undermining the signal.
+    - Incidents continue to override the system, making limits irrelevant.
+    - Teams interpret limits as “go slower” instead of “reduce multitasking.”
+  risk_mitigations:
+    - Start with conservative, team-chosen limits and adjust weekly.
+    - Make “expedite lane” explicit for true emergencies with defined criteria.
+    - Require work items to meet a clear “ready” policy before entering WIP.
+    - Use a simple weekly review - where did WIP pile up and why?
+intervention:
+  practice_under_test: set-and-enforce-wip-limits
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 8
+  description: >
+    Add explicit WIP limits to key workflow stages (e.g., In Progress, In Review,
+    In QA, Ready for Release). Make the limits visible on the board and adopt
+    lightweight policies for what the team does when limits are hit, including
+    how expedite work is handled.
+  success_criteria:
+    - metric: average_cycle_time_days
+      target: -20%
+      measurement_window: during_experiment
+      notes: >
+        Use the team’s primary work item type; measure from “In Progress” to “Done.”
+    - metric: number_of_concurrent_in_progress_items
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Count active items per engineer or per team, depending on board structure.
+    - metric: engineer_context_switching_pulse
+      target: reduced interruptions
+      measurement_window: after_experiment
+      notes: >
+        Short pulse: “I can focus for meaningful blocks of time” and “urgent
+        interruptions are triaged, not broadcast.”
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Define workflow stages and ensure the board reflects reality
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Set initial WIP limits and policies (including expedite criteria)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Introduce weekly WIP review to tune limits and remove bottlenecks
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Add lightweight tracking for cycle time and interruption signals
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

@@ -1,0 +1,83 @@
+context:
+  problem_statement: >
+    User-impacting failures are often discovered through manual signals
+    (incident channels, product reports, direct messages) rather than through
+    automated detection. This delays response and increases the probability
+    of broad swarming and reactive coordination.
+  desired_outcome: >
+    Detect user-impacting failures earlier by implementing symptom-based alerts
+    tied to customer experience signals (errors, latency, failed workflows),
+    with clear ownership and response expectations.
+hypothesis:
+  statement: >
+    If we implement symptom-based alerts for a high-value user journey or service
+    and define a small on-call response workflow, then the team will detect
+    customer-impacting incidents earlier and reduce time-to-acknowledge and
+    time-to-mitigate for those failures.
+  assumptions:
+    - We can identify a small set of symptoms that correlate strongly with impact.
+    - Monitoring tools can support alert thresholds and routing to the right people.
+    - The team can tune alerts to avoid excessive noise.
+  risks:
+    - Alerts are too noisy and get ignored (alert fatigue).
+    - Symptoms are poorly chosen and miss real user impact.
+    - Ownership is unclear, so alerts route to a broad audience.
+    - Alert thresholds become stale as traffic patterns change.
+    - Teams lack access to fix the underlying issue once detected.
+  risk_mitigations:
+    - Start with 2-4 high-signal symptoms for one journey/service.
+    - Use rate-of-change and error-budget style thresholds where possible.
+    - Route alerts to a small responder group; broadcast only for major incidents.
+    - Review alerts weekly for tuning and add runbooks for top alerts.
+intervention:
+  practice_under_test: implement-symptom-based-alerts
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 8
+  description: >
+    Select a critical user workflow and implement symptom-based alerts that
+    reflect user impact (e.g., failure rate, elevated error codes, latency,
+    conversion drop). Define alert routing, severity levels, and a minimal
+    response playbook so responders can act quickly and consistently.
+  success_criteria:
+    - metric: time_to_acknowledge_minutes
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Measure from first symptom threshold breach to first responder acknowledgement.
+    - metric: percent_of_user_impacting_incidents_detected_by_alerts
+      target: ">= 60%"
+      measurement_window: during_experiment
+      notes: >
+        Tag incidents with “detected_by” and aim to shift detection from manual to automated.
+    - metric: alert_noise_ratio
+      target: <= 2_to_1
+      measurement_window: during_experiment
+      notes: >
+        Track actionable vs non-actionable alerts to prevent fatigue.
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Identify the critical user journey/service and define “user impact” symptoms
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Implement initial symptom alerts and routing (severity + ownership)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Create short runbooks for each alert (what to check, what to do first)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Run weekly alert tuning review and adjust thresholds based on outcomes
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

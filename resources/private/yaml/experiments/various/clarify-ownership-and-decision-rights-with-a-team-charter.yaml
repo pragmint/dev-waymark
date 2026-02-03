@@ -1,0 +1,87 @@
+context:
+  problem_statement: >
+    Ownership and decision rights are inconsistent across teams and domains.
+    Some engineers describe production access and operational responsibilities
+    as blocked or SRE-mediated, while others report broad access granted quickly.
+    This inconsistency creates confusion about who is responsible for what,
+    slows decisions, increases handoffs, and contributes to reactive coordination.
+  desired_outcome: >
+    Improve clarity and speed of execution by defining and socializing a team
+    charter that makes ownership boundaries, decision rights, operating norms,
+    and escalation paths explicit and easy to reference.
+hypothesis:
+  statement: >
+    If the team creates and publishes a lightweight team charter that clarifies
+    ownership, decision rights, and operational expectations, then cross-team
+    coordination overhead will decrease and engineers will report higher
+    confidence about how to get decisions made and work unblocked.
+  assumptions:
+    - The main friction is ambiguity (not lack of capability or intent).
+    - Leadership will respect the decision rights documented in the charter.
+    - The charter will be used as a living reference, not a one-time document.
+  risks:
+    - The charter becomes aspirational and does not reflect actual constraints.
+    - Decision rights are clarified on paper but not honored in practice.
+    - The charter adds bureaucracy (review gates) rather than removing it.
+    - Disagreements about ownership stall the effort or lead to political conflict.
+    - Changes in org structure quickly invalidate the charter.
+  risk_mitigations:
+    - Focus on “what we do today” first, then document “what we want next.”
+    - Include explicit examples of who decides, who executes, who is consulted.
+    - Keep it short (1-2 pages) and revisit monthly for small updates.
+    - Align leadership early on the intent - reduce ambiguity, not add gates.
+intervention:
+  practice_under_test: create-a-team-charter
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 6
+  description: >
+    Facilitate a short working session to define team purpose, ownership
+    boundaries, decision rights, operating norms (including incident response
+    expectations), and escalation paths. Publish the charter where teams already
+    look for operational truth and reinforce it in recurring ceremonies.
+  success_criteria:
+    - metric: time_to_decision_for_cross_team_requests_days
+      target: -25%
+      measurement_window: during_experiment
+      notes: >
+        Use a sample of recurring cross-team decisions (access, config changes,
+        release approvals) and measure elapsed time from request to decision.
+    - metric: engineer_role_clarity_survey
+      target: improved clarity
+      measurement_window: after_experiment
+      notes: >
+        Short pulse survey: “I know who owns X and how decisions are made” and
+        “I know how to get unblocked.”
+    - metric: number_of_work_items_blocked_due_to_ownership_ambiguity
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Track blocked reasons on tickets for a single team (or a single value stream)
+        to avoid boiling the ocean.
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Collect top recurring ambiguity pain points (ownership, access, approvals)
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Draft the team charter (purpose, ownership map, decision rights, escalation)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Validate the charter with adjacent teams and leadership; resolve conflicts
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog
+    - title: Publish the charter and add a monthly review cadence
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog

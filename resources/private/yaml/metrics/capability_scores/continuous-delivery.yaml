@@ -1,22 +1,23 @@
 data:
-  - team: team-a
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value:
-      - value-delivery-frequency: 1
-      - lead-time-for-changes: 1
-      - change-failure-rate: 1
-      - time-to-restore-service: 1
-  - team: team-b
-    date: 27.1.2026
-    value:
-      - value-delivery-frequency: 1
+      - value-delivery-frequency: 3
+        justification: |-
+          Changes are frequently promoted to lower environments, and production releases occur on a regular cadence. The Platform team described deploying to lower environments two to three times per day and releasing to training and production about once per week. Product leadership described roughly four to five production deployments per week across teams. But releasing to production on-demand appears constrained by manual approval steps and coordinated release practices, including a champion releaser workflow and multiple approvers for each release.
       - lead-time-for-changes: 2
-      - change-failure-rate: 3
-      - time-to-restore-service: 1
-  - team: team-c
-    date: 27.1.2026
-    value:
-      - value-delivery-frequency: 2
-      - lead-time-for-changes: 1
-      - change-failure-rate: 2
-      - time-to-restore-service: 3
+        justification: |-
+          There is no clear or consistently used source of truth for measuring lead time from change initiation to production (formerly tracked in ADO). As a result, observations are based on team member anecdotes rather than shared metrics across teams.
+          Interviewees described production releases occurring approximately once per week, often followed by hotfixes to address issues discovered after release. In legacy areas of the system, lead time was reported to extend significantly, in some cases taking up to one month.
+          Lead time is also extended by rework and waiting time earlier in the delivery process. Multiple handoffs between product, engineering, and QA, combined with misalignment in requirements or late clarification, introduce additional cycles of rework and revalidation.
+      - change-failure-rate: 1
+        justification: |-
+          There is no consistent, shared measure that links production incidents back to specific changes or releases. Teams do not appear to track change failure rate explicitly or review it as a signal of whether the system is remaining deployable and low risk as changes are introduced.
+          Interviews pointed to a significant portion of production deployments resulting in service degradation, defects, or the need for follow-up corrective work. Product leadership reported roughly four to five production deployments per week alongside roughly four to five production incidents per week across teams. Engineers described frequent fix-forward releases and hotfixes following production deployments, rather than issues being detected and resolved earlier in the delivery process.
+          The team described several reasons that changes may fail after release. Configuration differences across environments, especially related to feature flags and environment variables, were repeatedly cited as causing changes to behave differently in production than in lower environments. This limits confidence that the system remains deployable as changes move through the pipeline.
+      - time-to-restore-service: 2
+        justification: |-
+          Incidents are responded to and resolved, but restoration speed appears to vary based on whether the team can quickly determine what is deployable and what change is needed to restore expected behavior.
+          Several interview notes suggest that the feedback needed to restore service is not consistently available to all engineers in real time. Teams frequently rely on pairing with SREs or coordinating through shared channels to access production signals and perform deeper diagnosis, which can extend the elapsed time to identify and validate a fix.
+          When restoration requires a production change, the delivery workflow can introduce additional waiting time. Approvals, manual deployment steps, and environment configuration dependencies mean that safely applying corrective changes takes more time, including for hotfix scenarios.
+          There is evidence that the organization is moving toward patterns that could reduce restoration time, such as improvements to deployment tooling and the use of observability tools. At present, restore work still depends on a mix of automated tooling and manual coordination, which is consistent with a mid-level capability score rather than a high-performing on-demand model.

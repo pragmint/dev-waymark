@@ -1,0 +1,83 @@
+context:
+  problem_statement: >
+    CI outcomes are unreliable, with builds and deployments failing randomly and
+    requiring reruns without changes. This reduces trust in automated feedback
+    and turns CI into a compliance gate rather than a confidence-building system.
+    In some cases, teams lack the access needed to fix CI failures durably.
+  desired_outcome: >
+    Restore trust in CI by treating broken builds as outages: visible, owned,
+    and prioritized for rapid recovery, with follow-through to remove the root
+    cause of repeat failures.
+hypothesis:
+  statement: >
+    If the team treats broken builds as outages with clear ownership, response
+    expectations, and a root-cause follow-up loop, then build stability will
+    improve and engineers will spend less time retrying pipelines and working
+    around flaky signals.
+  assumptions:
+    - Build failures can be categorized (flaky infra, flaky tests, deterministic failures).
+    - The team can allocate capacity to prioritize CI health work.
+    - There is a place to make CI health visible (dashboard, channel, board).
+  risks:
+    - The policy is declared but not enforced under delivery pressure.
+    - Lack of permissions prevents durable fixes, creating frustration.
+    - The team over-rotates to “always green” by weakening validations.
+    - Repeated failures create fatigue and learned helplessness.
+    - Ownership conflicts between platform/DevOps and application teams.
+  risk_mitigations:
+    - Define escalation paths and access needs up front.
+    - Track “rerun without change” as a CI smell and prioritize it.
+    - Require that fixes preserve validation integrity (no “mute the alarm” shortcuts).
+    - Start with one repo/pipeline to prove the approach.
+intervention:
+  practice_under_test: treat-broken-builds-like-outages
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 8
+  description: >
+    Establish an explicit policy and workflow: a broken main build is an outage.
+    Create rapid triage expectations, clear ownership, and a lightweight
+    follow-up mechanism to eliminate recurring flakiness. Make CI health visible
+    and reviewed regularly.
+  success_criteria:
+    - metric: minutes_with_broken_main_branch_per_week
+      target: -50%
+      measurement_window: during_experiment
+      notes: >
+        Track elapsed time the main build is red (or deployments blocked).
+    - metric: rerun_without_change_rate
+      target: -40%
+      measurement_window: during_experiment
+      notes: >
+        Measure how often engineers rerun jobs to “get green” without changes.
+    - metric: engineer_trust_in_ci_signal
+      target: improved trust
+      measurement_window: after_experiment
+      notes: >
+        Pulse survey: “CI failures usually mean something actionable.”
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Define what constitutes a “broken build outage” and how it is reported
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Create ownership + escalation paths for CI failures (including access gaps)
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Instrument CI health metrics (broken minutes, reruns) and publish weekly
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog
+    - title: Run a recurring root-cause follow-up loop for top recurring failures
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog

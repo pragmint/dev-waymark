@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
-    value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+  - team: various
+    date: 30.1.2026
+    value: 3
+    justification: |-
+      The organization operates on cloud infrastructure and has baseline elasticity in production. Auto-scaling is enabled, with instances configured to a baseline of 2 and a hard cap. Interview notes did not indicate current performance or capacity constraints that require additional scaling.
+      Most environments appear to be long-lived and shared across teams, including production, training, QA, and development. Multiple interviewees described coordination costs that come from working in these shared environments, such as using training as a demo environment and for QA work.
+      On-demand self-service is mixed. Several workflow examples indicate developers do not consistently self-service environment configuration changes through an automated mechanism. Environment variable and secret changes commonly require a form or ticket, followed by manual work by SRE or DevOps. This creates waiting time and makes configuration drift between environments more likely.

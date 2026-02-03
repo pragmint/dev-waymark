@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
-    value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+  - team: various
+    date: 30.1.2026
+    value: 3
+    justification: |-
+      Version control is broadly in use for application source code across the engineering department. Engineers described routine collaboration via pull requests and coordinated reviews. One team also reported that moving multiple microfrontends into a monorepo reduced the friction of making cross-cutting changes.
+      At the same time, there are gaps in reproducibility and traceability for environments. Environment variables and secrets are managed outside of engineering control, configured manually by SREs based on forms. Feature flags are managed in external systems and are not consistently promoted or synchronized across environments. And, in some cases, debugging relies on timestamps rather than consistent end-to-end correlation.
+      AI tooling is widely available and actively used for version control, but we didn't come across AI artifacts like prompts or agent configuration files that are being versioned as shared team assets. This reduces both auditability and the safety benefits of being able to revert or review AI-assisted changes with full context.

@@ -1,0 +1,82 @@
+context:
+  problem_statement: >
+    Deployments and release promotion are fragile and coordination-heavy. Teams
+    report flaky pipelines that sometimes require reruns with no code changes.
+    Approval chains add days of waiting, and repeatability breaks around
+    configuration and environment drift.
+  desired_outcome: >
+    Increase release repeatability and reduce manual effort by improving the
+    automated deployment pipeline for a targeted service or slice of the system,
+    focusing on deterministic outcomes and fast recovery from failures.
+hypothesis:
+  statement: >
+    If we improve the automated deployment pipeline for one high-value deployment
+    path (including failure handling and repeatability checks), then pipeline
+    success rate will improve and releases will require fewer manual interventions
+    and reruns.
+  assumptions:
+    - There is a known recurring failure point (e.g., apply step) that can be improved.
+    - The team can obtain the access needed to make pipeline changes.
+    - The chosen slice is representative enough to generalize later.
+  risks:
+    - Root causes require cross-team changes that exceed the timebox.
+    - Improvements are localized and do not address upstream instability.
+    - Pipeline changes introduce new failure modes or slow deployment time.
+    - Approvals remain a bottleneck even if the pipeline is reliable.
+    - Teams continue to treat retries as normal rather than fixing underlying issues.
+  risk_mitigations:
+    - Start with the single most common failure mode and instrument it.
+    - Add deterministic pre-checks and clearer failure diagnostics.
+    - Build a rollback/retry strategy that is safe and documented.
+    - Capture baseline data (failure rate, reruns) before changes.
+intervention:
+  practice_under_test: automate-deployment-scripts
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 12
+  description: >
+    Select a deployment pipeline that is high-friction and improve it to be
+    deterministic and self-diagnosing. Focus on reliability of the pipeline,
+    clarity of failure modes, and reducing “rerun until it works” behaviors.
+  success_criteria:
+    - metric: deployment_pipeline_success_rate
+      target: +20%
+      measurement_window: during_experiment
+      notes: >
+        Measure successful runs / total runs for the targeted pipeline.
+    - metric: number_of_reruns_per_deployment
+      target: -50%
+      measurement_window: during_experiment
+      notes: >
+        Count reruns where no code/config changed, indicating flakiness.
+    - metric: manual_interventions_per_release
+      target: -30%
+      measurement_window: during_experiment
+      notes: >
+        Track manual steps required to complete a release (excluding intentional approvals).
+  decision-roles:
+    - responsible:
+    - accountable:
+    - consulted:
+    - informed:
+  action-plan:
+    - title: Baseline current pipeline failure modes and identify the top culprit step
+      assigned-to:
+        - Example Person 1
+      link: null
+      status: backlog
+    - title: Implement deterministic checks and improved diagnostics for the culprit step
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Add safe retry/rollback behavior and document operational guidance
+      assigned-to:
+        - Example Person 2
+      link: null
+      status: backlog
+    - title: Review outcomes weekly and publish reliability metrics to the team
+      assigned-to:
+        - Example Person 3
+      link: null
+      status: backlog

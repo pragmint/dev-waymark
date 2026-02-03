@@ -1,10 +1,7 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Release pipelines are in place and are used to deploy build artifacts into multiple environments, which has reduced some manual effort. However, production releases still require manual approvals.
+      Automation also breaks down around configuration and repeatability. Environment variables and feature flags are not consistently managed or promoted alongside the same artifacts across environments, leading to deployments that appear successful but fail in production. Pipelines are described as flaky and non-deterministic, sometimes requiring reruns without changes. Environments are long-lived and cannot be reliably recreated from version-controlled scripts and configuration.

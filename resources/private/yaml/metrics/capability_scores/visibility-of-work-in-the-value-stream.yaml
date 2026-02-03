@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Work is visible within local slices of the process, especially once items are in active delivery. Teams described using boards and tickets, and there is some forward visibility into planned work. One engineer noted that backlog visibility improved from a roughly one-week horizon to a multi-month view.
+      Visibility becomes weaker when work crosses functions or teams, or when it depends on upstream or downstream context. Multiple conversations from interviews suggest that not everyone has the same understanding of how a request moves from idea through implementation, testing, release, and customer impact. In one case, missing context about a third-party integration led to assumptions and rework until someone investigated and surfaced the hidden dependency.
+      We didn't find a shared, up-to-date value stream map or a consistent set of flow metrics that teams can access to understand where work queues, rework occurs, or how long items spend in each stage. One leader explicitly called out that basic-level service dashboards are missing.

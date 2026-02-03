@@ -1,10 +1,8 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
-    value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+  - team: various
+    date: 30.1.2026
+    value: 1.5
+    justification: |-
+      Automated testing exists across parts of the system, but it is not consistently used as a fast feedback mechanism for validating changes and behavior throughout the delivery lifecycle, or for catching regressions early. Several signals suggest the automated test suites satisfy process or tooling expectations but do not yet provide reliable assurance that a change is releasable.
+      Coverage and maturity vary significantly by team and codebase. One team reported higher unit test coverage, while other areas were described as having low coverage or relying on manual QA as the primary backstop. This unevenness makes it hard to treat automated testing as a shared standard for "dev complete."
+      A recent Platform pull request included unit tests without assertions, tests that validate mocked behavior rather than observable outcomes, and Gherkin-style scenarios that do not appear to be executed anywhere. In addition, multiple recent Frontend pull requests added or modified branching logic without introducing corresponding automated tests.

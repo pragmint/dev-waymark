@@ -1,10 +1,9 @@
 data:
-  - team: team-a
-    date: 27.1.2026
-    value: 1
-  - team: team-b
-    date: 27.1.2026
+  - team: various
+    date: 30.1.2026
     value: 2
-  - team: team-c
-    date: 27.1.2026
-    value: 2
+    justification: |-
+      Customer feedback reaches teams, but it does not yet operate as a fast, closed-loop system that consistently drives learning. Signals about customer experience often arrive after issues surface, instead of as a steady stream of leading indicators that allow teams to detect problems early and adjust quickly.
+      Product team members actively advocate for customers and play a key role in bringing customer concerns, priorities, and context into planning and delivery discussions. This advocacy helps ensure that customer needs are represented, especially when issues arise or when changes are being evaluated for release.
+      There is no shared set of customer satisfaction or usage metrics that is reviewed regularly and used to guide decisions. Measures such as adoption, task success, retention, or customer effort are not consistently visible across teams. As a result, engineering and product are often not using the same signals to align around improving customer outcomes.
+      Some tools make it possible to observe customer behavior and investigate failures, and these are used to support validation and troubleshooting. However, they are not yet embedded in a continuous feedback rhythm that helps teams understand whether recent changes improved or degraded the customer experience.
