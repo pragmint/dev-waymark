@@ -1,75 +1,15 @@
-context:
-  problem_statement: >
-    When production issues occur, we lack fast, trustworthy signals that explain
-    what happened, where it happened, and why—leading to longer incident
-    duration and higher cognitive load.
-    Deployment frequency and system complexity have increased. The existing
-    observability approach is becoming a constraint on reliability and response.
-  desired_outcome: >
-    Make incident diagnosis faster and more reliable by standardizing telemetry
-    (traces + key metrics) using OpenTelemetry for a high-value slice of the system.
-hypothesis:
-  statement: >
-    If we instrument one critical service using OpenTelemetry standards and
-    provide a minimal, practical workflow for using traces during incidents,
-    then engineers will reduce time-to-diagnose production issues for that
-    service and report higher confidence in root cause analysis.
-  assumptions:
-    - The selected service is involved in a meaningful share of incidents or high-impact failures.
-    - Engineers will use traces during incident response if the workflow is easy and documented.
-    - Our current observability backend can ingest and visualize traces with acceptable latency.
-    - We can limit telemetry volume (sampling, attribute hygiene) to avoid runaway cost/noise.
-  risks:
-    - Instrumentation effort exceeds the timebox due to legacy patterns or deep call stacks.
-    - Trace data is noisy, poorly attributed, or missing key spans, reducing usefulness.
-    - Performance overhead or increased resource usage impacts production.
-    - Team does not adopt the “use traces first” workflow during real incidents.
-  risk_mitigations:
-    - Start with auto-instrumentation where feasible; hand-instrument only the top pain points.
-    - Define a small set of required attributes and semantic conventions up front.
-    - Use conservative sampling and explicit high-cardinality guardrails.
-    - Add a lightweight incident playbook and do at least one tabletop exercise.
-intervention:
-  practice_under_test: adopt-open-telemetry
-  description: >
-    Introduce standardized, service-level tracing and a small set of operational
-    metrics using OpenTelemetry for a single high-value service. Focus on the
-    ability to diagnose incidents quickly (workflow + signal quality), not on
-    platform perfection or broad rollout.
-success_criteria:
-  quantitative:
-    - metric: mean_time_to_diagnose_minutes
-      target_change: -20%
-      measurement_window: during_experiment
-      notes: >
-        Use incident timelines; if data is sparse, use median or per-incident comparison.
-    - metric: time_to_first_useful_signal_minutes
-      target: "<= 5"
-      measurement_window: during_experiment
-      notes: >
-        Defined as time from incident start/alert to the first signal that narrows the hypothesis space.
-    - metric: incidents_using_traces_percent
-      target: ">= 60%"
-      measurement_window: during_experiment
-      notes: >
-        Incidents involving the target service where traces were explicitly referenced.
-    - metric: manual_logging_added_during_incident_count
-      target_change: -30%
-      measurement_window: during_experiment
-      notes: >
-        Proxy for “we had no signal.” Count PRs/commits that add logs during active incidents.
-  qualitative:
-    - outcome: engineer_confidence_in_root_cause_analysis
-      target: improved
-      measurement: weekly_pulse_survey
-    - outcome: perceived_cognitive_load_during_incidents
-      target: reduced
-      measurement: retro_notes_and_survey
-  leading_indicators:
-    - Traces referenced in incident channels, tickets, or post-incident reviews.
-    - Engineers can reliably find the correct trace from an alert context.
-    - Trace data includes service boundary spans and dependency spans for critical paths.
-
+practice: automate-coding-standards
+hypothesis: If we enforce type-safety, we should eliminate a whole class of errors from happening right now and in the future.
+status: active # possible states: active, backlog, blocked, pitch, polish
+supporting-evidence:
+  - team_specific/team_a/linter-error-count:
+    - expected-impact: This should go down to zero.
+    - expected-duration: We hope to reach this milestone in 2 months.
+  - team_specific/team_a/anecdotes-on-code-quality:
+    - expected-impact: We expect developers to enjoy the added type safety.
+    - expected-duration: These sort of anecdotes should start rolling in after we make half of the type safety fixes.
+start-date: 14.1.2026
+expected-duration-in-weeks: 12
 decision-roles:
   - responsible:
     - Example Person 1
