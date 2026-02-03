@@ -4,7 +4,7 @@
  * Parses a date string that may be in various formats (European DD.M.YYYY, ISO, etc.)
  * Returns a valid Date object or null if parsing fails
  */
-export function parseFlexibleDate(dateString: string): Date | null {
+export function parseFlexibleDate(dateString?: string | null): Date | null {
   if (!dateString) return null;
 
   // Try parsing as-is first (handles ISO format, US format, etc.)
@@ -84,11 +84,11 @@ export function getMaturityLevelLabel(level: number): string {
   }
 }
 
-export function calculateEndDate(startDate: string, duration?: string): string {
+export function calculateEndDate(startDate?: string | null, duration?: string): string {
   if (!duration) return 'TBD';
 
   const start = parseFlexibleDate(startDate);
-  if (!start) return 'Invalid Date';
+  if (!start) return 'TBD';
 
   const durationMatch = duration.match(/(\d+)\s*(week|month|day)/i);
 

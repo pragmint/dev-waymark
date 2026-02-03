@@ -68,7 +68,7 @@ export const Sidebar: FC<SidebarProps> = ({ teams, activePage }) => {
 
       <div class="data-updated">
         <div class="data-updated-label">Data last updated on:</div>
-        <div class="data-updated-date">December 18, 2025</div>
+        <div class="data-updated-date">January 30, 2026</div>
       </div>
     </nav>
   );

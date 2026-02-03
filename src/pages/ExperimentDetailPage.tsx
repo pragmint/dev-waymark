@@ -170,7 +170,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
         month: 'long',
         day: 'numeric',
       })
-    : 'Invalid Date';
+    : 'TBD';
   const duration = experiment.expectedDurationInWeeks
     ? `${experiment.expectedDurationInWeeks} weeks`
     : undefined;
