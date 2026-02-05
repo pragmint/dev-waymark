@@ -39,6 +39,7 @@ import { PracticesCatalogPage } from './src/pages/PracticesCatalogPage';
 import { PracticeDetailPage } from './src/pages/PracticeDetailPage';
 import { TeamDetailPage } from './src/pages/TeamDetailPage';
 import { ExperimentDetailPage } from './src/pages/ExperimentDetailPage';
+import { ComingSoonPage } from './src/pages/ComingSoonPage';
 import { prepareOverviewData } from './src/pages/handlers/OverviewHandler';
 import { prepareTeamDetailData } from './src/pages/handlers/TeamDetailHandler';
 import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDetailHandler';
@@ -85,6 +86,16 @@ const handleArchive = (c: Context) => {
 
 app.get('/archive/:date', handleArchive);
 app.get('/archive/:date/', handleArchive);
+
+// Coming soon pages
+const handleInsight = (c: Context) => {
+  return c.html(
+    <ComingSoonPage teams={teams} title="Insights" heading="Insights" activePage="insights" />
+  );
+};
+
+app.get('/insight', handleInsight);
+app.get('/insight/', handleInsight);
 
 // Capability catalog page
 const handleCapabilityCatalog = (c: Context) => {
