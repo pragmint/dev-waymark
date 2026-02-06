@@ -46,4 +46,4 @@ temp/
 Thumbs.db
 
 # AI tool settings
-.claude/
+.claude/settings.local.json

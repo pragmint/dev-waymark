@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun test:*)",
+      "Bash(bun run lint)",
+      "Bash(bun run lint:fix)",
+      "Bash(ls)",
+      "Bash(grep)"
+    ],
+    "deny": [
+      "Read(resources/public)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/runLint.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
