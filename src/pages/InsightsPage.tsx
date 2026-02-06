@@ -19,7 +19,7 @@ export const InsightsPage: FC<InsightsPageProps> = ({
   availableDates,
 }) => {
   return (
-    <Page title="Insights" heading="Metrics Insights" activePage="insight" teams={teams}>
+    <Page title="Insights" heading="Metrics Insights" activePage="insights" teams={teams}>
       <div class="insights-container">
         <div class="insights-controls">
           <div class="control-group">
