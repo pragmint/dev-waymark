@@ -4,8 +4,10 @@
       "Bash(bun test:*)",
       "Bash(bun run lint)",
       "Bash(bun run lint:fix)",
-      "Bash(ls)",
-      "Bash(grep)"
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(tree *)",
+      "Bash(echo *)"
     ],
     "deny": [
       "Read(resources/public)"
