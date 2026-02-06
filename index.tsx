@@ -39,10 +39,11 @@ import { PracticesCatalogPage } from './src/pages/PracticesCatalogPage';
 import { PracticeDetailPage } from './src/pages/PracticeDetailPage';
 import { TeamDetailPage } from './src/pages/TeamDetailPage';
 import { ExperimentDetailPage } from './src/pages/ExperimentDetailPage';
-import { ComingSoonPage } from './src/pages/ComingSoonPage';
+import { InsightsPage } from './src/pages/InsightsPage';
 import { prepareOverviewData } from './src/pages/handlers/OverviewHandler';
 import { prepareTeamDetailData } from './src/pages/handlers/TeamDetailHandler';
 import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDetailHandler';
+import { prepareInsightsData } from './src/pages/handlers/InsightsHandler';
 
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
@@ -87,10 +88,18 @@ const handleArchive = (c: Context) => {
 app.get('/archive/:date', handleArchive);
 app.get('/archive/:date/', handleArchive);
 
-// Coming soon pages
+// Insights page
 const handleInsight = (c: Context) => {
+  const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics, teamMetrics);
+
   return c.html(
-    <ComingSoonPage teams={teams} title="Insights" heading="Insights" activePage="insights" />
+    <InsightsPage
+      teams={insightsData.teams}
+      metricOptions={insightsData.metricOptions}
+      capabilityMetricsJson={JSON.stringify(insightsData.capabilityMetrics)}
+      teamMetricsJson={JSON.stringify(insightsData.teamMetrics)}
+      availableDates={insightsData.availableDates}
+    />
   );
 };
 

@@ -1,0 +1,168 @@
+@use 'variables' as *;
+@use 'sass:color';
+
+// Insights page styles
+
+.insights-container {
+  max-width: 120rem;
+  margin: 0 auto;
+}
+
+.insights-controls {
+  background: $bg-white;
+  border-radius: $border-radius-md;
+  border: 0.1rem solid $border-color-light;
+  padding: $spacing-xxl;
+  margin-bottom: $spacing-xxxl;
+  box-shadow: $shadow-sm;
+  transition: all $transition-fast;
+
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+}
+
+.control-group {
+  margin-bottom: $spacing-xxl;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: $font-sm;
+    margin-bottom: $spacing-sm;
+    color: $text-primary;
+    line-height: 1.4;
+  }
+}
+
+.metric-select {
+  width: 100%;
+  padding: $spacing-md $spacing-lg;
+  border: 0.1rem solid $border-color;
+  border-radius: $border-radius-sm;
+  font-size: $font-base;
+  font-family: $font-family-base;
+  background-color: $bg-white;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  line-height: 1.6;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right $spacing-lg center;
+  padding-right: $spacing-huge;
+
+  &:hover {
+    border-color: $primary-color;
+    color: $primary-color;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    color: $primary-color;
+    box-shadow: 0 0 0 0.3rem rgba(0, 123, 255, 0.1);
+  }
+}
+
+.date-range {
+  display: flex;
+  gap: $spacing-xl;
+
+  .date-input-group {
+    flex: 1;
+  }
+}
+
+.date-input {
+  width: 100%;
+  padding: $spacing-md $spacing-lg;
+  border: 0.1rem solid $border-color;
+  border-radius: $border-radius-sm;
+  font-size: $font-base;
+  font-family: $font-family-base;
+  color: $text-secondary;
+  line-height: 1.6;
+  transition: all $transition-fast;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    color: $primary-color;
+    box-shadow: 0 0 0 0.3rem rgba(0, 123, 255, 0.1);
+  }
+
+  // Style the calendar icon
+  &::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.chart-container {
+  background: $bg-white;
+  border-radius: $border-radius-md;
+  border: 0.1rem solid $border-color-light;
+  padding: $spacing-xxxl;
+  box-shadow: $shadow-sm;
+  min-height: 40rem;
+
+  canvas {
+    max-height: 50rem;
+  }
+}
+
+.chart-message {
+  background: $bg-light;
+  border-left: 0.4rem solid $primary-color;
+  padding: $spacing-xl;
+  margin-top: $spacing-xl;
+  border-radius: $border-radius-sm;
+  color: $text-secondary;
+  font-size: $font-base;
+  line-height: 1.6;
+  display: none;
+
+  &.error {
+    background: color.scale($danger-color, $lightness: 86%);
+    border-left-color: $danger-color;
+    color: color.scale($danger-color, $lightness: -18%);
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .insights-container {
+    padding: 0;
+  }
+
+  .insights-controls {
+    padding: $spacing-xl;
+  }
+
+  .date-range {
+    flex-direction: column;
+    gap: $spacing-md;
+  }
+
+  .chart-container {
+    padding: $spacing-xl;
+  }
+}
