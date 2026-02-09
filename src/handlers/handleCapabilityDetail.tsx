@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { findCapabilityById, getCapabilityScoreForTeam } from "../core/data/capabilityQueries";
+import { getCapabilityScoreForTeam } from "../core/data/capabilityQueries";
 import { NotFoundError } from "../core/errors";
 import { CapabilityDetailPage } from "../pages/CapabilityDetailPage";
 import { loadCapabilityMarkdown } from "../shell/loaders/capabilityLoader";
@@ -9,7 +9,7 @@ const { capabilities, teams, capabilityMetrics } = await loadDataContext()
 
 export async function handleCapabilityDetail(c: Context) {
   const capabilityId = c.req.param('capabilityId');
-  const capability = findCapabilityById(capabilities, capabilityId);
+  const capability = capabilities.find(c => c.id === capabilityId)
 
   if (!capability) {
     throw new NotFoundError('Capability', capabilityId);

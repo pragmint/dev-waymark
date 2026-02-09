@@ -27,10 +27,6 @@ function getNumericScore(value: MetricValue): number {
   return 0; // String values or other types default to 0
 }
 
-export function findCapabilityById(capabilities: Capability[], id: string): Capability | undefined {
-  return capabilities.find(c => c.id === id);
-}
-
 /**
  * Calculate capability score for a specific team or all teams
  * Returns a modified capability with team-specific score and trend

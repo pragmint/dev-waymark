@@ -2,7 +2,6 @@ import { describe, test, expect } from 'bun:test';
 import { enrichCapabilitiesWithTeamData } from '../src/core/data/capabilityAggregations';
 import {
   getTopThreeCapabilities,
-  findCapabilityById,
 } from '../src/core/data/capabilityQueries';
 import type { Capability } from '../src/core/data/capabilityTypes';
 import type { Team } from '../src/core/data/teamTypes';
@@ -97,11 +96,5 @@ describe('Capability Data Transformations', () => {
     expect(topThree[0].currentScore).toBe(3.5);
     expect(topThree[1].currentScore).toBe(2.5);
     expect(topThree[2].currentScore).toBe(1.5);
-  });
-
-  test('findCapabilityById returns correct capability', () => {
-    const capability = findCapabilityById(baseCapabilities, 'cap-2');
-
-    expect(capability?.name).toBe('Automated Testing');
   });
 });
