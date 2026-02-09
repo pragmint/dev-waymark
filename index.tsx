@@ -1,183 +1,38 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { errorHandler } from './src/shell/middleware/errorHandler';
-import {
-  loadCapabilityMarkdown,
-} from './src/shell/loaders/capabilityLoader';
-import {
-  loadPracticeFromFilesystem,
-  loadAllPracticesFromFilesystem,
-} from './src/shell/loaders/practiceLoader';
-import {
-  getAllCapabilities,
-  findCapabilityById,
-  getCapabilityScoreForTeam,
-} from './src/core/data/capabilityQueries';
-import { NotFoundError } from './src/core/errors';
-import { OverviewPage } from './src/pages/OverviewPage';
-import { CapabilityCatalogPage } from './src/pages/CapabilityCatalogPage';
-import { CapabilityDetailPage } from './src/pages/CapabilityDetailPage';
-import { PracticesCatalogPage } from './src/pages/PracticesCatalogPage';
-import { PracticeDetailPage } from './src/pages/PracticeDetailPage';
-import { TeamDetailPage } from './src/pages/TeamDetailPage';
-import { ExperimentDetailPage } from './src/pages/ExperimentDetailPage';
-import { InsightsPage } from './src/pages/InsightsPage';
-import { prepareOverviewData } from './src/pages/handlers/OverviewHandler';
-import { prepareTeamDetailData } from './src/pages/handlers/TeamDetailHandler';
-import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDetailHandler';
-import { prepareInsightsData } from './src/pages/handlers/InsightsHandler';
 import { trimTrailingSlash } from 'hono/trailing-slash'
-import { loadDataContext } from './src/loaders/loadDataContext';
+import { handleOverview } from './src/handlers/handleOverview';
+import { handleInsight } from './src/handlers/handleInsight';
+import { handleCapabilityCatalog } from './src/handlers/handleCapabilityCatalog';
+import { handleCapabilityDetail } from './src/handlers/handleCapabilityDetail';
+import { handlePracticeCatalog } from './src/handlers/handlePracticeCatalog';
+import { handlePracticeDetail } from './src/handlers/handlePracticeDetail';
+import { handleTeamDetail } from './src/handlers/handleTeamDetail';
+import { handleExperimentDetail } from './src/handlers/handleExperimentDetail';
 
 // Imperative Shell - All I/O happens here
 // Core business logic is imported as pure functions
-
-const { enrichedExperiments, capabilities, summaries, teams, teamMetrics, capabilityMetrics } = await loadDataContext()
-
-// --- INITIALIZATION (I/O) ---
-
-// --- HONO APP SETUP ---
 const app = new Hono();
 
-// Register error handler
 app.onError(errorHandler);
 app.use(trimTrailingSlash());
 app.use('/resources/*', serveStatic({ root: './' }));
 
-
-const handleOverview = (c: Context) => {
-  const data = prepareOverviewData(teams, capabilities, summaries);
-  return c.html(<OverviewPage {...data} />);
-}
-
-// Overview page
 app.get('/', handleOverview);
-
-// Archive page - displays a specific summary by date
-const handleArchive = (c: Context) => {
-  const date = c.req.param('date');
-  const data = prepareOverviewData(teams, capabilities, summaries, date);
-  return c.html(<OverviewPage {...data} />);
-};
-
-app.get('/archive/:date', handleArchive);
-
-// Insights page
-const handleInsight = (c: Context) => {
-  const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics, teamMetrics);
-
-  return c.html(
-    <InsightsPage
-      teams={insightsData.teams}
-      metricOptions={insightsData.metricOptions}
-      capabilityMetricsJson={JSON.stringify(insightsData.capabilityMetrics)}
-      teamMetricsJson={JSON.stringify(insightsData.teamMetrics)}
-      availableDates={insightsData.availableDates}
-    />
-  );
-};
-
+app.get('/archive/:date', handleOverview);
 app.get('/insight', handleInsight);
-
-// Capability catalog page
-const handleCapabilityCatalog = (c: Context) => {
-  const allCapabilities = getAllCapabilities(capabilities);
-
-  return c.html(<CapabilityCatalogPage teams={teams} allCapabilities={allCapabilities} />);
-};
-
 app.get('/catalog/capability', handleCapabilityCatalog);
-
-// Capability detail page handler (shared logic)
-const handleCapabilityDetail = async (c: Context) => {
-  const capabilityId = c.req.param('capabilityId');
-  const capability = findCapabilityById(capabilities, capabilityId);
-
-  if (!capability) {
-    throw new NotFoundError('Capability', capabilityId);
-  }
-
-  // Get team filter from query string
-  let teamFilter = c.req.query('team') || 'all';
-
-  // If there's only one team, automatically show that team's score
-  if (teams.length === 1 && teamFilter === 'all') {
-    const singleTeamId = teams[0].id;
-    return c.redirect(`/catalog/capability/${capabilityId}?team=${singleTeamId}`);
-  }
-
-  // Calculate team-specific score
-  const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
-
-  // Load capability markdown content
-  const markdownContent = await loadCapabilityMarkdown(capabilityId);
-
-  return c.html(
-    <CapabilityDetailPage
-      teams={teams}
-      capability={filteredCapability}
-      selectedTeam={teamFilter}
-      markdownContent={markdownContent}
-    />
-  );
-};
-
-// Capability detail page (with and without trailing slash)
 app.get('/catalog/capability/:capabilityId', handleCapabilityDetail);
-
-// Practice catalog page
-const handlePracticeCatalog = async (c: Context) => {
-  const practices = await loadAllPracticesFromFilesystem();
-
-  return c.html(<PracticesCatalogPage teams={teams} practices={practices} />);
-};
-
 app.get('/catalog/practice', handlePracticeCatalog);
-
-// Practice detail page
-const handlePracticeDetail = async (c: Context) => {
-  const practiceId = c.req.param('practiceId');
-  const practice = await loadPracticeFromFilesystem(practiceId);
-
-  if (!practice) {
-    throw new NotFoundError('Practice', practiceId);
-  }
-
-  return c.html(<PracticeDetailPage teams={teams} practice={practice} />);
-};
-
 app.get('/catalog/practice/:practiceId', handlePracticeDetail);
-
-// Team detail page
-const handleTeamDetail = async (c: Context) => {
-  const teamId = c.req.param('teamId');
-  const data = await prepareTeamDetailData(
-    teamId,
-    teams,
-    capabilities,
-    capabilityMetrics,
-    enrichedExperiments,
-    teamMetrics
-  );
-  return c.html(<TeamDetailPage {...data} />);
-};
-
 app.get('/team/:teamId', handleTeamDetail);
-
-// Experiment detail page
-const handleExperimentDetail = async (c: Context) => {
-  const experimentId = c.req.param('experimentId');
-  const data = await prepareExperimentDetailData(experimentId, teams, enrichedExperiments);
-  return c.html(<ExperimentDetailPage {...data} />);
-};
-
 app.get('/experiment/:experimentId', handleExperimentDetail);
 
-// --- HTTP SERVER (I/O) ---
 export default {
   port: 3000,
   fetch: app.fetch,
 };
 
 console.log('Server running at http://localhost:3000');
+
