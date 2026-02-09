@@ -69,16 +69,17 @@ const app = new Hono();
 
 // Register error handler
 app.onError(errorHandler);
-
 app.use(trimTrailingSlash());
-// Serve static files
 app.use('/resources/*', serveStatic({ root: './' }));
 
-// Overview page
-app.get('/', c => {
+
+const handleOverview = (c: Context) => {
   const data = prepareOverviewData(teams, capabilities, summaries);
   return c.html(<OverviewPage {...data} />);
-});
+}
+
+// Overview page
+app.get('/', handleOverview);
 
 // Archive page - displays a specific summary by date
 const handleArchive = (c: Context) => {

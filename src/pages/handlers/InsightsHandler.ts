@@ -1,6 +1,7 @@
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Metric, TeamMetric } from '../../shell/loaders/metricLoader';
+import { CapabilityMetric } from '../../scripts/insights-data';
 
 export interface MetricOption {
   id: string;

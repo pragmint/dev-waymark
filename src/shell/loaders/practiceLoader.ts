@@ -7,22 +7,13 @@ export interface Practice {
   content: string;
 }
 
-// Type for file reading function (enables easy testing/mocking)
-type FileReader = (path: string) => Promise<string>;
-
-// Production file reader using Bun
-const bunFileReader: FileReader = async (path: string) => {
-  return await Bun.file(path).text();
-};
-
 // Pure function - reads markdown file from filesystem
 async function readMarkdownFile(
-  practiceId: string,
-  readFile: FileReader = bunFileReader
+  practiceId: string
 ): Promise<string> {
   const filename = `${practiceId}.md`;
   const filePath = `resources/private/markdown/practices/${filename}`;
-  return await readFile(filePath);
+  return await Bun.file(filePath).text();
 }
 
 // Pure function - parses markdown to HTML
@@ -57,11 +48,10 @@ function transformResourceLinks(html: string): string {
 // Composed function - loads and parses a single practice
 export async function loadPracticeFromFilesystem(
   practiceId: string,
-  readFile?: FileReader
 ): Promise<Practice | null> {
   try {
     // Load markdown
-    const markdown = await readMarkdownFile(practiceId, readFile);
+    const markdown = await readMarkdownFile(practiceId);
 
     // Parse markdown to HTML
     const rawHtml = await parseMarkdown(markdown);

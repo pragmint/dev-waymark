@@ -77,9 +77,7 @@ function enrichCapabilityWithTeamMetrics(
   }
 
   // Get most recent score
-  const sortedData = teamData.sort(
-    (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
-  );
+  const sortedData = teamData.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
   const currentScore = getNumericScore(sortedData[0].value);
 
   // Calculate trend
