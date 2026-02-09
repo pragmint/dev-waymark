@@ -96,3 +96,4 @@ export async function loadCapabilityMarkdown(capabilityId: string): Promise<stri
     return null;
   }
 }
+

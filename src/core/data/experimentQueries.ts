@@ -1,18 +1,6 @@
 import type { Experiment } from './experimentTypes';
 import type { Team } from './teamTypes';
 
-// Pure query functions - no I/O, no mutation
-
-/**
- * Find experiment by ID across all experiments
- */
-export function findExperimentById(
-  experiments: Experiment[],
-  experimentId: string
-): Experiment | undefined {
-  return experiments.find(exp => exp.id === experimentId);
-}
-
 /**
  * Find all experiments for a specific team
  */
@@ -30,7 +18,7 @@ export function findExperimentByIdWithTeam(
   teams: Team[],
   experimentId: string
 ): { team: Team; experiment: Experiment } | undefined {
-  const experiment = findExperimentById(experiments, experimentId);
+  const experiment = experiments.find(exp => exp.id === experimentId)
   if (!experiment) return undefined;
 
   const team = teams.find(t => t.id === experiment.teamId);

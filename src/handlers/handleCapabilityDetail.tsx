@@ -9,26 +9,18 @@ const { capabilities, teams, capabilityMetrics } = await loadDataContext()
 
 export async function handleCapabilityDetail(c: Context) {
   const capabilityId = c.req.param('capabilityId');
-  const capability = capabilities.find(c => c.id === capabilityId)
-
-  if (!capability) {
-    throw new NotFoundError('Capability', capabilityId);
-  }
-
-  // Get team filter from query string
   let teamFilter = c.req.query('team') || 'all';
+  
+  const capability = capabilities.find(c => c.id === capabilityId)
+  if (!capability) throw new NotFoundError('Capability', capabilityId);
 
-  // If there's only one team, automatically show that team's score
+  const markdownContent = await loadCapabilityMarkdown(capabilityId);
+
   if (teams.length === 1 && teamFilter === 'all') {
-    const singleTeamId = teams[0].id;
-    return c.redirect(`/catalog/capability/${capabilityId}?team=${singleTeamId}`);
+    return c.redirect(`/catalog/capability/${capabilityId}?team=${teams[0].id}`);
   }
 
-  // Calculate team-specific score
   const filteredCapability = getCapabilityScoreForTeam(capability, capabilityMetrics, teamFilter);
-
-  // Load capability markdown content
-  const markdownContent = await loadCapabilityMarkdown(capabilityId);
 
   return c.html(
     <CapabilityDetailPage

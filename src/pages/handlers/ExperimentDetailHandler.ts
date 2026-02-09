@@ -1,6 +1,5 @@
 import type { Team } from '../../core/data/teamTypes';
 import type { Experiment } from '../../core/data/experimentTypes';
-import { findExperimentByIdWithTeam } from '../../core/data/experimentQueries';
 import { loadPracticeFromFilesystem } from '../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../core/errors';
 
@@ -21,15 +20,12 @@ export async function prepareExperimentDetailData(
   teams: Team[],
   experiments: Experiment[]
 ): Promise<ExperimentDetailPageData> {
-  // Find the experiment and its parent team
-  const result = findExperimentByIdWithTeam(experiments, teams, experimentId);
-  if (!result) {
-    throw new NotFoundError('Experiment', experimentId);
-  }
+  const experiment = experiments.find(exp => exp.id === experimentId)
+  if (experiment === undefined) throw new NotFoundError('Experiment', experimentId);
 
-  const { team, experiment } = result;
-
-  // Load the practice to get its display name
+  const team = teams.find(t => t.id === experiment.teamId);
+  if (team === undefined) throw new NotFoundError('Team', experiment.teamId);
+  
   const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
   const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
 
