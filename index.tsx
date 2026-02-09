@@ -1,31 +1,14 @@
-// Imperative Shell - All I/O happens here
-// Core business logic is imported as pure functions
-
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { errorHandler } from './src/shell/middleware/errorHandler';
-import { loadTeamsFromFilesystem } from './src/shell/loaders/teamLoader';
 import {
-  loadCapabilitiesFromFilesystem,
-  enrichCapabilitiesWithAssessment,
   loadCapabilityMarkdown,
 } from './src/shell/loaders/capabilityLoader';
 import {
   loadPracticeFromFilesystem,
   loadAllPracticesFromFilesystem,
 } from './src/shell/loaders/practiceLoader';
-import { loadSummariesFromFilesystem } from './src/shell/loaders/summaryLoader';
-import {
-  loadCapabilityMetricsFromFilesystem,
-  loadTeamMetricsFromFilesystem,
-} from './src/shell/loaders/metricLoader';
-import { loadExperimentsFromFilesystem } from './src/shell/loaders/experimentLoader';
-import {
-  enrichCapabilitiesWithMetrics,
-  enrichTeamsWithMetrics,
-  enrichExperimentsWithMetrics,
-} from './src/core/data/metricAggregations';
 import {
   getAllCapabilities,
   findCapabilityById,
@@ -45,24 +28,14 @@ import { prepareTeamDetailData } from './src/pages/handlers/TeamDetailHandler';
 import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDetailHandler';
 import { prepareInsightsData } from './src/pages/handlers/InsightsHandler';
 import { trimTrailingSlash } from 'hono/trailing-slash'
+import { loadDataContext } from './src/loaders/loadDataContext';
+
+// Imperative Shell - All I/O happens here
+// Core business logic is imported as pure functions
+
+const { enrichedExperiments, capabilities, summaries, teams, teamMetrics, capabilityMetrics } = await loadDataContext()
 
 // --- INITIALIZATION (I/O) ---
-const rawCapabilities = await loadCapabilitiesFromFilesystem();
-const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(rawCapabilities);
-const rawTeams = await loadTeamsFromFilesystem();
-const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
-const teamMetrics = await loadTeamMetricsFromFilesystem();
-const experiments = await loadExperimentsFromFilesystem();
-const summaries = await loadSummariesFromFilesystem();
-
-// --- PURE TRANSFORMATION ---
-const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
-const capabilities = enrichCapabilitiesWithMetrics(
-  capabilitiesWithAssessment,
-  capabilityMetrics,
-  teams
-);
-const enrichedExperiments = enrichExperimentsWithMetrics(experiments, teamMetrics);
 
 // --- HONO APP SETUP ---
 const app = new Hono();

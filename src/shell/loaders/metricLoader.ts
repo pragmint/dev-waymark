@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { ValidationError } from '../../core/errors';
 import { consoleLogger } from '../../core/logger';
+import { CapabilityMetric } from '../../scripts/insights-data';
 
 // Zod schemas for capability metric data validation
 // Value can be:
@@ -90,7 +91,7 @@ export interface TeamMetric {
  * Pure I/O function - loads capability metrics from filesystem with validation
  * Each file corresponds to a capability and contains team scores over time
  */
-export async function loadCapabilityMetricsFromFilesystem(): Promise<Metric[]> {
+export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityMetric[]> {
   const dir = 'resources/private/yaml/metrics/capability_scores';
 
   try {
