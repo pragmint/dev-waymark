@@ -5,7 +5,6 @@ import type { Practice } from '../../shell/loaders/practiceLoader';
 import type { Metric, TeamMetric, MetricValue } from '../../shell/loaders/metricLoader';
 import { findTeamById } from '../../core/data/teamQueries';
 import { findExperimentsByTeamId } from '../../core/data/experimentQueries';
-import { getAllCapabilities } from '../../core/data/capabilityQueries';
 import { loadPracticeFromFilesystem } from '../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../core/errors';
 import { parseDate } from '../../core/utils/dateFormatter';
@@ -129,12 +128,11 @@ export async function prepareTeamDetailData(
   const teamMetrics = allTeamMetrics.filter(m => m.teamId === teamId);
 
   // Prepare capability data for rendering
-  const allCapabilities = getAllCapabilities(capabilities);
   const capabilityMap = new Map(capabilities.map(cap => [cap.id, cap]));
 
   // Enrich all capabilities with team's metric data
   const teamCapabilityMap = new Map<string, TeamCapability>();
-  for (const capability of allCapabilities) {
+  for (const capability of capabilities) {
     const enrichedCapability = enrichCapabilityWithTeamMetrics(
       capability.id,
       teamId,
@@ -176,7 +174,7 @@ export async function prepareTeamDetailData(
   return {
     teams,
     team,
-    allCapabilities,
+    allCapabilities: capabilities,
     capabilityMap,
     teamCapabilityMap,
     practiceMap,

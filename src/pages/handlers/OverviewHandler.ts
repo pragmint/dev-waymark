@@ -1,7 +1,7 @@
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Summary } from '../../core/data/summaryTypes';
-import { getTopThreeCapabilities, getAllCapabilities } from '../../core/data/capabilityQueries';
+import { getTopThreeCapabilities } from '../../core/data/capabilityQueries';
 import { getMostRecentSummary, getSummaryByDate } from '../../shell/loaders/summaryLoader';
 
 export interface OverviewPageData {
@@ -24,7 +24,6 @@ export function prepareOverviewData(
   requestedDate?: string
 ): OverviewPageData {
   const topThree = getTopThreeCapabilities(capabilities);
-  const allCapabilities = getAllCapabilities(capabilities);
 
   // Get the summary to display
   let selectedSummary: Summary | null;
@@ -42,7 +41,7 @@ export function prepareOverviewData(
   return {
     teams,
     topThree,
-    allCapabilities,
+    allCapabilities: capabilities,
     summaryHtml,
     summaryDate,
     availableSummaryDates,

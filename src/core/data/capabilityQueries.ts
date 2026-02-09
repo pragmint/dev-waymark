@@ -118,7 +118,3 @@ export function getTopThreeCapabilities(capabilities: Capability[]): Capability[
     .slice(0, 3);
 }
 
-export function getAllCapabilities(capabilities: Capability[]): Capability[] {
-  // Return all capabilities sorted alphabetically by name
-  return [...capabilities].sort((a, b) => a.name.localeCompare(b.name));
-}

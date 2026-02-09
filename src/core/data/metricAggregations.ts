@@ -138,7 +138,7 @@ export function enrichCapabilitiesWithMetrics(
       trend: 'stable' as TrendDirection,
       teamsTargeting: targetingCounts.get(capability.id) || 0,
     };
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

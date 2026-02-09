@@ -2,7 +2,6 @@ import { describe, test, expect } from 'bun:test';
 import { enrichCapabilitiesWithTeamData } from '../src/core/data/capabilityAggregations';
 import {
   getTopThreeCapabilities,
-  getAllCapabilities,
   findCapabilityById,
 } from '../src/core/data/capabilityQueries';
 import type { Capability } from '../src/core/data/capabilityTypes';
@@ -98,16 +97,6 @@ describe('Capability Data Transformations', () => {
     expect(topThree[0].currentScore).toBe(3.5);
     expect(topThree[1].currentScore).toBe(2.5);
     expect(topThree[2].currentScore).toBe(1.5);
-  });
-
-  test('getAllCapabilities returns capabilities sorted alphabetically', () => {
-    const enriched = enrichCapabilitiesWithTeamData(baseCapabilities, teams);
-    const sorted = getAllCapabilities(enriched);
-
-    expect(sorted).toHaveLength(3);
-    expect(sorted[0].name).toBe('Automated Testing');
-    expect(sorted[1].name).toBe('Continuous Integration');
-    expect(sorted[2].name).toBe('Learning Culture');
   });
 
   test('findCapabilityById returns correct capability', () => {
