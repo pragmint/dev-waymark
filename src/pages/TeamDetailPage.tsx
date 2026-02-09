@@ -9,7 +9,7 @@ import type { TeamMetric } from '../shell/loaders/metricLoader';
 import { getStatusBadge } from '../core/rendering/htmlHelpers';
 import { parseDate } from '../core/utils/dateFormatter';
 
-interface TeamDetailPageProps {
+export interface TeamDetailPageProps {
   teams: Team[];
   team: Team;
   allCapabilities: Capability[];
@@ -19,52 +19,6 @@ interface TeamDetailPageProps {
   experiments: Experiment[];
   teamMetrics: TeamMetric[];
 }
-
-const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
-  experiment,
-  practiceName,
-}) => {
-  const duration = experiment.expectedDurationInWeeks
-    ? `${experiment.expectedDurationInWeeks} weeks`
-    : undefined;
-
-  return (
-    <div class="experiment-card">
-      <div class="experiment-header">
-        <h3>
-          <a href={`/experiment/${experiment.id}/`}>{experiment.title}</a>
-        </h3>
-        <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
-      </div>
-      <div class="experiment-supporting-practice">
-        Supporting practice:{' '}
-        <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
-          {practiceName}
-        </a>
-      </div>
-      <div class="experiment-meta">
-        <span class="experiment-date">
-          Started:{' '}
-          {experiment.startDate
-            ? parseDate(experiment.startDate).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })
-            : 'TBD'}
-        </span>
-        {duration && <span class="experiment-duration">{duration}</span>}
-      </div>
-      <div class="experiment-hypothesis">
-        <strong>Hypothesis:</strong>
-        <p>{experiment.hypothesis.statement}</p>
-      </div>
-      <div class="experiment-view-details">
-        <a href={`/experiment/${experiment.id}/`}>View Details →</a>
-      </div>
-    </div>
-  );
-};
 
 export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teams,
@@ -187,3 +141,50 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
     </Page>
   );
 };
+
+const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
+  experiment,
+  practiceName,
+}) => {
+  const duration = experiment.expectedDurationInWeeks
+    ? `${experiment.expectedDurationInWeeks} weeks`
+    : undefined;
+
+  return (
+    <div class="experiment-card">
+      <div class="experiment-header">
+        <h3>
+          <a href={`/experiment/${experiment.id}/`}>{experiment.title}</a>
+        </h3>
+        <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
+      </div>
+      <div class="experiment-supporting-practice">
+        Supporting practice:{' '}
+        <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
+          {practiceName}
+        </a>
+      </div>
+      <div class="experiment-meta">
+        <span class="experiment-date">
+          Started:{' '}
+          {experiment.startDate
+            ? parseDate(experiment.startDate).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })
+            : 'TBD'}
+        </span>
+        {duration && <span class="experiment-duration">{duration}</span>}
+      </div>
+      <div class="experiment-hypothesis">
+        <strong>Hypothesis:</strong>
+        <p>{experiment.hypothesis.statement}</p>
+      </div>
+      <div class="experiment-view-details">
+        <a href={`/experiment/${experiment.id}/`}>View Details →</a>
+      </div>
+    </div>
+  );
+};
+

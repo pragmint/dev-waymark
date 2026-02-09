@@ -146,22 +146,19 @@ export function enrichCapabilitiesWithMetrics(
  * Now handles both old format (objects) and new format (strings)
  */
 export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[] {
-  // Create a map of metrics by capability ID
+
   const metricsMap = new Map<string, Metric>();
   metrics.forEach(metric => {
     metricsMap.set(metric.capabilityId, metric);
   });
 
   return teams.map(team => {
-    // Normalize capabilities to consistent format
     const normalizedTargeted = normalizeTeamCapabilities(team);
 
-    // Enrich with metrics
     const targetedCapabilities = normalizedTargeted.map(tc =>
       enrichTeamCapability(tc, team.id, metricsMap)
     );
 
-    // Handle nonTargetedCapabilities (may not exist in new format)
     const nonTargetedCapabilities = team.nonTargetedCapabilities
       ? team.nonTargetedCapabilities.map(tc => enrichTeamCapability(tc, team.id, metricsMap))
       : [];
@@ -170,15 +167,11 @@ export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[]
       ...team,
       targetedCapabilities,
       nonTargetedCapabilities,
-      // Keep activeExperiments for backward compatibility if present
       activeExperiments: team.activeExperiments || [],
     };
   });
 }
 
-/**
- * Helper function to enrich a single team capability with metric data
- */
 function enrichTeamCapability(
   teamCapability: TeamCapability,
   teamId: string,
