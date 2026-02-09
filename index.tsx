@@ -44,6 +44,7 @@ import { prepareOverviewData } from './src/pages/handlers/OverviewHandler';
 import { prepareTeamDetailData } from './src/pages/handlers/TeamDetailHandler';
 import { prepareExperimentDetailData } from './src/pages/handlers/ExperimentDetailHandler';
 import { prepareInsightsData } from './src/pages/handlers/InsightsHandler';
+import { trimTrailingSlash } from 'hono/trailing-slash'
 
 // --- INITIALIZATION (I/O) ---
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
@@ -69,6 +70,7 @@ const app = new Hono();
 // Register error handler
 app.onError(errorHandler);
 
+app.use(trimTrailingSlash());
 // Serve static files
 app.use('/resources/*', serveStatic({ root: './' }));
 
@@ -86,7 +88,6 @@ const handleArchive = (c: Context) => {
 };
 
 app.get('/archive/:date', handleArchive);
-app.get('/archive/:date/', handleArchive);
 
 // Insights page
 const handleInsight = (c: Context) => {
@@ -104,7 +105,6 @@ const handleInsight = (c: Context) => {
 };
 
 app.get('/insight', handleInsight);
-app.get('/insight/', handleInsight);
 
 // Capability catalog page
 const handleCapabilityCatalog = (c: Context) => {
@@ -114,7 +114,6 @@ const handleCapabilityCatalog = (c: Context) => {
 };
 
 app.get('/catalog/capability', handleCapabilityCatalog);
-app.get('/catalog/capability/', handleCapabilityCatalog);
 
 // Capability detail page handler (shared logic)
 const handleCapabilityDetail = async (c: Context) => {
@@ -152,7 +151,6 @@ const handleCapabilityDetail = async (c: Context) => {
 
 // Capability detail page (with and without trailing slash)
 app.get('/catalog/capability/:capabilityId', handleCapabilityDetail);
-app.get('/catalog/capability/:capabilityId/', handleCapabilityDetail);
 
 // Practice catalog page
 const handlePracticeCatalog = async (c: Context) => {
@@ -162,7 +160,6 @@ const handlePracticeCatalog = async (c: Context) => {
 };
 
 app.get('/catalog/practice', handlePracticeCatalog);
-app.get('/catalog/practice/', handlePracticeCatalog);
 
 // Practice detail page
 const handlePracticeDetail = async (c: Context) => {
@@ -177,7 +174,6 @@ const handlePracticeDetail = async (c: Context) => {
 };
 
 app.get('/catalog/practice/:practiceId', handlePracticeDetail);
-app.get('/catalog/practice/:practiceId/', handlePracticeDetail);
 
 // Team detail page
 const handleTeamDetail = async (c: Context) => {
@@ -194,7 +190,6 @@ const handleTeamDetail = async (c: Context) => {
 };
 
 app.get('/team/:teamId', handleTeamDetail);
-app.get('/team/:teamId/', handleTeamDetail);
 
 // Experiment detail page
 const handleExperimentDetail = async (c: Context) => {
@@ -204,7 +199,6 @@ const handleExperimentDetail = async (c: Context) => {
 };
 
 app.get('/experiment/:experimentId', handleExperimentDetail);
-app.get('/experiment/:experimentId/', handleExperimentDetail);
 
 // --- HTTP SERVER (I/O) ---
 export default {
