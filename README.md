@@ -15,4 +15,12 @@ bun run dev
 bun test
 ```
 
+While developing you may find some structures or patterns around. Here are some patterns you'll find and want to keep so things stay organized:
+
+- Handler: Zero logic boilerplate for tying into hono endpoints. Takes in a Hono Context returns Hono response.
+- Loader: Loads data from somewhere
+- Processor: Processes data into a palatable format for the jsx views to consume.
+- Pages: Content to be displayed by a route (uses server side jsx as html).
+- Components: Set of reusable views that get composed within Pages.
+
 Server runs at `http://localhost:3000`
