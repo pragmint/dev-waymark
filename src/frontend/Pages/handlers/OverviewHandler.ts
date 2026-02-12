@@ -3,15 +3,7 @@ import type { Capability } from '../../../core/data/capabilityTypes';
 import type { Summary } from '../../../core/data/summaryTypes';
 import { getTopThreeCapabilities } from '../../../core/data/capabilityQueries';
 import { getMostRecentSummary, getSummaryByDate } from '../../../shell/loaders/summaryLoader';
-
-export interface OverviewPageData {
-  teams: Team[];
-  topThree: Capability[];
-  allCapabilities: Capability[];
-  summaryHtml: string;
-  summaryDate: string;
-  availableSummaryDates: string[];
-}
+import type { OverviewPageProps } from '../OverviewPage';
 
 /**
  * Prepares all data needed for the Overview page
@@ -22,7 +14,7 @@ export function prepareOverviewData(
   capabilities: Capability[],
   summaries: Summary[],
   requestedDate?: string
-): OverviewPageData {
+): OverviewPageProps {
   const topThree = getTopThreeCapabilities(capabilities);
 
   // Get the summary to display

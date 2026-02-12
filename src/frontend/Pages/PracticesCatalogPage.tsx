@@ -3,7 +3,7 @@ import { Page } from '../components/Page';
 import type { Team } from '../../core/data/teamTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
 
-interface PracticesCatalogPageProps {
+export interface PracticesCatalogPageProps {
   teams: Team[];
   practices: Practice[];
 }

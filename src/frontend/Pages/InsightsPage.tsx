@@ -3,7 +3,7 @@ import { Page } from '../components/Page';
 import type { Team } from '../../core/data/teamTypes';
 import type { MetricOption } from './handlers/InsightsHandler';
 
-interface InsightsPageProps {
+export interface InsightsPageProps {
   teams: Team[];
   metricOptions: MetricOption[];
   capabilityMetricsJson: string;

@@ -4,7 +4,7 @@ import { CapabilityTile } from '../components/CapabilityTile';
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 
-interface CapabilityCatalogPageProps {
+export interface CapabilityCatalogPageProps {
   teams: Team[];
   allCapabilities: Capability[];
 }

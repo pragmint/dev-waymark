@@ -2,13 +2,7 @@ import type { Team } from '../../../core/data/teamTypes';
 import type { Experiment } from '../../../core/data/experimentTypes';
 import { loadPracticeFromFilesystem } from '../../../shell/loaders/practiceLoader';
 import { NotFoundError } from '../../../core/errors';
-
-export interface ExperimentDetailPageData {
-  teams: Team[];
-  team: Team;
-  experiment: Experiment;
-  practiceName: string;
-}
+import type { ExperimentDetailPageProps } from '../ExperimentDetailPage';
 
 /**
  * Prepares all data needed for the Experiment Detail page
@@ -19,7 +13,7 @@ export async function prepareExperimentDetailData(
   experimentId: string,
   teams: Team[],
   experiments: Experiment[]
-): Promise<ExperimentDetailPageData> {
+): Promise<ExperimentDetailPageProps> {
   const experiment = experiments.find(exp => exp.id === experimentId)
   if (experiment === undefined) throw new NotFoundError('Experiment', experimentId);
 

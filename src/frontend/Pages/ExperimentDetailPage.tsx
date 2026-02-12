@@ -9,7 +9,7 @@ import type {
 } from '../../core/data/experimentTypes';
 import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../htmlHelpers/htmlHelpers';
 
-interface ExperimentDetailPageProps {
+export interface ExperimentDetailPageProps {
   teams: Team[];
   team: Team;
   experiment: Experiment;

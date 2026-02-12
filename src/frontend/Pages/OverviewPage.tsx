@@ -5,7 +5,7 @@ import { ExecutiveSummary } from '../components/ExecutiveSummary';
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 
-interface OverviewPageProps {
+export interface OverviewPageProps {
   teams: Team[];
   topThree: Capability[];
   allCapabilities: Capability[];

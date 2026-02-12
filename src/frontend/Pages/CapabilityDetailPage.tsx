@@ -4,7 +4,7 @@ import type { Team } from '../../core/data/teamTypes';
 import type { Capability, MaturityLevel } from '../../core/data/capabilityTypes';
 import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../htmlHelpers/htmlHelpers';
 
-interface CapabilityDetailPageProps {
+export interface CapabilityDetailPageProps {
   teams: Team[];
   capability: Capability;
   selectedTeam: string;
