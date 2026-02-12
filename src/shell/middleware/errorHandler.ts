@@ -1,6 +1,5 @@
 import type { Context } from 'hono';
 import { NotFoundError, isAppError, formatErrorForLogging } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 
 /**
  * Global error handler middleware for Hono
@@ -8,7 +7,7 @@ import { consoleLogger } from '../../core/logger';
  */
 export async function errorHandler(err: Error, c: Context) {
   // Log the error with context
-  consoleLogger.error(formatErrorForLogging(err, { path: c.req.path, method: c.req.method }));
+  console.log(formatErrorForLogging(err, { path: c.req.path, method: c.req.method }));
 
   // Handle known application errors
   if (isAppError(err)) {

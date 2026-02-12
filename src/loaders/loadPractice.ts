@@ -1,4 +1,3 @@
-import { consoleLogger } from "../core/logger";
 import { Practice, parseMarkdown, transformCapabilityLinks, transformPracticeLinks, transformResourceLinks, extractTitle } from "../shell/loaders/practiceLoader";
 
 async function readMarkdownFile(
@@ -33,7 +32,7 @@ export async function loadPracticeFromFilesystem(
       content: html,
     };
   } catch (error) {
-    consoleLogger.error(`Failed to load practice ${practiceId}`, { error });
+    console.log(`Failed to load practice ${practiceId}`, { error });
     return null;
   }
 }

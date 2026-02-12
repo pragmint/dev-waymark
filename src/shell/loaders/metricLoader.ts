@@ -3,7 +3,6 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { ValidationError } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 import { CapabilityMetric } from '../../scripts/insights-data';
 
 // Zod schemas for capability metric data validation
@@ -119,7 +118,7 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityM
           } catch (error) {
             if (error instanceof z.ZodError && error.errors) {
               const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-              consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
+              console.log(`Validation error in ${file}`, { errors: error.errors });
               throw new ValidationError('Metric', file, details);
             }
             throw error;
@@ -127,12 +126,12 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityM
         })
     );
 
-    consoleLogger.info(`Loaded ${metrics.length} capability metrics`);
+    console.log(`Loaded ${metrics.length} capability metrics`);
 
     return metrics;
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      consoleLogger.warn('Capability metrics directory not found, returning empty array');
+      console.log('Capability metrics directory not found, returning empty array');
       return [];
     }
     throw error;
@@ -183,7 +182,7 @@ export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
           } catch (error) {
             if (error instanceof z.ZodError && error.errors) {
               const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-              consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
+              console.log(`Validation error in ${file}`, { errors: error.errors });
               throw new ValidationError('TeamMetric', file, details);
             }
             throw error;
@@ -195,11 +194,11 @@ export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
       }
     }
 
-    consoleLogger.info(`Loaded ${teamMetrics.length} team metrics`);
+    console.log(`Loaded ${teamMetrics.length} team metrics`);
     return teamMetrics;
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      consoleLogger.warn('Team metrics directory not found, returning empty array');
+      console.log('Team metrics directory not found, returning empty array');
       return [];
     }
     throw error;

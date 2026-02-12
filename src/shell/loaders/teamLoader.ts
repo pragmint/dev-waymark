@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { Team } from '../../core/data/teamTypes';
 import { TeamSchema } from '../../core/data/teamTypes';
 import { ValidationError } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 
 // Pure I/O function - loads teams from filesystem with validation
 export async function loadTeamsFromFilesystem(): Promise<Team[]> {
@@ -26,7 +25,7 @@ export async function loadTeamsFromFilesystem(): Promise<Team[]> {
         } catch (error) {
           if (error instanceof z.ZodError) {
             const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-            consoleLogger.error(`Validation error in ${file}`, { errors: error.errors });
+            console.log(`Validation error in ${file}`, { errors: error.errors });
             throw new ValidationError('Team', file, details);
           }
           throw error;
@@ -37,7 +36,7 @@ export async function loadTeamsFromFilesystem(): Promise<Team[]> {
   // Sort teams alphabetically by name
   teams.sort((a, b) => a.name.localeCompare(b.name));
 
-  consoleLogger.info(`Loaded ${teams.length} teams`);
+  console.log(`Loaded ${teams.length} teams`);
 
   return teams;
 }

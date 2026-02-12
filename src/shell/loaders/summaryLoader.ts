@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { Summary } from '../../core/data/summaryTypes';
 import { SummaryDateSchema } from '../../core/data/summaryTypes';
 import { ValidationError } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 import { parseDate } from '../../core/utils/dateFormatter';
 
 // Pure I/O function - loads summaries from filesystem
@@ -27,7 +26,7 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
             SummaryDateSchema.parse(dateString);
           } catch (error) {
             if (error instanceof z.ZodError) {
-              consoleLogger.error(`Invalid date format in filename ${file}`, { error });
+              console.log(`Invalid date format in filename ${file}`, { error });
               throw new ValidationError(
                 'Summary',
                 file,
@@ -57,12 +56,12 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
       return dateB.getTime() - dateA.getTime();
     });
 
-    consoleLogger.info(`Loaded ${summaries.length} summaries`);
+    console.log(`Loaded ${summaries.length} summaries`);
 
     return summaries;
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      consoleLogger.warn('Summaries directory not found, returning empty array');
+      console.log('Summaries directory not found, returning empty array');
       return [];
     }
     throw error;

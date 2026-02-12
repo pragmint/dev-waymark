@@ -3,7 +3,6 @@ import { marked } from 'marked';
 import type { Capability } from '../../core/data/capabilityTypes';
 import { filenameToTitle } from '../../core/utils/stringUtils';
 import { parseAssessmentMarkdown } from './assessmentParser';
-import { consoleLogger } from '../../core/logger';
 
 /**
  * Pure I/O function - loads capabilities from markdown files
@@ -92,7 +91,7 @@ export async function loadCapabilityMarkdown(capabilityId: string): Promise<stri
 
     return html;
   } catch (error) {
-    consoleLogger.error(`Failed to load capability markdown ${capabilityId}`, { error });
+    console.log(`Failed to load capability markdown ${capabilityId}`, { error });
     return null;
   }
 }

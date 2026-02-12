@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { Experiment } from '../../core/data/experimentTypes';
 import { ExperimentFileSchema } from '../../core/data/experimentTypes';
 import { ValidationError } from '../../core/errors';
-import { consoleLogger } from '../../core/logger';
 import { filenameToTitle } from '../../core/utils/stringUtils';
 
 /**
@@ -71,7 +70,7 @@ async function loadExperimentFromFile(
   } catch (error) {
     if (error instanceof z.ZodError) {
       const details = error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      consoleLogger.error(`Validation error in ${filePath}`, { errors: error.issues });
+      console.log(`Validation error in ${filePath}`, { errors: error.issues });
       throw new ValidationError('Experiment', filePath, details);
     }
     throw error;
@@ -117,7 +116,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
       }
     }
 
-    consoleLogger.info(
+    console.log(
       `Loaded ${experiments.length} experiments from ${
         teamDirs.filter(async d => {
           try {
@@ -132,7 +131,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
     return experiments;
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      consoleLogger.warn('Experiments directory not found, returning empty array');
+      console.log('Experiments directory not found, returning empty array');
       return [];
     }
     throw error;

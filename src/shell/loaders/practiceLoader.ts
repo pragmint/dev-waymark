@@ -1,5 +1,4 @@
 import { marked } from 'marked';
-import { consoleLogger } from '../../core/logger';
 
 export interface Practice {
   id: string;
@@ -70,7 +69,7 @@ export async function loadPracticeFromFilesystem(
       content: html,
     };
   } catch (error) {
-    consoleLogger.error(`Failed to load practice ${practiceId}`, { error });
+    console.log(`Failed to load practice ${practiceId}`, { error });
     return null;
   }
 }
