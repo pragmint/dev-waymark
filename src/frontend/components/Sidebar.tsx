@@ -1,5 +1,5 @@
 import type { FC } from 'hono/jsx';
-import type { Team } from '../core/data/teamTypes';
+import type { Team } from '../../core/data/teamTypes';
 
 interface SidebarProps {
   teams: Team[];

@@ -1,5 +1,5 @@
 import type { FC } from 'hono/jsx';
-import { formatDateString } from '../core/utils/dateFormatter';
+import { formatDateString } from '../../core/utils/dateFormatter';
 
 export interface ExecutiveSummaryProps {
   htmlContent: string;

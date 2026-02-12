@@ -1,6 +1,6 @@
 import { Context } from "hono";
-import { ExperimentDetailPage } from "../pages/ExperimentDetailPage";
-import { prepareExperimentDetailData } from "../pages/handlers/ExperimentDetailHandler";
+import { ExperimentDetailPage } from "../frontend/Pages/ExperimentDetailPage";
+import { prepareExperimentDetailData } from "../frontend/Pages/handlers/ExperimentDetailHandler";
 import { loadDataContext } from "../loaders/loadDataContext";
 
 const { enrichedExperiments, teams } = await loadDataContext()

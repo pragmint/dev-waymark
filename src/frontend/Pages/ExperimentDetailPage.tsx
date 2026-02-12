@@ -1,13 +1,13 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../core/data/teamTypes';
+import type { Team } from '../../core/data/teamTypes';
 import type {
   Experiment,
   ExperimentActionItem,
   ExperimentDecisionRolesItem,
   ExperimentSuccessCriteriaItem,
-} from '../core/data/experimentTypes';
-import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../core/rendering/htmlHelpers';
+} from '../../core/data/experimentTypes';
+import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../htmlHelpers/htmlHelpers';
 
 interface ExperimentDetailPageProps {
   teams: Team[];

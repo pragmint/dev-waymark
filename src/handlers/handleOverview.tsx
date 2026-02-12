@@ -1,7 +1,7 @@
 import { Context } from "hono";
 import { loadDataContext } from "../loaders/loadDataContext";
-import { prepareOverviewData } from "../pages/handlers/OverviewHandler";
-import { OverviewPage } from "../pages/OverviewPage";
+import { prepareOverviewData } from "../frontend/Pages/handlers/OverviewHandler";
+import { OverviewPage } from "../frontend/Pages/OverviewPage";
 
 const { capabilities, summaries, teams } = await loadDataContext()
 

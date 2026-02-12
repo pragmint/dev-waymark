@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
-import type { Capability } from '../core/data/capabilityTypes';
-import { getTrendIcon } from '../core/rendering/htmlHelpers';
+import type { Capability } from '../../core/data/capabilityTypes';
+import { getTrendIcon } from '../htmlHelpers/htmlHelpers';
 
 interface CapabilityTileProps {
   capability: Capability;

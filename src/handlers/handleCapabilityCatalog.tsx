@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { CapabilityCatalogPage } from "../pages/CapabilityCatalogPage";
+import { CapabilityCatalogPage } from "../frontend/Pages/CapabilityCatalogPage";
 import { loadDataContext } from "../loaders/loadDataContext";
 
 const { capabilities, teams } = await loadDataContext()

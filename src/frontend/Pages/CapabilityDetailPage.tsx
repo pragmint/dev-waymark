@@ -1,8 +1,8 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../core/data/teamTypes';
-import type { Capability, MaturityLevel } from '../core/data/capabilityTypes';
-import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../core/rendering/htmlHelpers';
+import type { Team } from '../../core/data/teamTypes';
+import type { Capability, MaturityLevel } from '../../core/data/capabilityTypes';
+import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../htmlHelpers/htmlHelpers';
 
 interface CapabilityDetailPageProps {
   teams: Team[];

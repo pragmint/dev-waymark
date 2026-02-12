@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { TeamDetailPage, TeamDetailPageProps } from "../pages/TeamDetailPage";
+import { TeamDetailPage, TeamDetailPageProps } from "../frontend/Pages/TeamDetailPage";
 import { loadDataContext } from "../loaders/loadDataContext";
 import { Capability, TrendDirection } from "../core/data/capabilitySchemas";
 import { findExperimentsByTeamId } from "../core/data/experimentQueries";

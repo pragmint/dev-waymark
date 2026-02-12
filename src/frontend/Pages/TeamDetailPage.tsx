@@ -1,13 +1,13 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, TeamCapability } from '../core/data/teamTypes';
-import type { Experiment } from '../core/data/experimentTypes';
-import type { Capability } from '../core/data/capabilityTypes';
-import type { Practice } from '../shell/loaders/practiceLoader';
-import type { TeamMetric } from '../shell/loaders/metricLoader';
-import { getStatusBadge } from '../core/rendering/htmlHelpers';
-import { parseDate } from '../core/utils/dateFormatter';
+import type { Team, TeamCapability } from '../../core/data/teamTypes';
+import type { Experiment } from '../../core/data/experimentTypes';
+import type { Capability } from '../../core/data/capabilityTypes';
+import type { Practice } from '../../shell/loaders/practiceLoader';
+import type { TeamMetric } from '../../shell/loaders/metricLoader';
+import { getStatusBadge } from '../htmlHelpers/htmlHelpers';
+import { parseDate } from '../../core/utils/dateFormatter';
 
 export interface TeamDetailPageProps {
   teams: Team[];

@@ -1,6 +1,6 @@
 import { Context } from "hono";
-import { prepareInsightsData } from "../pages/handlers/InsightsHandler";
-import { InsightsPage } from "../pages/InsightsPage";
+import { prepareInsightsData } from "../frontend/Pages/handlers/InsightsHandler";
+import { InsightsPage } from "../frontend/Pages/InsightsPage";
 import { loadDataContext } from "../loaders/loadDataContext";
 
 const { capabilities, teams, teamMetrics, capabilityMetrics } = await loadDataContext()

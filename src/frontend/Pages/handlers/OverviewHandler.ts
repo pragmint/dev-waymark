@@ -1,8 +1,8 @@
-import type { Team } from '../../core/data/teamTypes';
-import type { Capability } from '../../core/data/capabilityTypes';
-import type { Summary } from '../../core/data/summaryTypes';
-import { getTopThreeCapabilities } from '../../core/data/capabilityQueries';
-import { getMostRecentSummary, getSummaryByDate } from '../../shell/loaders/summaryLoader';
+import type { Team } from '../../../core/data/teamTypes';
+import type { Capability } from '../../../core/data/capabilityTypes';
+import type { Summary } from '../../../core/data/summaryTypes';
+import { getTopThreeCapabilities } from '../../../core/data/capabilityQueries';
+import { getMostRecentSummary, getSummaryByDate } from '../../../shell/loaders/summaryLoader';
 
 export interface OverviewPageData {
   teams: Team[];

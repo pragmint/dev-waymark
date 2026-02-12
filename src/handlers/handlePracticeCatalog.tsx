@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { PracticesCatalogPage } from "../pages/PracticesCatalogPage";
+import { PracticesCatalogPage } from "../frontend/Pages/PracticesCatalogPage";
 import { loadAllPracticesFromFilesystem } from "../shell/loaders/practiceLoader";
 import { loadDataContext } from "../loaders/loadDataContext";
 
