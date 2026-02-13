@@ -50,7 +50,7 @@ export const OverviewPage: FC<OverviewPageProps> = ({
         availableDates={availableSummaryDates}
       />
 
-      <script src="/resources/public/overview.js"></script>
+      <script src="/public/overview.js"></script>
     </Page>
   );
 };

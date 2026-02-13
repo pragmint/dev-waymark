@@ -23,7 +23,7 @@ export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({
         </div>
       </div>
 
-      <script src="/resources/public/overview.js"></script>
+      <script src="/public/overview.js"></script>
     </Page>
   );
 };

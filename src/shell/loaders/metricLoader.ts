@@ -28,7 +28,7 @@ export {
  * Each file corresponds to a capability and contains team scores over time
  */
 export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityMetric[]> {
-  const dir = 'resources/private/yaml/metrics/capability_scores';
+  const dir = 'examples/metrics/capability_scores';
 
   try {
     const files = await readdir(dir);
@@ -68,7 +68,7 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityM
  * Directory structure: metrics/team_specific/{team_id}/{metric-name}.yaml
  */
 export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
-  const baseDir = 'resources/private/yaml/metrics/team_specific';
+  const baseDir = 'examples/metrics/team_specific';
 
   try {
     const teamDirs = await readdir(baseDir);

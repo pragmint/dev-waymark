@@ -6,7 +6,8 @@
     "start": "bun run index.tsx",
     "dev": "bun --watch index.tsx",
     "b": "bun ./scripts/build.ts",
-    "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css",
+    "build:prod": "bun ./scripts/build.ts --prod",
+    "watch:css": "sass --watch src/styles/main.scss:public/style.css",
     "check": "prettier --check . && eslint . && tsc",
     "fix": "prettier --write . && eslint . --fix",
     "test:e2e": "playwright test"

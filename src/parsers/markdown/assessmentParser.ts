@@ -6,7 +6,7 @@ import type { MaturityLevel } from '../../core/data/capabilitySchemas';
  * Returns a map of capability ID to maturity levels
  */
 export async function parseAssessmentMarkdown(): Promise<Map<string, MaturityLevel[]>> {
-  const markdownPath = 'resources/private/markdown/capabilities-maturity-assessment.md';
+  const markdownPath = 'resources/capabilities-maturity-assessment.md';
   const content = await readFile(markdownPath, 'utf-8');
 
   const capabilityMap = new Map<string, MaturityLevel[]>();

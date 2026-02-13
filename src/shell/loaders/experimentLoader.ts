@@ -24,7 +24,7 @@ function directoryToTeamId(dirname: string): string {
  * Directory structure: experiments/{team_id}/{experiment-name}.yaml
  */
 export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
-  const experimentsDir = 'resources/private/yaml/experiments';
+  const experimentsDir = 'examples/experiments';
 
   try {
     const teamDirs = await readdir(experimentsDir);

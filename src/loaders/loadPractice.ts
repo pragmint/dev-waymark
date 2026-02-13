@@ -9,7 +9,7 @@ import {
 
 async function readMarkdownFile(practiceId: string): Promise<string> {
   const filename = `${practiceId}.md`;
-  const filePath = `resources/private/markdown/practices/${filename}`;
+  const filePath = `resources/practices/${filename}`;
   return await Bun.file(filePath).text();
 }
 

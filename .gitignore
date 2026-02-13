@@ -5,7 +5,7 @@ node_modules/
 dist/
 build/
 *.js.map
-resources/public/
+public/
 
 # Environment variables
 .env

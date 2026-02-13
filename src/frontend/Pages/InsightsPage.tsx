@@ -94,7 +94,7 @@ export const InsightsPage: FC<InsightsPageProps> = ({
           }),
         }}
       />
-      <script src="/resources/public/insights.js"></script>
+      <script src="/public/insights.js"></script>
     </Page>
   );
 };

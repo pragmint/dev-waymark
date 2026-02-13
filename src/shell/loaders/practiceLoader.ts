@@ -15,7 +15,7 @@ export interface Practice {
 // Pure function - reads markdown file from filesystem
 async function readMarkdownFile(practiceId: string): Promise<string> {
   const filename = `${practiceId}.md`;
-  const filePath = `resources/private/markdown/practices/${filename}`;
+  const filePath = `resources/practices/${filename}`;
   return await Bun.file(filePath).text();
 }
 
@@ -49,7 +49,7 @@ export async function loadPracticeFromFilesystem(practiceId: string): Promise<Pr
 
 // Pure I/O function - loads all practices from filesystem
 export async function loadAllPracticesFromFilesystem(): Promise<Practice[]> {
-  const dir = 'resources/private/markdown/practices';
+  const dir = 'resources/practices';
   const glob = new Bun.Glob('*.md');
   const files: string[] = Array.from(glob.scanSync(dir)) as string[];
 

@@ -9,7 +9,7 @@ import { parseMarkdown } from '../../parsers/markdown';
 
 // Pure I/O function - loads summaries from filesystem
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
-  const dir = 'resources/private/markdown/summaries';
+  const dir = 'resources/summaries';
 
   try {
     const files = await readdir(dir);

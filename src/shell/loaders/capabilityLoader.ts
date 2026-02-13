@@ -13,7 +13,7 @@ import {
  * Discovers all capabilities from the markdown directory
  */
 export async function loadCapabilitiesFromFilesystem(): Promise<Capability[]> {
-  const markdownDir = 'resources/private/markdown/capabilities';
+  const markdownDir = 'resources/capabilities';
 
   const files = await readdir(markdownDir);
 
@@ -67,7 +67,7 @@ export async function enrichCapabilitiesWithAssessment(
 export async function loadCapabilityMarkdown(capabilityId: string): Promise<string | null> {
   try {
     const filename = `${capabilityId}.md`;
-    const filePath = `resources/private/markdown/capabilities/${filename}`;
+    const filePath = `resources/capabilities/${filename}`;
 
     // Load markdown
     const markdown = await Bun.file(filePath).text();

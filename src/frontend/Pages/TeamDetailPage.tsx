@@ -137,7 +137,7 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
         </div>
       </div>
 
-      <script src="/resources/public/team-detail.js"></script>
+      <script src="/public/team-detail.js"></script>
     </Page>
   );
 };

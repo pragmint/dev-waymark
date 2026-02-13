@@ -5,7 +5,7 @@ import { parseTeamYaml } from '../../parsers/yaml/teamParser';
 
 // Pure I/O function - loads teams from filesystem with validation
 export async function loadTeamsFromFilesystem(): Promise<Team[]> {
-  const dir = 'resources/private/yaml/teams';
+  const dir = 'examples/teams';
   const files = await readdir(dir);
 
   const teams = await Promise.all(

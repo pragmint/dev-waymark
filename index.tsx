@@ -17,7 +17,7 @@ const app = new Hono();
 
 app.onError(errorHandler);
 app.use(trimTrailingSlash());
-app.use('/resources/*', serveStatic({ root: './' }));
+app.use('/public/*', serveStatic({ root: './' }));
 
 app.get('/', handleOverview);
 app.get('/archive/:date', handleOverview);
