@@ -6,7 +6,7 @@
     "start": "bun ./scripts/start.ts",
     "dev": "bun ./scripts/dev.ts",
     "b": "bun ./scripts/build.ts",
-    "build:prod": "bun ./scripts/build.ts --prod",
+    "b:prod": "bun ./scripts/build.ts --prod",
     "watch:css": "sass --watch src/styles/main.scss:public/style.css",
     "check": "prettier --check . && eslint . && tsc",
     "fix": "prettier --write . && eslint . --fix",

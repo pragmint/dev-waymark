@@ -13,6 +13,13 @@ bun dev
 
 # Run tests
 bun test
+
+# Build for Production
+bun b:prod
+
+# Start app from dist
+bun start
+
 ```
 
 While developing you may find some structures or patterns around. Here are some patterns you'll find and want to keep so things stay organized:
