@@ -68,7 +68,3 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
   }
 }
 
-// Get the most recent summary
-export function getMostRecentSummary(summaries: Summary[]): Summary | null {
-  return summaries.length > 0 ? summaries[0] : null;
-}

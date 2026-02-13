@@ -4,22 +4,6 @@ import type { Experiment } from '../../core/data/experimentTypes';
 import { parseExperimentYaml } from '../../parsers/yaml/experimentParser';
 
 /**
- * Converts kebab-case filename to experiment ID
- * Example: "enforce-types-with-a-linter.yaml" -> "enforce-types-with-a-linter"
- */
-function filenameToExperimentId(filename: string): string {
-  return filename.replace('.yaml', '');
-}
-
-/**
- * Converts snake_case directory name to team ID
- * Example: "team_a" -> "team-a"
- */
-function directoryToTeamId(dirname: string): string {
-  return dirname.replace(/_/g, '-');
-}
-
-/**
  * Pure I/O function - loads experiments from filesystem with validation
  * Directory structure: experiments/{team_id}/{experiment-name}.yaml
  */
@@ -42,7 +26,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
         continue;
       }
 
-      const teamId = directoryToTeamId(teamDir);
+      const teamId = teamDir.replace(/_/g, '-');
 
       // Read experiment files in this team's directory
       const files = await readdir(teamDirPath);
@@ -51,7 +35,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
         if (!file.endsWith('.yaml')) continue;
 
         const filePath = join(teamDirPath, file);
-        const experimentId = filenameToExperimentId(file);
+        const experimentId = file.replace('.yaml', '');
 
         const content = await Bun.file(filePath).text();
         const experiment = parseExperimentYaml(content, teamId, experimentId);

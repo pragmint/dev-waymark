@@ -2,7 +2,6 @@ import type { Team } from '../../../core/data/teamTypes';
 import type { Capability } from '../../../core/data/capabilityTypes';
 import type { Summary } from '../../../core/data/summaryTypes';
 import { getTopThreeCapabilities } from '../../../core/data/capabilityQueries';
-import { getMostRecentSummary } from '../../../shell/loaders/summaryLoader';
 import type { OverviewPageProps } from '../OverviewPage';
 
 /**
@@ -22,7 +21,7 @@ export function prepareOverviewData(
   if (requestedDate) {
     selectedSummary = summaries.find(s => s.dateString === requestedDate) || null;
   } else {
-    selectedSummary = getMostRecentSummary(summaries);
+    selectedSummary = summaries.length > 0 ? summaries[0] : null;
   }
 
   // Fallback if no summary found
