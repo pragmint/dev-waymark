@@ -1,6 +1,6 @@
 {
-  "name": "hello-world-bun",
-  "version": "1.0.0",
+  "name": "step-engine",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "start": "bun run index.tsx",
@@ -10,7 +10,7 @@
     "build:css": "sass src/styles/main.scss:resources/public/style.css",
     "build:js": "for file in src/scripts/*.ts; do bun build \"$file\" --outfile \"resources/public/$(basename \"$file\" .ts).js\"; done",
     "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint .",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
