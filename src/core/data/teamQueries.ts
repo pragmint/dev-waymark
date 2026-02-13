@@ -2,10 +2,6 @@ import type { Team, ActiveExperiment } from './teamTypes';
 
 // Pure query functions - no I/O, no mutation
 
-export function findTeamById(teams: Team[], id: string): Team | undefined {
-  return teams.find(t => t.id === id);
-}
-
 /**
  * @deprecated Use experimentQueries.findExperimentByIdWithTeam instead
  * This function searches for experiments embedded in team.activeExperiments (old format)

@@ -72,8 +72,3 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
 export function getMostRecentSummary(summaries: Summary[]): Summary | null {
   return summaries.length > 0 ? summaries[0] : null;
 }
-
-// Get a specific summary by date string
-export function getSummaryByDate(summaries: Summary[], dateString: string): Summary | null {
-  return summaries.find(s => s.dateString === dateString) || null;
-}

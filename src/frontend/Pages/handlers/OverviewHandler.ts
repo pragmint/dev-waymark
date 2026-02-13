@@ -2,7 +2,7 @@ import type { Team } from '../../../core/data/teamTypes';
 import type { Capability } from '../../../core/data/capabilityTypes';
 import type { Summary } from '../../../core/data/summaryTypes';
 import { getTopThreeCapabilities } from '../../../core/data/capabilityQueries';
-import { getMostRecentSummary, getSummaryByDate } from '../../../shell/loaders/summaryLoader';
+import { getMostRecentSummary } from '../../../shell/loaders/summaryLoader';
 import type { OverviewPageProps } from '../OverviewPage';
 
 /**
@@ -20,7 +20,7 @@ export function prepareOverviewData(
   // Get the summary to display
   let selectedSummary: Summary | null;
   if (requestedDate) {
-    selectedSummary = getSummaryByDate(summaries, requestedDate);
+    selectedSummary = summaries.find(s => s.dateString === requestedDate) || null;
   } else {
     selectedSummary = getMostRecentSummary(summaries);
   }

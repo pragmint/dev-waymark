@@ -243,15 +243,3 @@ export function enrichExperimentsWithMetrics(
   // For now, experiments just store the reference strings
   return experiments;
 }
-
-/**
- * Helper to resolve a metric reference from an experiment
- * Returns the actual metric data for a given reference string
- * Example: resolveMetricReference("team-a/linter-error-count", teamMetrics)
- */
-export function resolveMetricReference(
-  metricRef: string,
-  teamMetrics: TeamMetric[]
-): TeamMetric | undefined {
-  return teamMetrics.find(m => `${m.teamId}/${m.metricName}` === metricRef);
-}

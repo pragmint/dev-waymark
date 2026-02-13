@@ -2,7 +2,6 @@ import { Context } from 'hono';
 import { TeamDetailPage, TeamDetailPageProps } from '../frontend/Pages/TeamDetailPage';
 import { loadDataContext } from '../loaders/loadDataContext';
 import { Capability, TrendDirection } from '../core/data/capabilitySchemas';
-import { findExperimentsByTeamId } from '../core/data/experimentQueries';
 import { Experiment } from '../core/data/experimentSchemas';
 import { Team, TeamCapability } from '../core/data/teamSchemas';
 import { NotFoundError } from '../core/errors';
@@ -133,7 +132,7 @@ export async function prepareTeamDetailData(
   }
 
   // Get experiments for this team
-  const experiments = findExperimentsByTeamId(allExperiments, teamId);
+  const experiments = allExperiments.filter(exp => exp.teamId === teamId);
 
   // Get team metrics for this team
   const teamMetrics = allTeamMetrics.filter(m => m.teamId === teamId);

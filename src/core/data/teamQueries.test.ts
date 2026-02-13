@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { findTeamById, findExperimentById } from './teamQueries';
+import { findExperimentById } from './teamQueries';
 import type { Team } from './teamTypes';
 
 describe('Team Queries', () => {
@@ -35,18 +35,6 @@ describe('Team Queries', () => {
       ],
     },
   ];
-
-  test('findTeamById returns correct team', () => {
-    const team = findTeamById(teams, 'team-a');
-
-    expect(team?.name).toBe('Team Alpha');
-  });
-
-  test('findTeamById returns undefined for non-existent team', () => {
-    const team = findTeamById(teams, 'team-z');
-
-    expect(team).toBeUndefined();
-  });
 
   test('findExperimentById finds experiment across teams', () => {
     const result = findExperimentById(teams, 'exp-2');

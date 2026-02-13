@@ -2,13 +2,6 @@ import type { Experiment } from './experimentTypes';
 import type { Team } from './teamTypes';
 
 /**
- * Find all experiments for a specific team
- */
-export function findExperimentsByTeamId(experiments: Experiment[], teamId: string): Experiment[] {
-  return experiments.filter(exp => exp.teamId === teamId);
-}
-
-/**
  * Find experiment by ID and return with team context
  * This is for backward compatibility with existing code that expects
  * the experiment alongside its team
