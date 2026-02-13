@@ -5,7 +5,7 @@ import type { Team, TeamCapability } from '../../core/data/teamTypes';
 import type { Experiment } from '../../core/data/experimentTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
-import type { TeamMetric } from '../../shell/loaders/metricLoader';
+import type { TeamMetric } from '../../parsers/yaml/metricParser';
 import { getStatusBadge } from '../htmlHelpers/htmlHelpers';
 import { parseDate } from '../../core/utils/dateFormatter';
 

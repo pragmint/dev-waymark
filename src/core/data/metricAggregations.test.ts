@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from './metricAggregations';
-import type { Metric } from '../../shell/loaders/metricLoader';
+import type { Metric } from '../../parsers/yaml/metricParser';
 import type { Team } from './teamTypes';
 import type { Capability } from './capabilityTypes';
 

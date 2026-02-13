@@ -1,11 +1,11 @@
+import type { Practice } from '../shell/loaders/practiceLoader';
 import {
-  Practice,
   parseMarkdown,
+  extractTitle,
   transformCapabilityLinks,
   transformPracticeLinks,
   transformResourceLinks,
-  extractTitle,
-} from '../shell/loaders/practiceLoader';
+} from '../parsers/markdown';
 
 async function readMarkdownFile(practiceId: string): Promise<string> {
   const filename = `${practiceId}.md`;

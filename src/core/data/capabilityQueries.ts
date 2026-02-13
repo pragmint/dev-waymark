@@ -1,5 +1,5 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric, MetricValue } from '../../shell/loaders/metricLoader';
+import type { Metric, MetricValue } from '../../parsers/yaml/metricParser';
 import { parseDate } from '../utils/dateFormatter';
 
 // Pure query functions - no I/O, no mutation

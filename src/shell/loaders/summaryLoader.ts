@@ -1,11 +1,11 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { marked } from 'marked';
 import { z } from 'zod';
 import type { Summary } from '../../core/data/summaryTypes';
 import { SummaryDateSchema } from '../../core/data/summaryTypes';
 import { ValidationError } from '../../core/errors';
 import { parseDate } from '../../core/utils/dateFormatter';
+import { parseMarkdown } from '../../parsers/markdown';
 
 // Pure I/O function - loads summaries from filesystem
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
@@ -38,7 +38,7 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
 
           // Read and convert markdown to HTML
           const content = await Bun.file(filePath).text();
-          const htmlContent = await marked.parse(content);
+          const htmlContent = await parseMarkdown(content);
 
           return {
             date: dateString,

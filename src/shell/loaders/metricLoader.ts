@@ -1,90 +1,27 @@
-import { parse } from 'yaml';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { z } from 'zod';
-import { ValidationError } from '../../core/errors';
-import { CapabilityMetric } from '../../scripts/insights-data';
+import type { CapabilityMetric } from '../../scripts/insights-data';
+import type { TeamMetric } from '../../parsers/yaml/metricParser';
+import { parseCapabilityMetricYaml, parseTeamMetricYaml } from '../../parsers/yaml/metricParser';
 
-// Zod schemas for capability metric data validation
-// Value can be:
-// - A number (simple score)
-// - A string (anecdotes)
-// - An array of single-key objects (dimension scores from YAML)
-// - A record object (dimension scores)
-const DimensionScoreSchema = z.record(z.string(), z.number());
-const DimensionScoreArraySchema = z.array(z.record(z.string(), z.union([z.number(), z.string()])));
+// Re-export types from metricParser for downstream consumers
+export type {
+  MetricDataPoint,
+  MetricValue,
+  MetricFile,
+  Metric,
+  TeamMetricDataPoint,
+  TeamMetricFile,
+  TeamMetric,
+} from '../../parsers/yaml/metricParser';
 
-export const MetricDataPointSchema = z
-  .object({
-    team: z.string().optional(),
-    date: z.string(), // Format: yy.m.dd or similar
-    value: z.union([z.number(), z.string(), DimensionScoreArraySchema, DimensionScoreSchema]),
-    justification: z.string().optional(),
-  })
-  .transform(data => {
-    // Normalize dimension score arrays to single objects
-    // YAML arrays like [{"new-code": 1, "justification": "..."}, {"old-code": 2}]
-    // -> {scores: {"new-code": 1, "old-code": 2}, justifications: {"new-code": "..."}}
-    if (Array.isArray(data.value)) {
-      const normalized: Record<string, number> = {};
-      const justifications: Record<string, string> = {};
-
-      for (const item of data.value) {
-        // Extract dimension name (the key that's not 'justification')
-        const dimensionKey = Object.keys(item).find(k => k !== 'justification');
-        if (dimensionKey && typeof item[dimensionKey] === 'number') {
-          normalized[dimensionKey] = item[dimensionKey];
-          if (item.justification && typeof item.justification === 'string') {
-            justifications[dimensionKey] = item.justification;
-          }
-        }
-      }
-
-      return {
-        ...data,
-        value: normalized,
-        dimensionJustifications:
-          Object.keys(justifications).length > 0 ? justifications : undefined,
-      };
-    }
-    return data;
-  });
-
-export const MetricFileSchema = z.object({
-  data: z.array(MetricDataPointSchema),
-});
-
-export type MetricDataPoint = z.infer<typeof MetricDataPointSchema> & {
-  justification?: string;
-  dimensionJustifications?: Record<string, string>;
-};
-export type MetricValue = number | string | Record<string, number>;
-export type MetricFile = z.infer<typeof MetricFileSchema>;
-
-export interface Metric {
-  capabilityId: string;
-  data: MetricDataPoint[];
-}
-
-// Zod schemas for team metric data validation
-export const TeamMetricDataPointSchema = z.object({
-  date: z.string(),
-  value: z.union([z.number(), z.string()]),
-  // No team field - team is derived from filename
-});
-
-export const TeamMetricFileSchema = z.object({
-  data: z.array(TeamMetricDataPointSchema),
-});
-
-export type TeamMetricDataPoint = z.infer<typeof TeamMetricDataPointSchema>;
-export type TeamMetricFile = z.infer<typeof TeamMetricFileSchema>;
-
-export interface TeamMetric {
-  teamId: string;
-  metricName: string;
-  data: TeamMetricDataPoint[];
-}
+// Re-export schemas for downstream consumers
+export {
+  MetricDataPointSchema,
+  MetricFileSchema,
+  TeamMetricDataPointSchema,
+  TeamMetricFileSchema,
+} from '../../parsers/yaml/metricParser';
 
 /**
  * Pure I/O function - loads capability metrics from filesystem with validation
@@ -102,27 +39,15 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityM
         .map(async file => {
           const filePath = join(dir, file);
           const content = await Bun.file(filePath).text();
-          const raw = parse(content);
+          const metricFile = parseCapabilityMetricYaml(content, file);
 
-          try {
-            // Parse with runtime validation
-            const metricFile = MetricFileSchema.parse(raw);
+          // Extract capability ID from filename (remove .yaml extension)
+          const capabilityId = file.replace('.yaml', '');
 
-            // Extract capability ID from filename (remove .yaml extension)
-            const capabilityId = file.replace('.yaml', '');
-
-            return {
-              capabilityId,
-              data: metricFile.data,
-            };
-          } catch (error) {
-            if (error instanceof z.ZodError && error.errors) {
-              const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-              console.log(`Validation error in ${file}`, { errors: error.errors });
-              throw new ValidationError('Metric', file, details);
-            }
-            throw error;
-          }
+          return {
+            capabilityId,
+            data: metricFile.data,
+          } as CapabilityMetric;
         })
     );
 
@@ -168,25 +93,13 @@ export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
           const metricName = file.replace('.yaml', '');
 
           const content = await Bun.file(filePath).text();
-          const raw = parse(content);
+          const metricFile = parseTeamMetricYaml(content, file);
 
-          try {
-            // Parse with runtime validation
-            const metricFile = TeamMetricFileSchema.parse(raw);
-
-            teamMetrics.push({
-              teamId,
-              metricName,
-              data: metricFile.data,
-            });
-          } catch (error) {
-            if (error instanceof z.ZodError && error.errors) {
-              const details = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-              console.log(`Validation error in ${file}`, { errors: error.errors });
-              throw new ValidationError('TeamMetric', file, details);
-            }
-            throw error;
-          }
+          teamMetrics.push({
+            teamId,
+            metricName,
+            data: metricFile.data,
+          });
         }
       } catch {
         // Skip if not a directory or can't read

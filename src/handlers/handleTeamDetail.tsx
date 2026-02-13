@@ -9,7 +9,7 @@ import { NotFoundError } from '../core/errors';
 import { loadPracticeFromFilesystem } from '../loaders/loadPractice';
 import { TeamMetric } from '../scripts/insights-data';
 import { parseDate } from '../scripts/insights-utils';
-import { MetricValue, Metric } from '../shell/loaders/metricLoader';
+import type { MetricValue, Metric } from '../parsers/yaml/metricParser';
 import { Practice } from '../shell/loaders/practiceLoader';
 
 const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } =

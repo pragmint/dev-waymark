@@ -1,5 +1,5 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric, TeamMetric, MetricValue } from '../../shell/loaders/metricLoader';
+import type { Metric, TeamMetric, MetricValue } from '../../parsers/yaml/metricParser';
 import type { Team, TeamCapability } from './teamTypes';
 import type { Experiment } from './experimentTypes';
 import { normalizeTeamCapabilities } from './teamSchemas';
