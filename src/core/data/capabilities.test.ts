@@ -1,8 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { enrichCapabilitiesWithTeamData } from './capabilityAggregations';
-import {
-  getTopThreeCapabilities,
-} from './capabilityQueries';
+import { getTopThreeCapabilities } from './capabilityQueries';
 import type { Capability } from './capabilityTypes';
 import type { Team } from './teamTypes';
 

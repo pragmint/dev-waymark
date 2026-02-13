@@ -1,6 +1,6 @@
 # [Pervasive Security](https://dora.dev/capabilities/pervasive-security/)
 
-Pervasive Security emphasizes integrating security practices into the daily workflow across all phases of software development. The goal is to shift security considerations to the *early stages* of the development lifecycle. This is also known as "shifting left," which helps prevent costly security defects and enhances software delivery performance. Implementing the Pervasive Security capability leads to more secure systems and reduces the time spent remediating issues, benefiting both development speed and system stability.
+Pervasive Security emphasizes integrating security practices into the daily workflow across all phases of software development. The goal is to shift security considerations to the _early stages_ of the development lifecycle. This is also known as "shifting left," which helps prevent costly security defects and enhances software delivery performance. Implementing the Pervasive Security capability leads to more secure systems and reduces the time spent remediating issues, benefiting both development speed and system stability.
 
 ## Nuances
 

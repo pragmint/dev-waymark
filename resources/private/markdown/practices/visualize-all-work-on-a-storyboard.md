@@ -1,6 +1,6 @@
 # Visualize All Work on a Storyboard
 
-When everyone is busy, everyone tends to be caught up in their own world. Developers focus on their assigned tickets. QA focuses on testing queues. Ops focuses on incidents. Product focuses on stakeholder requests. Each person optimizes for their slice without seeing how those local optimizations create bottlenecks elsewhere in the system. Teams may work to improve and deliver in their areas of control and point the finger at others when things go sideways.  The result is suboptimization and a system and culture that may be working against itself.
+When everyone is busy, everyone tends to be caught up in their own world. Developers focus on their assigned tickets. QA focuses on testing queues. Ops focuses on incidents. Product focuses on stakeholder requests. Each person optimizes for their slice without seeing how those local optimizations create bottlenecks elsewhere in the system. Teams may work to improve and deliver in their areas of control and point the finger at others when things go sideways. The result is suboptimization and a system and culture that may be working against itself.
 
 A storyboard makes all work visible in one place. Unlike a sprint board that tracks only committed work, a storyboard captures everything happening across the team: feature work, bug fixes, production support, meetings, spikes, and the invisible coordination that consumes time but never gets tracked. When all work is visible, teams can see where effort is actually going, identify bottlenecks worth swarming on, and make prioritization decisions grounded in reality rather than assumptions.
 
@@ -40,17 +40,17 @@ A storyboard only works if the team uses it. Build rituals that center on the bo
 
 ## Lessons From The Field
 
-- *Start Imperfect, Refine Along the Way.* The first version of your storyboard will be wrong. Columns won't match reality, work types will be incomplete, and the team will resist updating it. That's fine. Treat the board as a living artifact that improves through use. After two weeks, revisit what's working and what's not.
+- _Start Imperfect, Refine Along the Way._ The first version of your storyboard will be wrong. Columns won't match reality, work types will be incomplete, and the team will resist updating it. That's fine. Treat the board as a living artifact that improves through use. After two weeks, revisit what's working and what's not.
 
-- *Resistance Reveals Hidden Work.* When someone says "I don't have time to update the board," that's a signal. Either the board is too cumbersome, or their work is genuinely invisible and needs to be surfaced. Both are problems worth solving.
+- _Resistance Reveals Hidden Work._ When someone says "I don't have time to update the board," that's a signal. Either the board is too cumbersome, or their work is genuinely invisible and needs to be surfaced. Both are problems worth solving.
 
-- *The Conversation Matters More Than the Artifact.* The VSM workshop creates value through discussion, not through the diagram it produces. When a QA engineer explains their bottlenecks and developers hear it for the first time, alignment happens. Don't rush through the workshop to produce a deliverable.
+- _The Conversation Matters More Than the Artifact._ The VSM workshop creates value through discussion, not through the diagram it produces. When a QA engineer explains their bottlenecks and developers hear it for the first time, alignment happens. Don't rush through the workshop to produce a deliverable.
 
-- *Bottlenecks Move.* Once you address the biggest constraint, another will emerge. This is expected. The storyboard helps you continuously identify where to focus improvement efforts rather than optimizing areas that aren't actually bottlenecks.
+- _Bottlenecks Move._ Once you address the biggest constraint, another will emerge. This is expected. The storyboard helps you continuously identify where to focus improvement efforts rather than optimizing areas that aren't actually bottlenecks.
 
-- *Physical Boards Create Different Conversations.* If your team is co-located, consider a physical board alongside any digital tool. Standing in front of a wall of cards creates different dynamics than clicking through a Jira board. The tactile act of moving cards reinforces ownership and makes blockers harder to ignore.
+- _Physical Boards Create Different Conversations._ If your team is co-located, consider a physical board alongside any digital tool. Standing in front of a wall of cards creates different dynamics than clicking through a Jira board. The tactile act of moving cards reinforces ownership and makes blockers harder to ignore.
 
-- *WIP Limits Need Visibility First.* Teams often try to implement WIP limits before they have visibility into actual WIP. This creates frustration because limits feel arbitrary. Build the storyboard first, observe actual WIP for a few weeks, then set limits based on what you learn.
+- _WIP Limits Need Visibility First._ Teams often try to implement WIP limits before they have visibility into actual WIP. This creates frustration because limits feel arbitrary. Build the storyboard first, observe actual WIP for a few weeks, then set limits based on what you learn.
 
 ## Deciding to Polish or Pitch
 

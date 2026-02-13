@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { errorHandler } from './src/shell/middleware/errorHandler';
-import { trimTrailingSlash } from 'hono/trailing-slash'
+import { trimTrailingSlash } from 'hono/trailing-slash';
 import { handleOverview } from './src/handlers/handleOverview';
 import { handleInsight } from './src/handlers/handleInsight';
 import { handleCapabilityCatalog } from './src/handlers/handleCapabilityCatalog';
@@ -35,4 +35,3 @@ export default {
 };
 
 console.log('Server running at http://localhost:3000');
-

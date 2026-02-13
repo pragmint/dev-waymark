@@ -6,7 +6,7 @@ A **clear and communicated AI stance** means that an organization has establishe
 
 This section outlines common pitfalls, challenges, or limitations teams commonly encounter when applying this capability. The goal is to arm you with the context needed to make informed decisions about implementing an AI stance.
 
-### The "Policy-in-a-Vacuum" Problem 
+### The "Policy-in-a-Vacuum" Problem
 
 A policy is only effective if people know it exists. Often, organizations create an AI policy that lives in a legal or HR portal that developers never visit. Without active communication, teams default to "shadow AI," using tools without oversight because they don't know the rules or feel the official process is too slow.
 
@@ -14,11 +14,11 @@ A policy is only effective if people know it exists. Often, organizations create
 
 An AI stance that is purely restrictive (e.g., "AI is banned") often results in a loss of competitive advantage and can drive usage underground. Conversely, an "anything goes" approach introduces massive legal and security risks. The most effective stances are nuanced—-defining which tools are safe for public data versus which can be used with proprietary code.
 
-### Recognizing the Speed of Change 
+### Recognizing the Speed of Change
 
 The AI landscape evolves faster than traditional corporate policy cycles. A stance written six months ago may not cover new capabilities like autonomous AI agents or local model execution. To remain relevant, an AI stance must be a "living document" that is reviewed and updated at a higher frequency than other organizational policies.
 
-### Ambiguity in "Reasonable Use" 
+### Ambiguity in "Reasonable Use"
 
 Terms like "use AI responsibly" are too vague to be actionable for a developer. For an AI stance to be effective, it needs to address specific, everyday concerns: Can I use it for refactoring? Can I use it to summarize meeting notes containing customer data? Can I use AI-generated code in our production repository? Clarity is the antidote to hesitation and risk.
 
@@ -43,11 +43,11 @@ Generally, an overall score equal to or less than 3 means you'll likely gain a l
 
 The following is a curated list of supporting practices to consider when looking to improve your team's AI Stance capability.
 
-### Create an "Approved AI Services" Catalog 
+### Create an "Approved AI Services" Catalog
 
 Maintain a central, internal list of AI tools and models that have been vetted for security and legal compliance. This reduces the cognitive load on developers, as they don't have to wonder if a specific tool is "safe" to use.
 
-### Establish "Security Tiers" for AI Interaction 
+### Establish "Security Tiers" for AI Interaction
 
 Clearly define what level of data can be sent to external AI providers. For example:
 
@@ -59,7 +59,7 @@ Clearly define what level of data can be sent to external AI providers. For exam
 
 Instead of just giving permission to use AI, provide guidance on how to use it effectively and safely. Sharing "Golden Prompts" for tasks like unit test generation or documentation helps standardize the quality of AI-assisted work.
 
-### Automate Policy Enforcement 
+### Automate Policy Enforcement
 
 Where possible, use tooling—-like secret scanners or egress filters—-to ensure that sensitive data isn't being sent to unapproved AI endpoints. This moves the AI stance from a "policy you have to remember" to a system that supports you.
 
@@ -78,4 +78,3 @@ A strong security culture is a prerequisite for a good AI stance. If you don't a
 ### [Empowering Teams](/capabilities/empowering-teams.md) - Downstream
 
 Providing a clear AI stance empowers teams to innovate. When developers know exactly where the guardrails are, they feel safer experimenting with new ways to improve their workflow.
-

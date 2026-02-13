@@ -54,91 +54,95 @@ export function enrichCapabilitiesWithMetrics(
   // Create a set of valid team IDs (teams that have files in the filesystem)
   const validTeamIds = new Set(teams.map(team => team.id));
 
-  return capabilities.map(capability => {
-    const metric = metricsMap.get(capability.id);
+  return capabilities
+    .map(capability => {
+      const metric = metricsMap.get(capability.id);
 
-    if (metric && metric.data.length > 0) {
-      // Calculate average score across all teams using each team's most recent value
-      // Group data by team, filtering to only include teams with files in the filesystem
-      const teamDataMap = new Map<string, typeof metric.data>();
-      metric.data.forEach(dataPoint => {
-        // Only include teams that have files in resources/private/yaml/teams/
-        if (validTeamIds.has(dataPoint.team)) {
-          if (!teamDataMap.has(dataPoint.team)) {
-            teamDataMap.set(dataPoint.team, []);
+      if (metric && metric.data.length > 0) {
+        // Calculate average score across all teams using each team's most recent value
+        // Group data by team, filtering to only include teams with files in the filesystem
+        const teamDataMap = new Map<string, typeof metric.data>();
+        metric.data.forEach(dataPoint => {
+          // Only include teams that have files in resources/private/yaml/teams/
+          if (validTeamIds.has(dataPoint.team)) {
+            if (!teamDataMap.has(dataPoint.team)) {
+              teamDataMap.set(dataPoint.team, []);
+            }
+            teamDataMap.get(dataPoint.team)!.push(dataPoint);
           }
-          teamDataMap.get(dataPoint.team)!.push(dataPoint);
+        });
+
+        // Get most recent value for each team
+        const currentTeamValues: number[] = [];
+        const previousTeamValues: number[] = [];
+
+        teamDataMap.forEach(teamData => {
+          // Sort team's data by date (most recent first)
+          const sortedTeamData = teamData.sort(
+            (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
+          );
+
+          // Get current (most recent) value - convert to numeric score
+          const currentValue = getNumericScore(sortedTeamData[0].value);
+          currentTeamValues.push(currentValue);
+
+          // Get previous value if it exists, otherwise use current value (no change)
+          if (sortedTeamData.length >= 2) {
+            previousTeamValues.push(getNumericScore(sortedTeamData[1].value));
+          } else {
+            // Team only has one data point - treat as no change
+            previousTeamValues.push(currentValue);
+          }
+        });
+
+        // If no valid teams have data after filtering, treat as no metrics
+        if (currentTeamValues.length === 0) {
+          return {
+            ...capability,
+            currentScore: 0,
+            trend: 'stable' as TrendDirection,
+            teamsTargeting: targetingCounts.get(capability.id) || 0,
+          };
         }
-      });
 
-      // Get most recent value for each team
-      const currentTeamValues: number[] = [];
-      const previousTeamValues: number[] = [];
+        // Calculate average of all teams' most recent values
+        const avgScore =
+          currentTeamValues.reduce((sum, v) => sum + v, 0) / currentTeamValues.length;
+        const currentScore = Math.round(avgScore * 10) / 10;
 
-      teamDataMap.forEach(teamData => {
-        // Sort team's data by date (most recent first)
-        const sortedTeamData = teamData.sort(
-          (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
-        );
+        // Calculate trend by comparing current average with previous average
+        let trend: TrendDirection = 'stable';
 
-        // Get current (most recent) value - convert to numeric score
-        const currentValue = getNumericScore(sortedTeamData[0].value);
-        currentTeamValues.push(currentValue);
+        // Both arrays now have the same length
+        const prevAvg =
+          previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
+        const scoreDiff = avgScore - prevAvg;
 
-        // Get previous value if it exists, otherwise use current value (no change)
-        if (sortedTeamData.length >= 2) {
-          previousTeamValues.push(getNumericScore(sortedTeamData[1].value));
-        } else {
-          // Team only has one data point - treat as no change
-          previousTeamValues.push(currentValue);
+        if (scoreDiff > 0.1) {
+          trend = 'up';
+        } else if (scoreDiff < -0.1) {
+          trend = 'down';
         }
-      });
 
-      // If no valid teams have data after filtering, treat as no metrics
-      if (currentTeamValues.length === 0) {
+        const teamsTargeting = targetingCounts.get(capability.id) || 0;
+
         return {
           ...capability,
-          currentScore: 0,
-          trend: 'stable' as TrendDirection,
-          teamsTargeting: targetingCounts.get(capability.id) || 0,
+          currentScore,
+          trend,
+          teamsTargeting,
         };
       }
 
-      // Calculate average of all teams' most recent values
-      const avgScore = currentTeamValues.reduce((sum, v) => sum + v, 0) / currentTeamValues.length;
-      const currentScore = Math.round(avgScore * 10) / 10;
-
-      // Calculate trend by comparing current average with previous average
-      let trend: TrendDirection = 'stable';
-
-      // Both arrays now have the same length
-      const prevAvg = previousTeamValues.reduce((sum, v) => sum + v, 0) / previousTeamValues.length;
-      const scoreDiff = avgScore - prevAvg;
-
-      if (scoreDiff > 0.1) {
-        trend = 'up';
-      } else if (scoreDiff < -0.1) {
-        trend = 'down';
-      }
-
-      const teamsTargeting = targetingCounts.get(capability.id) || 0;
-
+      // No metrics data for this capability
       return {
         ...capability,
-        currentScore,
-        trend,
-        teamsTargeting,
+        currentScore: 0,
+        trend: 'stable' as TrendDirection,
+        teamsTargeting: targetingCounts.get(capability.id) || 0,
       };
-    }
-
-    // No metrics data for this capability
-    return {
-      ...capability,
-      currentScore: 0,
-      trend: 'stable' as TrendDirection,
-      teamsTargeting: targetingCounts.get(capability.id) || 0,
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -146,7 +150,6 @@ export function enrichCapabilitiesWithMetrics(
  * Now handles both old format (objects) and new format (strings)
  */
 export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[] {
-
   const metricsMap = new Map<string, Metric>();
   metrics.forEach(metric => {
     metricsMap.set(metric.capabilityId, metric);

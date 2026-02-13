@@ -1,4 +1,5 @@
 # [Platform Engineering](https://dora.dev/capabilities/platform-engineering/)
+
 Platform Engineering is primarily about enabling value stream developers to do their jobs faster and with less cognitive load by creating an internal platform that is treated with the same care as the main product. Because of the rise of AI in development, having a strong platform is no longer an option; it is necessary. Platform Engineering, as a capability, ensures that gains from AI-driven development are not negated by other organizational inefficiencies down the line.
 
 ## Nuances
@@ -16,7 +17,6 @@ Different types of development—-such as data science, mobile, and legacy syste
 ## Assessment
 
 To assess how mature your team or organization is in this capability, complete this short exercise.
-
 
 Don't worry if the description doesn't exactly match your situation. These descriptions are meant to be examples of situations that would qualify for the associated score.
 

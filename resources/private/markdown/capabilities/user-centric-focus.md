@@ -3,12 +3,15 @@
 The value of software is ultimately defined by its usefulness to human beings, making a user-centric focus the essential "North Star" for development teams. In the era of AI-assisted coding, this focus on the user ensures that increased velocity leads to meaningful solutions rather than just faster mistakes. By prioritizing actual user outcomes over simple technical output, organizations achieve significantly higher performance and job satisfaction.
 
 ## Nuances
+
 This section outlines common pitfalls, challenges, or limitations teams commonly encounter when applying this capability. The goal here is not to discourage you. Rather, the goal is to arm you with the appropriate context so that you can make an informed decision about when and how to implement the capability with your teams.
 
 ### The "Feature Factory" Trap
+
 When shifting the focus to the user, one of the most common pitfalls is getting into the "feature factory" mindset, where success is measured by output (velocity and features shipped) rather than outcomes (user value). When teams optimize for activity, they risk building "shiny but hardly used" features. AI can significantly exacerbate this problem; because AI makes it easier to write code, teams may find themselves producing a high volume of low-value software faster than ever, leading to high activity but low impact.
 
 ### Organizational Silos and "Solutionism"
+
 Organizational structures often create a "gatekeeper" model, where product managers or researchers sit between developers and end users. This disconnect robs engineers of the context needed to build intuitive solutions and effectively verify AI-generated outputs. This often leads to "resumé-driven development" or "solutionism," where teams adopt complex AI models or new technologies for their own sake rather than to solve a specific, validated user problem.
 
 ## Assessment
@@ -63,4 +66,3 @@ Once a team has a strong user-centric focus, they can more effectively engage in
 ### [Job Satisfaction](/capabilities/job-satisfaction.md) - Downstream
 
 DORA research indicates that a user-centric focus is a strong predictor of job satisfaction. Developers who see the direct impact of their work on real users and feel they are solving meaningful problems are typically more engaged, and overall team morale tends to be higher.
-

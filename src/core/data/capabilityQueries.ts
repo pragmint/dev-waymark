@@ -113,4 +113,3 @@ export function getTopThreeCapabilities(capabilities: Capability[]): Capability[
     })
     .slice(0, 3);
 }
-

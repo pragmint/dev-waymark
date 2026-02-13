@@ -2,7 +2,7 @@
 
 A Generative Organizational Culture is characterized by high cooperation and trust, free flow of information, and an emphasis on performance and continuous learning. In such a culture, teams are encouraged to take risks, embrace failures as learning opportunities, and implement new ideas.
 
-A cornerstone of Generative Organizational Cultures is *transparency*. Leaders can model transparent behavior by talking openly with their teams about decisions, context, and rationale, ensuring information is presented in a way that is actionable for diverse audiences. Tools like asynchronous updates, decision logs, and team dashboards can make information accessible but not overwhelming. Effective transparency fosters collaboration, enables feedback, and ensures teams feel empowered to contribute.
+A cornerstone of Generative Organizational Cultures is _transparency_. Leaders can model transparent behavior by talking openly with their teams about decisions, context, and rationale, ensuring information is presented in a way that is actionable for diverse audiences. Tools like asynchronous updates, decision logs, and team dashboards can make information accessible but not overwhelming. Effective transparency fosters collaboration, enables feedback, and ensures teams feel empowered to contribute.
 
 ## Nuances
 
@@ -57,7 +57,7 @@ The following is a curated list of supporting practices to consider when looking
 
 ### Conduct Blameless Retrospectives
 
-After any incident or failure, organize a postmortem meeting where the focus is on *understanding the root causes* rather than assigning blame. Encourage all team members to openly share insights and perspectives to learn from the event. By treating failures as opportunities for inquiry and learning, teams can feel empowered to improve processes and prevent future issues, enhancing organizational trust and collaboration.
+After any incident or failure, organize a postmortem meeting where the focus is on _understanding the root causes_ rather than assigning blame. Encourage all team members to openly share insights and perspectives to learn from the event. By treating failures as opportunities for inquiry and learning, teams can feel empowered to improve processes and prevent future issues, enhancing organizational trust and collaboration.
 
 ### Host Skip-Level 1:1s
 

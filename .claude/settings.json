@@ -9,9 +9,7 @@
       "Bash(tree *)",
       "Bash(echo *)"
     ],
-    "deny": [
-      "Read(resources/public)"
-    ]
+    "deny": ["Read(resources/public)"]
   },
   "hooks": {
     "PostToolUse": [

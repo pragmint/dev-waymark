@@ -1,9 +1,9 @@
-import { Context } from "hono";
-import { prepareInsightsData } from "../frontend/Pages/handlers/InsightsHandler";
-import { InsightsPage } from "../frontend/Pages/InsightsPage";
-import { loadDataContext } from "../loaders/loadDataContext";
+import { Context } from 'hono';
+import { prepareInsightsData } from '../frontend/Pages/handlers/InsightsHandler';
+import { InsightsPage } from '../frontend/Pages/InsightsPage';
+import { loadDataContext } from '../loaders/loadDataContext';
 
-const { capabilities, teams, teamMetrics, capabilityMetrics } = await loadDataContext()
+const { capabilities, teams, teamMetrics, capabilityMetrics } = await loadDataContext();
 
 export function handleInsight(c: Context) {
   const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics, teamMetrics);
@@ -17,4 +17,4 @@ export function handleInsight(c: Context) {
       availableDates={insightsData.availableDates}
     />
   );
-};
+}

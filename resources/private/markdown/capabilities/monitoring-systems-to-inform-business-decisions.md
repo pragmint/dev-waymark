@@ -4,11 +4,11 @@ Monitoring isn’t just about uptime -- it’s about insight. The real power of 
 
 Every system emits data: response times, errors, user behavior. But these aren’t just technical metrics; they're proxies for customer experience, revenue, cost, and product impact.
 
-When you use metrics to inform business decisions, the question shifts from simply *What’s happening?* to *What does it mean?* Why aren't users adopting our latest feature? Where are we leaking revenue? Which investments are actually moving the needle? These questions can be answered when the data is available, accessible, and analyzed properly.
+When you use metrics to inform business decisions, the question shifts from simply _What’s happening?_ to _What does it mean?_ Why aren't users adopting our latest feature? Where are we leaking revenue? Which investments are actually moving the needle? These questions can be answered when the data is available, accessible, and analyzed properly.
 
 When teams frame monitoring around business questions, data becomes a tool for learning, not just for observing daily operations. This shift encourages hypotheses, fuels iteration, and ties technical work to customer value.
 
-Monitoring also shortens the feedback loop. Insights from operations or support flow upstream to dev and product, enabling checks on earlier decisions and faster course-correction. Start with business goals, then instrument your systems to ask, and answer, *the right questions*. Make insights accessible, relevant, and timely for all stakeholders.
+Monitoring also shortens the feedback loop. Insights from operations or support flow upstream to dev and product, enabling checks on earlier decisions and faster course-correction. Start with business goals, then instrument your systems to ask, and answer, _the right questions_. Make insights accessible, relevant, and timely for all stakeholders.
 
 Monitoring done well turns noise into narrative and day-to-day visibility into strategic clarity.
 
@@ -50,10 +50,11 @@ The following is a curated list of supporting practices to consider when looking
 Double-loop learning goes beyond tracking outcomes; it connects your work to the underlying assumptions, objectives, and established mental models behind your strategy. Instead of just asking _Are we hitting our numbers?_, double-loop learning encourages you to ask _Are we working on the right things to drive those numbers?_, and _Are our assumptions still valid?_
 
 When you practice double-loop learning, you map the relationships between projects, input metrics, and business KPIs. This lets you:
-* Reflect on experiments and question previous thinking at a deeper level
-* See how current efforts are (or aren’t) moving the right metrics
-* Adjust course when assumptions prove false
-* Align teams by making strategy visible and testable
+
+- Reflect on experiments and question previous thinking at a deeper level
+- See how current efforts are (or aren’t) moving the right metrics
+- Adjust course when assumptions prove false
+- Align teams by making strategy visible and testable
 
 For example, rather than treating dashboards as static reports, double-loop learning turns them into dynamic systems for continuous improvement.
 

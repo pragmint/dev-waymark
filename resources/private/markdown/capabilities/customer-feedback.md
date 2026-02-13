@@ -4,7 +4,7 @@ The Customer Feedback capability entails listening to what users say about your 
 
 Customer feedback comes in many forms. You might get direct feedback through surveys, interviews, or support tickets. You might see usage data showing how people actually use your features. You might hear anecdotes from sales teams or customer success managers. Not all feedback is equally valuable. However, data coming directly from end users tends to be more reliable than second-hand information from internal teams or stakeholders.
 
-The key to implementing this capability is *making customer feedback a regular part of how your team works*. This means incorporating user insights into planning meetings, using customer stories to prioritize features, and measuring whether recent changes actually solve the problems users face. When feedback is woven into the development process, the team will build features that users want and that deliver real value.
+The key to implementing this capability is _making customer feedback a regular part of how your team works_. This means incorporating user insights into planning meetings, using customer stories to prioritize features, and measuring whether recent changes actually solve the problems users face. When feedback is woven into the development process, the team will build features that users want and that deliver real value.
 
 ## Nuances
 
@@ -12,7 +12,7 @@ This section outlines common pitfalls, challenges, or limitations teams commonly
 
 ### Gathering Feedback Too Late
 
-When feedback is collected too late in the development lifecycle, it limits the team's ability to make timely adjustments. Late feedback often results in wasted resources and missed opportunities to address user needs effectively. It’s crucial to integrate feedback mechanisms *early and continuously*, throughout the development cycle.
+When feedback is collected too late in the development lifecycle, it limits the team's ability to make timely adjustments. Late feedback often results in wasted resources and missed opportunities to address user needs effectively. It’s crucial to integrate feedback mechanisms _early and continuously_, throughout the development cycle.
 
 ### Misinterpreting Customer Needs
 
@@ -53,7 +53,7 @@ Introduce A/B testing to evaluate different versions of a feature or product cha
 
 ### Shift Teams to Track Outcomes Instead of Outputs
 
-It’s easy to default to tracking what’s easy to count: tickets closed, lines of code, story points. But these are *outputs*, not *outcomes*. To drive meaningful improvement, displays should connect work to desired outcomes around customer behavior, system reliability, revenue generated, or time to resolve issues. When teams see the impact of their work, they can make smarter trade-offs and course-correct faster.
+It’s easy to default to tracking what’s easy to count: tickets closed, lines of code, story points. But these are _outputs_, not _outcomes_. To drive meaningful improvement, displays should connect work to desired outcomes around customer behavior, system reliability, revenue generated, or time to resolve issues. When teams see the impact of their work, they can make smarter trade-offs and course-correct faster.
 
 ## Adjacent Capabilities
 

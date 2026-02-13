@@ -16,9 +16,10 @@ If every small change requires a lengthy approval process, then developers are l
 
 ### Beware Long-lived Feature Flags
 
-When teams are new to trunk-based development, they tend to reach for feature flags as a way to integrate their changes without risking them going live before they're ready. While that's generally good advice, this can become a problem if feature flags live for weeks at a time. One of the main benefits of trunk-based development is how it forces developers to *break apart* their tasks into small increments (see [Working in Small Batches](/capabilities/working-in-small-batches.md)). The longer code sits behind a feature flag, the larger the batch size becomes and the riskier it is to switch that feature flag on.
+When teams are new to trunk-based development, they tend to reach for feature flags as a way to integrate their changes without risking them going live before they're ready. While that's generally good advice, this can become a problem if feature flags live for weeks at a time. One of the main benefits of trunk-based development is how it forces developers to _break apart_ their tasks into small increments (see [Working in Small Batches](/capabilities/working-in-small-batches.md)). The longer code sits behind a feature flag, the larger the batch size becomes and the riskier it is to switch that feature flag on.
 
 ## Assessment
+
 To assess how mature your team or organization is in this capability, complete this short exercise.
 
 Consider the descriptions below and score yourself on the Trunk-based Development capability. Generally, score a 1 if this capability is limited or completely lacking from your team or organization, a 2 if it is basic and you feel there is a LOT of room for improvement, a 3 if it is mature and you feel there is some room for improvement, and a 4 if your team or organization is exemplary in the area of Trunk-based Development.

@@ -45,11 +45,10 @@ Before you have a tested and independently running local setup, get your team in
 
 Schedule time with developers working in the new repo to understand how they use it and where they still encounter friction. This can be done during the course of regular work if you pair program. Listen to any gripes and complaints, and note what still causes confusion or wait times. Brainstorm potential solutions as a group and set aside time to improve problematic parts of the system. Focus on improving items listed in the Polish or Pitch section of this page to ensure efforts are making a difference. You know the repo is simple to set up and use when you observe developers using it who haven't come to you with questions first.
 
-
 ## Lessons From The Field
 
-- *Use Idle-time to Develop Tooling* - Your organization may be structured in a way that requires you to wait for a separate team to build/configure/grant you access to needed resources -- cloud databases, vendor sandboxes, or development environments. Instead of just waiting, use that time to start building this local repo. You may discover that you don't need to rely on others as much here and you can deliver value faster than you thought. Once you've got an experimental version up and running, share it with the team. This way, you save cross-team collaboration for when it really matters.
-- *Don't Be Discouraged By Silence* - Remote teams might not make their local developer setups visible. Just because no one mentions the monorepo or praises it doesn't mean it's not being used. If it saves your developers time and easily shows them what they need to see, then they'll use it.
+- _Use Idle-time to Develop Tooling_ - Your organization may be structured in a way that requires you to wait for a separate team to build/configure/grant you access to needed resources -- cloud databases, vendor sandboxes, or development environments. Instead of just waiting, use that time to start building this local repo. You may discover that you don't need to rely on others as much here and you can deliver value faster than you thought. Once you've got an experimental version up and running, share it with the team. This way, you save cross-team collaboration for when it really matters.
+- _Don't Be Discouraged By Silence_ - Remote teams might not make their local developer setups visible. Just because no one mentions the monorepo or praises it doesn't mean it's not being used. If it saves your developers time and easily shows them what they need to see, then they'll use it.
 
 ## Deciding to Polish or Pitch
 
@@ -73,7 +72,7 @@ A local monorepo can help expose duplicated scripts and configuration across mic
 
 ### [Test Automation](/capabilities/test-automation.md)
 
-When the team can test interactions between services, there is greater confidence that the whole system will perform as expected. Knowing those interactions still work *while developing*, instead of at deploy time, shortens feedback loops and speeds up delivery.
+When the team can test interactions between services, there is greater confidence that the whole system will perform as expected. Knowing those interactions still work _while developing_, instead of at deploy time, shortens feedback loops and speeds up delivery.
 
 ### [Test Data Management](/capabilities/test-data-management.md)
 

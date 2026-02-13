@@ -1,8 +1,8 @@
 # [Proactive Failure Notification](https://dora.dev/capabilities/proactive-failure-notification/)
 
-Failure notifications are alerts that are generated after a system, service, or component has already failed. These notifications typically indicate that something is broken, degraded, or unavailable -- often *after* users or external systems have already noticed the issue.
+Failure notifications are alerts that are generated after a system, service, or component has already failed. These notifications typically indicate that something is broken, degraded, or unavailable -- often _after_ users or external systems have already noticed the issue.
 
-Proactive failure notification involves generating alerts *before* failure occurs, when system metrics are approaching thresholds that are known to lead to failures. Instead of waiting for a system, service, or component to break (or for customers to report problems), teams receive early warnings based on observed signals such as rising error rates, slowing response times, or unusual behavior. This early detection enables teams to act before the situation becomes critical, reducing downtime and improving system reliability.
+Proactive failure notification involves generating alerts _before_ failure occurs, when system metrics are approaching thresholds that are known to lead to failures. Instead of waiting for a system, service, or component to break (or for customers to report problems), teams receive early warnings based on observed signals such as rising error rates, slowing response times, or unusual behavior. This early detection enables teams to act before the situation becomes critical, reducing downtime and improving system reliability.
 
 ## Nuances
 
@@ -30,7 +30,7 @@ Automation based on alerts can be a powerful way to reduce operational toil: aut
 
 ### Lack of Incident Post-Mortems
 
-Without incident post-mortems, teams miss the opportunity to identify potential indicators of failure that were *not* proactively monitored. Consistent post-mortems help refine monitoring strategies and prevent future incidents by incorporating new, predictive metrics.
+Without incident post-mortems, teams miss the opportunity to identify potential indicators of failure that were _not_ proactively monitored. Consistent post-mortems help refine monitoring strategies and prevent future incidents by incorporating new, predictive metrics.
 
 ## Assessment
 
@@ -67,7 +67,7 @@ Automate failure detection and rollback to reduce recovery time and minimize use
 
 ### Shadow Production with Traffic Replay
 
-Replay real, scrubbed production traffic in staging or testing environments to uncover and understand issues *before* they impact users. This practice mimics realistic load and usage patterns, helping surface problems that synthetic tests might miss. Monitoring and observability tooling can then be used to analyze anomalies, confirm fixes, or validate changes under near-production conditions. This is especially valuable for testing config changes, infrastructure updates, or edge cases that don’t appear in standard test suites.
+Replay real, scrubbed production traffic in staging or testing environments to uncover and understand issues _before_ they impact users. This practice mimics realistic load and usage patterns, helping surface problems that synthetic tests might miss. Monitoring and observability tooling can then be used to analyze anomalies, confirm fixes, or validate changes under near-production conditions. This is especially valuable for testing config changes, infrastructure updates, or edge cases that don’t appear in standard test suites.
 
 ### Conduct Regular Alert Audits
 

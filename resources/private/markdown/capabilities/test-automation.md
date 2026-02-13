@@ -89,9 +89,9 @@ By following the red-green-refactor cycle, and principles like Transformation Pr
 
 The following capabilities will be valuable for you and your team to explore, as they are either:
 
-* Related (they cover similar territory to Test Automation)
-* Upstream (they are a pre-requisite for Test Automation)
-* Downstream (Test Automation is a pre-requisite for them)
+- Related (they cover similar territory to Test Automation)
+- Upstream (they are a pre-requisite for Test Automation)
+- Downstream (Test Automation is a pre-requisite for them)
 
 ### [Code Maintainability](/capabilities/code-maintainability.md) - Related
 

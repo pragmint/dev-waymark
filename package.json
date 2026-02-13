@@ -12,12 +12,13 @@
     "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css",
     "lint": "eslint .",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fmt": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fmt:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
+    "eslint-formatter-unix": "^9.0.1",
     "glob": "^13.0.0",
     "hono": "^4.11.4",
     "marked": "^17.0.1",

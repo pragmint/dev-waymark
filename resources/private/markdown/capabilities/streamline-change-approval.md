@@ -1,6 +1,6 @@
 # [Streamline Change Approval](https://dora.dev/capabilities/streamlining-change-approval/)
 
-Streamlining change approval optimizes how system changes are reviewed and authorized for deployment. Traditional change management practices often depend on external reviewers or Change Approval Boards (CABs), which can introduce delays without significantly mitigating operational or security risks. Instead of eliminating the review function, the goals should be to *integrate corrective feedback earlier* in the development process and *automate routine tasks*, such as the number of spaces before code. This approach ensures a more consistent review process and frees up reviewers to focus on risks that are specific to a new change, such as security issues that may have been introduced. The result is a reduced review fatigue and faster, more rigorous review that requires less effort overall.
+Streamlining change approval optimizes how system changes are reviewed and authorized for deployment. Traditional change management practices often depend on external reviewers or Change Approval Boards (CABs), which can introduce delays without significantly mitigating operational or security risks. Instead of eliminating the review function, the goals should be to _integrate corrective feedback earlier_ in the development process and _automate routine tasks_, such as the number of spaces before code. This approach ensures a more consistent review process and frees up reviewers to focus on risks that are specific to a new change, such as security issues that may have been introduced. The result is a reduced review fatigue and faster, more rigorous review that requires less effort overall.
 
 ## Nuances
 
@@ -10,13 +10,14 @@ This section outlines common pitfalls, challenges, or limitations teams commonly
 
 When instability hits a system, our instinct is often to clamp down on controls and retreat to familiar—but-slower ways of working. However, responding to instability by adding heavier controls and time-consuming approvals can worsen delays and increase batch sizes, creating a vicious cycle that further degrades performance.
 
-Failure is inevitable. Rather than trying to prevent all failures, focus on *minimizing their impact.* This encourages experimentation and continuous improvement. Over time, failures should naturally decrease as teams regularly learn from mistakes without fear of negative consequences.
+Failure is inevitable. Rather than trying to prevent all failures, focus on _minimizing their impact._ This encourages experimentation and continuous improvement. Over time, failures should naturally decrease as teams regularly learn from mistakes without fear of negative consequences.
 
 ### Cultural Resistance to Change
 
 Team members may initially resist moving away from traditional change approval processes, fearing loss of control or exposure to risk. It's important to foster an environment of trust and transparency where the benefits of automation and early feedback are clearly communicated. Providing training and continuous support can help shift the organizational mindset toward embracing change and achieving a more agile workflow.
 
 ## Assessment
+
 To assess how mature your team or organization is in this capability, complete this short exercise.
 
 Consider the descriptions below and score yourself on the Streamline Change Approval capability. Generally, score a 1 if change approval is manual or completely lacking from your team or organization, a 2 if approvals are peer-reviewed and coordinated but you feel there is a LOT of room for improvement, a 3 if approvals are automated and efficient but you feel there is some room for improvement, and a 4 if your team or organization is exemplary in the area of change approval.
@@ -33,15 +34,16 @@ The number you selected represents your overall score for this capability. If yo
 Generally, an overall score equal to or less than 3 means you'll likely gain a lot of value from experimenting with some of the supporting practices listed here. An overall score higher than 3 generally means you and your team are largely proficient, or well on your way to becoming proficient, in the area of Streamline Change Approval; you would likely benefit from evaluating your scores in other capabilities.
 
 ## Supporting Practices
+
 The following is a curated list of supporting practices to consider when looking to improve your team's Streamline Change Approval capability. While not every practice will be beneficial in every situation, this list is meant to provide teams with fresh, pragmatic, and actionable ideas to support this capability.
 
 ### [Run Pair Programming Sessions](/practices/run-pair-programming-sessions.md)
 
-Pair programming sessions facilitate collaboration, real-time code review, and knowledge sharing among developers. By working in pairs, developers can also catch issues early and ensure code is comprehensible, consistent, and in adherence with coding standards. This practice accelerates the onboarding process for new team members while helping experienced developers refine their skills. 
+Pair programming sessions facilitate collaboration, real-time code review, and knowledge sharing among developers. By working in pairs, developers can also catch issues early and ensure code is comprehensible, consistent, and in adherence with coding standards. This practice accelerates the onboarding process for new team members while helping experienced developers refine their skills.
 
 ### [Host Codebase Stewardship Mob](/practices/conduct-code-reviews.md)
 
-Conducting code reviews typically slows down the change approval process. But if code reviews don't block the ability to integrate changes and the focus remains on getting feedback early in the development process, then this practice can actually *accelerate* the change approval process.
+Conducting code reviews typically slows down the change approval process. But if code reviews don't block the ability to integrate changes and the focus remains on getting feedback early in the development process, then this practice can actually _accelerate_ the change approval process.
 
 ### [Automate Coding Standards](/practices/automate-coding-standards.md)
 
@@ -65,7 +67,7 @@ To continuously integrate changes, the approval process must be streamlined. A l
 
 ### [Monitoring & Observability](/capabilities/monitoring-and-observability.md) - Upstream
 
-Having comprehensive monitoring and observability in place provides real-time feedback on the performance and stability of recently deployed changes,  reducing the burden on code reviewers. With the Monitoring & Observability capability met, teams can deploy changes with the confidence that any issues can be resolved quickly. This reduces the impact of bugs and the cost of missing something in the review process.
+Having comprehensive monitoring and observability in place provides real-time feedback on the performance and stability of recently deployed changes, reducing the burden on code reviewers. With the Monitoring & Observability capability met, teams can deploy changes with the confidence that any issues can be resolved quickly. This reduces the impact of bugs and the cost of missing something in the review process.
 
 ### [Test Automation](/capabilities/test-automation.md) - Upstream
 
@@ -77,4 +79,4 @@ Loosely Coupled Teams can make independent changes without requiring extensive c
 
 ### [Pervasive Security](/capabilities/pervasive-security.md) - Upstream
 
-Pervasive Security embeds security practices throughout the development lifecycle, proactively addressing vulnerabilities *before* code review. By building security directly into the process, teams reduce the complexity and overhead of change approvals, and achieve faster and safer deployments.
+Pervasive Security embeds security practices throughout the development lifecycle, proactively addressing vulnerabilities _before_ code review. By building security directly into the process, teams reduce the complexity and overhead of change approvals, and achieve faster and safer deployments.

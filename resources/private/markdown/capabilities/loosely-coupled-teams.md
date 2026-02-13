@@ -22,8 +22,8 @@ A common misconception is that loosely coupled teams and architectures require t
 
 For many reasons, striking the right balance between team autonomy and cross-team coordination is critical. While autonomy accelerates change by minimizing dependencies, some level of coordination is necessary to ensure alignment with broader organizational objectives. Leaders must create structured communication channels and establish governance practices that allow teams to operate independently without drifting from shared goals.
 
-
 ## Assessment
+
 To assess how mature your team or organization is in this capability, complete this short exercise.
 
 Consider the descriptions below and score yourself on the Loosely Coupled Teams capability. Generally, score a 1 if this capability is limited or completely lacking from your team or organization, a 2 if it is basic and you feel there is a LOT of room for improvement, a 3 if it is mature and you feel there is some room for improvement, and a 4 if your team or organization is exemplary in the area of Loosely Coupled Teams.

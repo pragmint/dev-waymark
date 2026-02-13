@@ -69,21 +69,21 @@ Below are suggestions for topics and prompts you could explore with your team du
 
 #### Maximizing the Effectiveness of Pair Programming
 
-* How frequently do we engage in pair programming sessions, and are they integrated into our regular workflow?
-* How do we measure the effectiveness of pair programming in terms of code quality, knowledge sharing, and team collaboration? What adjustments can we make to improve outcomes?
-* Are pair programming sessions adapted to suit different project phases and tasks, ensuring that they're used where they add the most value?
+- How frequently do we engage in pair programming sessions, and are they integrated into our regular workflow?
+- How do we measure the effectiveness of pair programming in terms of code quality, knowledge sharing, and team collaboration? What adjustments can we make to improve outcomes?
+- Are pair programming sessions adapted to suit different project phases and tasks, ensuring that they're used where they add the most value?
 
 #### Reflecting on Pair Dynamics and Team Culture
 
-* How do we manage pair dynamics to foster diverse perspectives and mitigate dependency on individual team members?
-* What steps can we take to encourage pairing across the team and prevent reliance on a single pair, which could lead to bottlenecks?
-* Are team members encouraged to take on both the role of driver and navigator during pair programming sessions, to promote skill development and engagement?
+- How do we manage pair dynamics to foster diverse perspectives and mitigate dependency on individual team members?
+- What steps can we take to encourage pairing across the team and prevent reliance on a single pair, which could lead to bottlenecks?
+- Are team members encouraged to take on both the role of driver and navigator during pair programming sessions, to promote skill development and engagement?
 
 #### Evaluating Contextual Suitability and Adaptability
 
-* Are there specific tasks or project phases where pair programming is particularly effective? How do we identify these opportunities?
-* What tools and protocols do we have in place to address challenges associated with remote pair programming, such as communication barriers and time zone differences?
-* How do we ensure that team members are equipped with the necessary skills and resources to effectively engage in pair programming?
+- Are there specific tasks or project phases where pair programming is particularly effective? How do we identify these opportunities?
+- What tools and protocols do we have in place to address challenges associated with remote pair programming, such as communication barriers and time zone differences?
+- How do we ensure that team members are equipped with the necessary skills and resources to effectively engage in pair programming?
 
 ### Lead Workshops
 

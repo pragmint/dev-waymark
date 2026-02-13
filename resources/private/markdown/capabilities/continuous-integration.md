@@ -65,7 +65,7 @@ Establish a rule that when the CI build breaks, fixing the build takes precedenc
 
 ### Perform Non-Integration-Blocking Code Review
 
-Implement code review processes that provide feedback and learning opportunities *without* blocking the integration of changes into the main branch. This allows teams to maintain the benefits of peer review while preserving the rapid feedback cycles that make CI effective. Practices like pair programming, mob programming, or daily group code review sessions can provide continuous feedback and knowledge sharing without creating integration blocks or bottlenecks.
+Implement code review processes that provide feedback and learning opportunities _without_ blocking the integration of changes into the main branch. This allows teams to maintain the benefits of peer review while preserving the rapid feedback cycles that make CI effective. Practices like pair programming, mob programming, or daily group code review sessions can provide continuous feedback and knowledge sharing without creating integration blocks or bottlenecks.
 
 ### [Create and Manage Ephemeral Environments](/practices/create-and-manage-ephemeral-environments.md)
 

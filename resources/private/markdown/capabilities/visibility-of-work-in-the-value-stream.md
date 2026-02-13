@@ -19,7 +19,7 @@ This section outlines common pitfalls, challenges, or limitations teams commonly
 
 ### VSMs Are More Than Just Sprint Boards
 
-Sprint boards track work from the time it enters a sprint to deployment, highlighting all tasks within that sprint. VSMs, however, offer a broader view, starting from the *idea phase* and extending through deployment. They capture phases like analysis, grooming, design, and estimation, as well as the time between and within these phases. This comprehensive tracking highlights inefficiencies and delays that sprint boards alone cannot reveal, enabling teams to optimize the entire workflow.
+Sprint boards track work from the time it enters a sprint to deployment, highlighting all tasks within that sprint. VSMs, however, offer a broader view, starting from the _idea phase_ and extending through deployment. They capture phases like analysis, grooming, design, and estimation, as well as the time between and within these phases. This comprehensive tracking highlights inefficiencies and delays that sprint boards alone cannot reveal, enabling teams to optimize the entire workflow.
 
 ### Leaders Often Incorrectly Assume Teams Know This Stuff
 
@@ -31,11 +31,11 @@ Value stream mapping isn't just an academic exercise for managers. Participation
 
 ### VSMs Are Not For Micro-Managing Individual Stories
 
-VSMs are a tool for teams to visualize and improve the overall flow of work across the value stream. They should empower teams to identify and resolve systemic issues. They should *not* be used by leaders to micro-manage individual stories or track granular progress. The focus should remain on optimizing the process as a whole, not controlling day-to-day details.
+VSMs are a tool for teams to visualize and improve the overall flow of work across the value stream. They should empower teams to identify and resolve systemic issues. They should _not_ be used by leaders to micro-manage individual stories or track granular progress. The focus should remain on optimizing the process as a whole, not controlling day-to-day details.
 
 ### Keep the Focus on Improving Bottleneck Areas
 
-Efforts to improve efficiency in areas that are *not* bottlenecks may have minimal impact or, in some cases, even worsen overall flow. Using the VSM as your guide, improvements should target the most significant constraints in the value stream. This will ensure a meaningful effect on lead times and delivery performance.
+Efforts to improve efficiency in areas that are _not_ bottlenecks may have minimal impact or, in some cases, even worsen overall flow. Using the VSM as your guide, improvements should target the most significant constraints in the value stream. This will ensure a meaningful effect on lead times and delivery performance.
 
 ### Lack of Authority to Implement Changes
 

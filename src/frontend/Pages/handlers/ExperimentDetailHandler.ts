@@ -14,12 +14,12 @@ export async function prepareExperimentDetailData(
   teams: Team[],
   experiments: Experiment[]
 ): Promise<ExperimentDetailPageProps> {
-  const experiment = experiments.find(exp => exp.id === experimentId)
+  const experiment = experiments.find(exp => exp.id === experimentId);
   if (experiment === undefined) throw new NotFoundError('Experiment', experimentId);
 
   const team = teams.find(t => t.id === experiment.teamId);
   if (team === undefined) throw new NotFoundError('Team', experiment.teamId);
-  
+
   const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
   const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
 

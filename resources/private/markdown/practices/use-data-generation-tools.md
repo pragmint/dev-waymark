@@ -4,12 +4,13 @@ Generating complex data types or adding complex data to databases can typically 
 
 Data-generation tools shine brightest when used with end-to-end or integration tests. They _can_ be used with more isolated tests or unit tests but this is often a symptom of a larger issue and should be used with discretion.
 
-*Integrated Tests:* Integration and end-to-end tests are difficult to set up because of their multi-process nature. In these evironments, your code isn't running in issolation. It needs to communicate across the network or between different processes on the same server. You can achieve a satisfactory solution without using third-party data-generation tools, but for projects serving tens of thousands or millions of users, developers will quite often need data-generation tools like the following:
+_Integrated Tests:_ Integration and end-to-end tests are difficult to set up because of their multi-process nature. In these evironments, your code isn't running in issolation. It needs to communicate across the network or between different processes on the same server. You can achieve a satisfactory solution without using third-party data-generation tools, but for projects serving tens of thousands or millions of users, developers will quite often need data-generation tools like the following:
+
 - [RedGate](https://www.red-gate.com/)
 - [dbForge](https://www.devart.com/)
 - [SSDT](https://learn.microsoft.com/en-us/sql/ssdt/sql-server-data-tools?view=sql-server-ver17)
 
-*Isolated Tests:* As setup complexity of unit and isolated tests grows, developers will want to reach for simple solutions like [factory method](https://refactoring.guru/design-patterns/factory-method) before introducing third-party tools. If efforts to reduce code duplication with factory methods and simple design patterns continues to fail, then libraries like [Fishery](https://github.com/thoughtbot/fishery) may improve maintainability and readability.
+_Isolated Tests:_ As setup complexity of unit and isolated tests grows, developers will want to reach for simple solutions like [factory method](https://refactoring.guru/design-patterns/factory-method) before introducing third-party tools. If efforts to reduce code duplication with factory methods and simple design patterns continues to fail, then libraries like [Fishery](https://github.com/thoughtbot/fishery) may improve maintainability and readability.
 
 ## When to Experiment
 
@@ -36,7 +37,7 @@ Once that choice has been made, always be prepared to be flexible and iterate on
 
 ## Lessons From The Field
 
-- _Don't Use Data-generation Tools Until (and Unless) There is a Need_ - While data-generation tools can be helpful in reducing complexity in test data management, if you don't *see* that complexity yet, consider waiting to adopt new tools until that complexity arises. There are use cases where test data management can be done without extraneous tools.
+- _Don't Use Data-generation Tools Until (and Unless) There is a Need_ - While data-generation tools can be helpful in reducing complexity in test data management, if you don't _see_ that complexity yet, consider waiting to adopt new tools until that complexity arises. There are use cases where test data management can be done without extraneous tools.
 
 - _Be Careful About Tests That Depend on Each Other_ - Most test that will require data generation tools end up being across significant application boundaries. When dealing with setup for such tests, like data inside your database or global variables (`window` & `document` in a web context), make sure that each test you write is independent of the setup or result of another test. This will likely require some thought when setting up your data generation tools. You can easily check this by running each of your tests in isolation. If a test only passes when other tests are also run, then some modification needs to be made to decouple the tests from each other.
 
@@ -58,7 +59,6 @@ To implement an effective Test Data Management strategy, teams should leverage t
 
 Depending on your strategy, data-generation tooling might be an essential part of how you continue or start doing Database Change Management.
 
-### [Continuous Delivery](/capabilities/continuous-delivery.md) 
+### [Continuous Delivery](/capabilities/continuous-delivery.md)
 
 Any tests that end up in your CI/CD pipelines will need test data to be managed. This might be done by data-generation tools, depending on your needs.
-

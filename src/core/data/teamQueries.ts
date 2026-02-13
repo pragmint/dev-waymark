@@ -3,7 +3,7 @@ import type { Team, ActiveExperiment } from './teamTypes';
 // Pure query functions - no I/O, no mutation
 
 export function findTeamById(teams: Team[], id: string): Team | undefined {
-    return teams.find(t => t.id === id);
+  return teams.find(t => t.id === id);
 }
 
 /**

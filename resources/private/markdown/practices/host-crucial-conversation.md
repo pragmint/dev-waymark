@@ -25,9 +25,9 @@ During a crucial conversation, it can be challenging to maintain a single point 
 
 A common misconception is that all decisions — especially those made during crucial conversations — should be made by consensus. But the belief that full agreement is always necessary can lead to compromises and delays. In urgent situations, or when decisions affect a larger group, full consensus may not be feasible. Here are some alternatives to consensus that offer quicker and more flexible decision-making:
 
-* Command: Decisions are made without involving others.
-* Consultation: Input is gathered from stakeholders and a smaller group makes the final decision.
-* Voting: Decisions are made based on a majority agreement.
+- Command: Decisions are made without involving others.
+- Consultation: Input is gathered from stakeholders and a smaller group makes the final decision.
+- Voting: Decisions are made based on a majority agreement.
 
 ## Gaining Traction
 
@@ -54,6 +54,7 @@ The authors of _Crucial Conversations_ teach you how to navigate high-stakes sit
 In his talk "Mastering the Art of Crucial Conversations," Joseph Grenny (co-author of _Crucial Conversations_) outlines key strategies for navigating high-stakes discussions with confidence. He emphasizes the importance of creating a safe environment and offers techniques for staying calm under pressure, managing emotions, and keeping the conversation productive. He also stresses the need to focus on shared goals and mutual respect.
 
 ## Adjacent Capabilities
+
 This practice supports enhanced performance in the following capabilities.
 
 ### [Generative organizational culture](/capabilities/generative-organizational-culture.md)

@@ -187,4 +187,3 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
     </div>
   );
 };
-

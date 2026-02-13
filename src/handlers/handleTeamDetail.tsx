@@ -1,18 +1,19 @@
-import { Context } from "hono";
-import { TeamDetailPage, TeamDetailPageProps } from "../frontend/Pages/TeamDetailPage";
-import { loadDataContext } from "../loaders/loadDataContext";
-import { Capability, TrendDirection } from "../core/data/capabilitySchemas";
-import { findExperimentsByTeamId } from "../core/data/experimentQueries";
-import { Experiment } from "../core/data/experimentSchemas";
-import { Team, TeamCapability } from "../core/data/teamSchemas";
-import { NotFoundError } from "../core/errors";
-import { loadPracticeFromFilesystem } from "../loaders/loadPractice";
-import { TeamMetric } from "../scripts/insights-data";
-import { parseDate } from "../scripts/insights-utils";
-import { MetricValue, Metric } from "../shell/loaders/metricLoader";
-import { Practice } from "../shell/loaders/practiceLoader";
+import { Context } from 'hono';
+import { TeamDetailPage, TeamDetailPageProps } from '../frontend/Pages/TeamDetailPage';
+import { loadDataContext } from '../loaders/loadDataContext';
+import { Capability, TrendDirection } from '../core/data/capabilitySchemas';
+import { findExperimentsByTeamId } from '../core/data/experimentQueries';
+import { Experiment } from '../core/data/experimentSchemas';
+import { Team, TeamCapability } from '../core/data/teamSchemas';
+import { NotFoundError } from '../core/errors';
+import { loadPracticeFromFilesystem } from '../loaders/loadPractice';
+import { TeamMetric } from '../scripts/insights-data';
+import { parseDate } from '../scripts/insights-utils';
+import { MetricValue, Metric } from '../shell/loaders/metricLoader';
+import { Practice } from '../shell/loaders/practiceLoader';
 
-const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } = await loadDataContext()
+const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } =
+  await loadDataContext();
 
 export async function handleTeamDetail(c: Context) {
   const teamId = c.req.param('teamId');
@@ -26,8 +27,7 @@ export async function handleTeamDetail(c: Context) {
   );
 
   return c.html(<TeamDetailPage {...data} />);
-};
-
+}
 
 /**
  * Helper function to check if a value is a dimension score object
@@ -52,39 +52,6 @@ function getNumericScore(value: MetricValue): number {
   return 0; // String values or other types default to 0
 }
 
-
-function _part1_enrichCapabilityWithTeamMetrics(
-  capabilityId: string,
-  teamId: string,
-  metrics: Metric[]
-) {
-  const metric = metrics.find(m => m.capabilityId === capabilityId);
-
-  if (!metric) {
-    // No metrics for this capability
-    return {
-      id: capabilityId,
-      currentScore: null,
-      trend: null,
-    };
-  }
-
-  // Find the most recent data point for this team
-  const teamData = metric.data.filter(d => d.team === teamId);
-
-  if (teamData.length === 0) {
-    // No data for this team
-    return {
-      id: capabilityId,
-      currentScore: null,
-      trend: null,
-    };
-  }
-
-  // Get most recent score
-  const sortedData = teamData.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
-  return sortedData
-}
 /**
  * Helper function to enrich a capability with team's metric data
  */
@@ -117,7 +84,9 @@ function enrichCapabilityWithTeamMetrics(
   }
 
   // Get most recent score
-  const sortedData = teamData.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
+  const sortedData = teamData.sort(
+    (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
+  );
   const currentScore = getNumericScore(sortedData[0].value);
 
   // Calculate trend
@@ -157,7 +126,7 @@ export async function prepareTeamDetailData(
   allTeamMetrics: TeamMetric[]
 ): Promise<TeamDetailPageProps> {
   // Find the requested team
-    //
+  //
   const team = teams.find(t => t.id === teamId);
   if (!team) {
     throw new NotFoundError('Team', teamId);

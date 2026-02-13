@@ -20,7 +20,7 @@ Teams often overlook "invisible work," or tasks that are not clearly represented
 
 ### Oversized WIP Limits
 
-Setting WIP limits that are too high can defeat the purpose of the practice, as it allows too many tasks to be worked on simultaneously. This leads to context switching, delayed completion times, and increased stress for team members. Effective WIP limits should *force prioritization* and *encourage a single-task focus*. If everything is being treated as important, then nothing is actually being treated as important.
+Setting WIP limits that are too high can defeat the purpose of the practice, as it allows too many tasks to be worked on simultaneously. This leads to context switching, delayed completion times, and increased stress for team members. Effective WIP limits should _force prioritization_ and _encourage a single-task focus_. If everything is being treated as important, then nothing is actually being treated as important.
 
 WIP limits aren't set in stone—regularly review and adjust. Monitor your flow metrics and team feedback to determine if your limits are too restrictive (causing idle time) or too permissive (allowing context switching and lead time lag). The goal is finding the sweet spot where teams feel focused but not hamstrung.
 

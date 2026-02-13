@@ -55,7 +55,7 @@ Runbooks provide step-by-step guidance that helps teams resolve issues quickly a
 
 ### Introduce a Screen-Recording Tool
 
-By enabling richer, more intuitive communication, screen recording helps teams document intent more clearly, reduce back-and-forth, and improve the efficiency of handoffs without requiring ticket authors to spend a lot of time writing. A lightweight screen-recording tool like [Loom](https://www.loom.com) allows ticket authors to quickly demonstrate the issue or desired behavior using voice and visuals, reducing ambiguity without adding process overhead. 
+By enabling richer, more intuitive communication, screen recording helps teams document intent more clearly, reduce back-and-forth, and improve the efficiency of handoffs without requiring ticket authors to spend a lot of time writing. A lightweight screen-recording tool like [Loom](https://www.loom.com) allows ticket authors to quickly demonstrate the issue or desired behavior using voice and visuals, reducing ambiguity without adding process overhead.
 
 ## Adjacent Capabilities
 

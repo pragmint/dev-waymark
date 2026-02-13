@@ -18,7 +18,7 @@ export function findExperimentByIdWithTeam(
   teams: Team[],
   experimentId: string
 ): { team: Team; experiment: Experiment } | undefined {
-  const experiment = experiments.find(exp => exp.id === experimentId)
+  const experiment = experiments.find(exp => exp.id === experimentId);
   if (!experiment) return undefined;
 
   const team = teams.find(t => t.id === experiment.teamId);

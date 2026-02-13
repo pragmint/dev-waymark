@@ -22,7 +22,7 @@ Teams sometimes mistake “small batches” for “small tasks” without consid
 
 ### Neglecting Long-Term Objectives
 
-A narrow focus on small, immediate "tasks" can distract from the project's long-term objectives. It's important to balance the benefits of incremental work with broader strategic planning to ensure that all updates represent *meaningful contributions* to the project's overarching goals.
+A narrow focus on small, immediate "tasks" can distract from the project's long-term objectives. It's important to balance the benefits of incremental work with broader strategic planning to ensure that all updates represent _meaningful contributions_ to the project's overarching goals.
 
 ## Assessment
 
@@ -51,7 +51,7 @@ Start with defining a clear Minimum Viable Product (MVP). This is the simplest v
 
 ### Run a Story-splitting Workshop
 
-Hold sessions that give teams an opportunity to practice decomposing features and break down user stories into small, independently valuable increments. This will likely push teams out of their comfort zone. But it's *good* to push teams to slice too much -- it's useful to know what "too much" looks like. Without opening their minds to new ways of slicing work, teams can easily revert to the original scope.
+Hold sessions that give teams an opportunity to practice decomposing features and break down user stories into small, independently valuable increments. This will likely push teams out of their comfort zone. But it's _good_ to push teams to slice too much -- it's useful to know what "too much" looks like. Without opening their minds to new ways of slicing work, teams can easily revert to the original scope.
 
 ### Instrument Systems With Telemetry Data
 
@@ -91,7 +91,7 @@ Strong monitoring and observability allow teams to quickly validate whether a sm
 
 ### [Continuous Integration](/capabilities/continuous-integration.md) - Downstream
 
-Working in small batches enables the *continuous* part of continuous integration. When changes are smaller and more frequent, they can be tested and integrated quickly, and issues can be detected and resolved early. This reduces integration friction and improves software quality.
+Working in small batches enables the _continuous_ part of continuous integration. When changes are smaller and more frequent, they can be tested and integrated quickly, and issues can be detected and resolved early. This reduces integration friction and improves software quality.
 
 ### [Trunk-Based Development](/capabilities/trunk-based-development.md) - Downstream
 

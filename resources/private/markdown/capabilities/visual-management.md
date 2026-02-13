@@ -24,7 +24,7 @@ What was once insightful can become invisible through repetition. Visuals must g
 
 ### Don’t Confuse Activity with Progress
 
-Highly active boards can give a false sense of momentum. Just because a lot is happening doesn't mean the right things are happening. Visual management should highlight key metrics and value flow, not just motion, so teams can spot when effort *isn’t* translating into outcomes.
+Highly active boards can give a false sense of momentum. Just because a lot is happening doesn't mean the right things are happening. Visual management should highlight key metrics and value flow, not just motion, so teams can spot when effort _isn’t_ translating into outcomes.
 
 ## Assessment
 

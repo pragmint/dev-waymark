@@ -115,7 +115,9 @@ test.describe('Capabilities Catalog', () => {
     await expect(backLink).toBeVisible();
 
     // Verify "View All Capabilities" link
-    const allCapabilitiesLink = page.locator('.capability-actions').getByRole('link', { name: 'View All Capabilities' });
+    const allCapabilitiesLink = page
+      .locator('.capability-actions')
+      .getByRole('link', { name: 'View All Capabilities' });
     await expect(allCapabilitiesLink).toBeVisible();
 
     // Click "View All Capabilities" and verify navigation

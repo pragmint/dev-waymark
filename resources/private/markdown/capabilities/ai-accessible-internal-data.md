@@ -20,7 +20,7 @@ Internal data changes rapidly. If your AI system relies on model fine-tuning or 
 
 ### Over-reliance and Loss of Tribal Knowledge
 
-While AI makes information easier to find, there is a risk that teams stop talking to one another or stop documenting *why* decisions were made, relying instead on the AI to summarize the *what*. If the AI tool goes down or provides a wrong answer that becomes "canon," it can lead to systemic errors. It is vital to treat AI as a co-pilot for discovery, not the ultimate source of truth.
+While AI makes information easier to find, there is a risk that teams stop talking to one another or stop documenting _why_ decisions were made, relying instead on the AI to summarize the _what_. If the AI tool goes down or provides a wrong answer that becomes "canon," it can lead to systemic errors. It is vital to treat AI as a co-pilot for discovery, not the ultimate source of truth.
 
 ## Assessment
 
@@ -42,18 +42,23 @@ Generally, an overall score equal to or less than 3 means you'll likely gain a l
 The following is a curated list of supporting practices to consider when looking to improve your team's AI-accessible Internal Data capability.
 
 ### Implement Retrieval-augmented Generation (RAG)
+
 Instead of training a model on your data, use RAG to retrieve relevant documents from a database and pass them to the AI as context for each specific query. This reduces hallucinations and allows the AI to cite its sources, enabling users to verify the information.
 
 ### Automate Data-indexing Pipelines
+
 Create automated workflows that trigger every time a document is updated or a pull request is merged. This ensures that the vector database used by the AI stays synchronized with the actual state of your projects, providing "fresh" answers.
 
 ### Establish Data Governance and Cleaning
+
 Treat internal documentation as code. Implement "Docs-as-Code" practices where documentation is reviewed and pruned regularly. Removing obsolete information is just as important as adding new information to prevent the AI from retrieving "zombie" instructions.
 
 ### Schedule Regular Documentation Audits
-Regular audits can help keep documentation owners accountable for the maintenance of their documents, which helps keep AI from returning incorrect, outdated, or misleading data. 
+
+Regular audits can help keep documentation owners accountable for the maintenance of their documents, which helps keep AI from returning incorrect, outdated, or misleading data.
 
 ### Use Identity-aware Vector Search
+
 Ensure your AI backend integrates with your Single Sign-On (SSO) provider. When a user asks a question, the system should only retrieve data fragments that the user's specific credentials allow them to see, maintaining the "principle of least privilege."
 
 ## Adjacent Capabilities
@@ -65,11 +70,13 @@ The following capabilities will be valuable for you and your team to explore, as
 - Downstream (AI-accessible Internal Data is a pre-requisite for them)
 
 ### [Clear and Communicated AI Stance](/capabilities/clear-and-communicated-ai-stance.md) - Related
+
 As internal AI-accessible data gets rolled out at your company, it will pair perfectly with having a balanced and effectively communicated stance on AI.
 
 ### [Documentation Quality](/capabilities/documentation-quality.md) - Upstream
+
 High-quality, modular, updated, and clear documentation is a pre-requisite for AI-accessible Internal Data. If humans can't understand the source text, an AI's summary of that text will be equally confusing.
 
 ### [Pervasive Security](/capabilities/pervasive-security.md) - Upstream
-Robust security protocols must be in place before making data AI-accessible to prevent internal data leaks or unauthorized privilege escalation via the AI interface.
 
+Robust security protocols must be in place before making data AI-accessible to prevent internal data leaks or unauthorized privilege escalation via the AI interface.

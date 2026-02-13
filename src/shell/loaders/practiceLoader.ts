@@ -7,9 +7,7 @@ export interface Practice {
 }
 
 // Pure function - reads markdown file from filesystem
-async function readMarkdownFile(
-  practiceId: string
-): Promise<string> {
+async function readMarkdownFile(practiceId: string): Promise<string> {
   const filename = `${practiceId}.md`;
   const filePath = `resources/private/markdown/practices/${filename}`;
   return await Bun.file(filePath).text();
@@ -45,9 +43,7 @@ function transformResourceLinks(html: string): string {
 }
 
 // Composed function - loads and parses a single practice
-export async function loadPracticeFromFilesystem(
-  practiceId: string,
-): Promise<Practice | null> {
+export async function loadPracticeFromFilesystem(practiceId: string): Promise<Practice | null> {
   try {
     // Load markdown
     const markdown = await readMarkdownFile(practiceId);
