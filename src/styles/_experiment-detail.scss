@@ -397,22 +397,22 @@
   border-radius: $border-radius-sm;
   letter-spacing: 0.05rem;
 
-  &[class*="active"] {
+  &[class*='active'] {
     background: #d1ecf1;
     color: #0c5460;
   }
 
-  &[class*="backlog"] {
+  &[class*='backlog'] {
     background: #e2e3e5;
     color: #383d41;
   }
 
-  &[class*="blocked"] {
+  &[class*='blocked'] {
     background: #f8d7da;
     color: #721c24;
   }
 
-  &[class*="complete"] {
+  &[class*='complete'] {
     background: #d4edda;
     color: #155724;
   }

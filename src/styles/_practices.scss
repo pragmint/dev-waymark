@@ -58,7 +58,7 @@
     line-height: 1.4;
 
     &::before {
-      content: "→ ";
+      content: '→ ';
       opacity: 0;
       margin-right: 0;
       transition: all $transition-fast;
@@ -146,7 +146,8 @@
     font-size: $font-base;
   }
 
-  ul, ol {
+  ul,
+  ol {
     margin: $spacing-lg 0;
     padding-left: $spacing-xxxl;
     line-height: 1.7;
@@ -203,7 +204,8 @@
     color: $text-primary;
   }
 
-  em, i {
+  em,
+  i {
     font-style: italic;
   }
 
@@ -223,7 +225,8 @@
     margin: $spacing-lg 0;
     border-collapse: collapse;
 
-    th, td {
+    th,
+    td {
       padding: $spacing-md;
       border: 0.1rem solid $border-color-light;
       text-align: left;
