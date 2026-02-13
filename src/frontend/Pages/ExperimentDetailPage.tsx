@@ -7,7 +7,65 @@ import type {
   ExperimentDecisionRolesItem,
   ExperimentSuccessCriteriaItem,
 } from '../../core/data/experimentTypes';
-import { getStatusBadge, calculateEndDate, parseFlexibleDate } from '../htmlHelpers/htmlHelpers';
+function parseFlexibleDate(dateString?: string | null): Date | null {
+  if (!dateString) return null;
+
+  let date = new Date(dateString);
+  if (!isNaN(date.getTime())) {
+    return date;
+  }
+
+  const europeanMatch = dateString.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (europeanMatch) {
+    const day = parseInt(europeanMatch[1], 10);
+    const month = parseInt(europeanMatch[2], 10) - 1;
+    const year = parseInt(europeanMatch[3], 10);
+    date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  return null;
+}
+
+function getStatusBadge(status: string): string {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'in-progress': { bg: '#e8f4f8', text: '#0066cc' },
+    blocked: { bg: '#f8d7da', text: '#721c24' },
+    paused: { bg: '#fff3cd', text: '#856404' },
+  };
+
+  const colors = statusColors[status] || { bg: '#e0e0e0', text: '#666' };
+  const label = status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
+}
+
+function calculateEndDate(startDate?: string | null, duration?: string): string {
+  if (!duration) return 'TBD';
+
+  const start = parseFlexibleDate(startDate);
+  if (!start) return 'TBD';
+
+  const durationMatch = duration.match(/(\d+)\s*(week|month|day)/i);
+
+  if (!durationMatch) return 'TBD';
+
+  const amount = parseInt(durationMatch[1]);
+  const unit = durationMatch[2].toLowerCase();
+
+  const end = new Date(start);
+  if (unit.startsWith('week')) {
+    end.setDate(end.getDate() + amount * 7);
+  } else if (unit.startsWith('month')) {
+    end.setMonth(end.getMonth() + amount);
+  } else if (unit.startsWith('day')) {
+    end.setDate(end.getDate() + amount);
+  }
+
+  return end.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 export interface ExperimentDetailPageProps {
   teams: Team[];

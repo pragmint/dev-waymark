@@ -2,7 +2,46 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../../core/data/teamTypes';
 import type { Capability, MaturityLevel } from '../../core/data/capabilityTypes';
-import { getTrendIcon, getTrendLabel, getMaturityLevelLabel } from '../htmlHelpers/htmlHelpers';
+function getTrendIcon(trend: string): string {
+  switch (trend) {
+    case 'up':
+      return '↑';
+    case 'down':
+      return '↓';
+    case 'stable':
+    default:
+      return '→';
+  }
+}
+
+function getTrendLabel(trend: string): string {
+  switch (trend) {
+    case 'up':
+      return 'Improving';
+    case 'down':
+      return 'Declining';
+    case 'stable':
+    default:
+      return 'Stable';
+  }
+}
+
+function getMaturityLevelLabel(level: number): string {
+  switch (level) {
+    case 0:
+      return 'Not Started';
+    case 1:
+      return 'Initial';
+    case 2:
+      return 'Developing';
+    case 3:
+      return 'Defined';
+    case 4:
+      return 'Optimizing';
+    default:
+      return 'Unknown';
+  }
+}
 
 export interface CapabilityDetailPageProps {
   teams: Team[];

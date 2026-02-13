@@ -1,7 +1,18 @@
 import type { FC } from 'hono/jsx';
 import type { TeamCapability } from '../../core/data/teamTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
-import { getTrendIcon } from '../htmlHelpers/htmlHelpers';
+
+function getTrendIcon(trend: string): string {
+  switch (trend) {
+    case 'up':
+      return '↑';
+    case 'down':
+      return '↓';
+    case 'stable':
+    default:
+      return '→';
+  }
+}
 
 interface TeamCapabilityTileProps {
   teamCapability: TeamCapability;

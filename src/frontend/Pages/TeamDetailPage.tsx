@@ -6,8 +6,20 @@ import type { Experiment } from '../../core/data/experimentTypes';
 import type { Capability } from '../../core/data/capabilityTypes';
 import type { Practice } from '../../shell/loaders/practiceLoader';
 import type { TeamMetric } from '../../parsers/yaml/metricParser';
-import { getStatusBadge } from '../htmlHelpers/htmlHelpers';
 import { parseDate } from '../../core/utils/dateFormatter';
+
+function getStatusBadge(status: string): string {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'in-progress': { bg: '#e8f4f8', text: '#0066cc' },
+    blocked: { bg: '#f8d7da', text: '#721c24' },
+    paused: { bg: '#fff3cd', text: '#856404' },
+  };
+
+  const colors = statusColors[status] || { bg: '#e0e0e0', text: '#666' };
+  const label = status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
+}
 
 export interface TeamDetailPageProps {
   teams: Team[];

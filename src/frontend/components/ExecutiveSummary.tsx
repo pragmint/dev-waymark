@@ -1,5 +1,26 @@
 import type { FC } from 'hono/jsx';
-import { formatDateString } from '../../core/utils/dateFormatter';
+
+function formatDateString(dateString: string): string {
+  const [day, month, year] = dateString.split('.');
+  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
 
 export interface ExecutiveSummaryProps {
   htmlContent: string;

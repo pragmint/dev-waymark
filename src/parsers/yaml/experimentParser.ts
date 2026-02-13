@@ -3,7 +3,19 @@ import { z } from 'zod';
 import type { Experiment } from '../../core/data/experimentTypes';
 import { ExperimentFileSchema } from '../../core/data/experimentTypes';
 import { ValidationError } from '../../core/errors';
-import { filenameToTitle } from '../../core/utils/stringUtils';
+function filenameToTitle(filename: string): string {
+  const lowercaseWords = new Set(['a', 'the', 'and', 'to', 'of', 'in']);
+
+  return filename
+    .split('-')
+    .map((word, index) => {
+      if (word === 'ai') return 'AI';
+      if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1);
+      if (lowercaseWords.has(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
 
 export function parseExperimentYaml(
   content: string,

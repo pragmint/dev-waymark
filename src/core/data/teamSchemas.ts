@@ -75,11 +75,3 @@ export type DecisionRoles = z.infer<typeof DecisionRolesSchema>;
 export type ActiveExperiment = z.infer<typeof ActiveExperimentSchema>;
 export type TeamCapability = z.infer<typeof TeamCapabilitySchema>;
 export type Team = z.infer<typeof TeamSchema>;
-
-/**
- * Normalizes team capabilities to consistent format
- * With the schema transform, targetedCapabilities is always TeamCapability[]
- */
-export function normalizeTeamCapabilities(team: Team): TeamCapability[] {
-  return team.targetedCapabilities || [];
-}

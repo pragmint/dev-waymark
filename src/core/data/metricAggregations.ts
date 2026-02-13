@@ -2,7 +2,6 @@ import type { Capability, TrendDirection } from './capabilityTypes';
 import type { Metric, TeamMetric, MetricValue } from '../../parsers/yaml/metricParser';
 import type { Team, TeamCapability } from './teamTypes';
 import type { Experiment } from './experimentTypes';
-import { normalizeTeamCapabilities } from './teamSchemas';
 import { parseDate } from '../utils/dateFormatter';
 
 /**
@@ -45,8 +44,7 @@ export function enrichCapabilitiesWithMetrics(
   // Count teams that are actively targeting each capability
   const targetingCounts = new Map<string, number>();
   teams.forEach(team => {
-    const normalizedCapabilities = normalizeTeamCapabilities(team);
-    normalizedCapabilities.forEach(tc => {
+    (team.targetedCapabilities || []).forEach(tc => {
       targetingCounts.set(tc.id, (targetingCounts.get(tc.id) || 0) + 1);
     });
   });
@@ -157,9 +155,7 @@ export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[]
   });
 
   return teams.map(team => {
-    const normalizedTargeted = normalizeTeamCapabilities(team);
-
-    const targetedCapabilities = normalizedTargeted.map(tc =>
+    const targetedCapabilities = (team.targetedCapabilities || []).map(tc =>
       enrichTeamCapability(tc, team.id, metricsMap)
     );
 
