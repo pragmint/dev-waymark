@@ -6,14 +6,14 @@ import {
 import {
   loadCapabilitiesFromFilesystem,
   enrichCapabilitiesWithAssessment,
-} from '../shell/loaders/capabilityLoader';
-import { loadExperimentsFromFilesystem } from '../shell/loaders/experimentLoader';
+} from './capabilityLoader';
+import { loadExperimentsFromFilesystem } from './experimentLoader';
 import {
   loadCapabilityMetricsFromFilesystem,
   loadTeamMetricsFromFilesystem,
-} from '../shell/loaders/metricLoader';
-import { loadSummariesFromFilesystem } from '../shell/loaders/summaryLoader';
-import { loadTeamsFromFilesystem } from '../shell/loaders/teamLoader';
+} from './metricLoader';
+import { loadSummariesFromFilesystem } from './summaryLoader';
+import { loadTeamsFromFilesystem } from './teamLoader';
 
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
 const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(rawCapabilities);

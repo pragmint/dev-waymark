@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import type { Capability } from '../../core/data/capabilityTypes';
+import type { Capability } from '../core/data/capabilityTypes';
 function filenameToTitle(filename: string): string {
   const lowercaseWords = new Set(['a', 'the', 'and', 'to', 'of', 'in']);
 
@@ -13,12 +13,12 @@ function filenameToTitle(filename: string): string {
     })
     .join(' ');
 }
-import { parseAssessmentMarkdown } from '../../parsers/markdown/assessmentParser';
+import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
 import {
   parseMarkdown,
   transformCapabilityLinks,
   transformPracticeLinks,
-} from '../../parsers/markdown';
+} from '../parsers/markdown';
 
 /**
  * Pure I/O function - loads capabilities from markdown files

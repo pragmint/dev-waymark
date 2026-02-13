@@ -1,8 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CapabilityMetric } from '../../frontend/scripts/insights-data';
-import type { TeamMetric } from '../../parsers/yaml/metricParser';
-import { parseCapabilityMetricYaml, parseTeamMetricYaml } from '../../parsers/yaml/metricParser';
+import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { TeamMetric } from '../parsers/yaml/metricParser';
+import { parseCapabilityMetricYaml, parseTeamMetricYaml } from '../parsers/yaml/metricParser';
 
 // Re-export types from metricParser for downstream consumers
 export type {
@@ -13,7 +13,7 @@ export type {
   TeamMetricDataPoint,
   TeamMetricFile,
   TeamMetric,
-} from '../../parsers/yaml/metricParser';
+} from '../parsers/yaml/metricParser';
 
 // Re-export schemas for downstream consumers
 export {
@@ -21,7 +21,7 @@ export {
   MetricFileSchema,
   TeamMetricDataPointSchema,
   TeamMetricFileSchema,
-} from '../../parsers/yaml/metricParser';
+} from '../parsers/yaml/metricParser';
 
 /**
  * Pure I/O function - loads capability metrics from filesystem with validation

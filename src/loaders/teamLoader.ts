@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Team } from '../../core/data/teamTypes';
-import { parseTeamYaml } from '../../parsers/yaml/teamParser';
+import type { Team } from '../core/data/teamTypes';
+import { parseTeamYaml } from '../parsers/yaml/teamParser';
 
 // Pure I/O function - loads teams from filesystem with validation
 export async function loadTeamsFromFilesystem(): Promise<Team[]> {

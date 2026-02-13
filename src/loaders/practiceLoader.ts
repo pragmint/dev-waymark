@@ -4,7 +4,7 @@ import {
   transformCapabilityLinks,
   transformPracticeLinks,
   transformResourceLinks,
-} from '../../parsers/markdown';
+} from '../parsers/markdown';
 
 export interface Practice {
   id: string;

@@ -9,7 +9,7 @@ import { loadPracticeFromFilesystem } from '../loaders/loadPractice';
 import { TeamMetric } from '../frontend/scripts/insights-data';
 import { parseDate } from '../frontend/scripts/insights-utils';
 import type { MetricValue, Metric } from '../parsers/yaml/metricParser';
-import { Practice } from '../shell/loaders/practiceLoader';
+import { Practice } from '../loaders/practiceLoader';
 
 const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } =
   await loadDataContext();

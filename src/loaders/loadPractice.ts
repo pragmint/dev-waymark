@@ -1,4 +1,4 @@
-import type { Practice } from '../shell/loaders/practiceLoader';
+import type { Practice } from './practiceLoader';
 import {
   parseMarkdown,
   extractTitle,

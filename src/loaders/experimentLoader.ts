@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Experiment } from '../../core/data/experimentTypes';
-import { parseExperimentYaml } from '../../parsers/yaml/experimentParser';
+import type { Experiment } from '../core/data/experimentTypes';
+import { parseExperimentYaml } from '../parsers/yaml/experimentParser';
 
 /**
  * Pure I/O function - loads experiments from filesystem with validation
