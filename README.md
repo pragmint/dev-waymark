@@ -6,10 +6,10 @@ A simple website that helps software and data engineering teams continuously exp
 
 ```bash
 # Build the js/css
-bun run build
+bun b
 
 # Development with hot reload
-bun run dev
+bun dev
 
 # Run tests
 bun test

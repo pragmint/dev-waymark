@@ -4,16 +4,11 @@
   "type": "module",
   "scripts": {
     "start": "bun run index.tsx",
-    "test": "bun test ./src",
     "dev": "bun --watch index.tsx",
-    "build": "bun run build:css && bun run build:js",
-    "build:css": "sass src/styles/main.scss:resources/public/style.css",
-    "build:js": "for file in src/scripts/*.ts; do bun build \"$file\" --outfile \"resources/public/$(basename \"$file\" .ts).js\"; done",
+    "b": "bun ./scripts/build.ts",
     "watch:css": "sass --watch src/styles/main.scss:resources/public/style.css",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "fmt": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "fmt:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "check": "prettier --check . && eslint . && tsc",
+    "fix": "prettier --write . && eslint . --fix",
     "test:e2e": "playwright test"
   },
   "dependencies": {

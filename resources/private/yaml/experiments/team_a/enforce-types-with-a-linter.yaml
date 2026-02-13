@@ -38,7 +38,7 @@ intervention:
     rollout to establish norms, documentation, and a sustainable remediation path.
   success_criteria:
     - metric: linter-error-count
-      target: "0 (for the defined slice)"
+      target: '0 (for the defined slice)'
       measurement_window: during_experiment
       notes: >
         Track the count over time; the goal is to reach zero for the slice and keep it there
@@ -75,10 +75,10 @@ intervention:
       status: blocked
 decision-roles:
   - responsible:
-    - Example Person 1
-    - Example Person 2
+      - Example Person 1
+      - Example Person 2
   - accountable:
-    - Example Person 3
+      - Example Person 3
   - consulted:
   - informed:
-    - Example Person 4
+      - Example Person 4
