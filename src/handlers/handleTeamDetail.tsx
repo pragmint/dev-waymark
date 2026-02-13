@@ -7,8 +7,8 @@ import { Experiment } from '../core/data/experimentSchemas';
 import { Team, TeamCapability } from '../core/data/teamSchemas';
 import { NotFoundError } from '../core/errors';
 import { loadPracticeFromFilesystem } from '../loaders/loadPractice';
-import { TeamMetric } from '../scripts/insights-data';
-import { parseDate } from '../scripts/insights-utils';
+import { TeamMetric } from '../frontend/scripts/insights-data';
+import { parseDate } from '../frontend/scripts/insights-utils';
 import type { MetricValue, Metric } from '../parsers/yaml/metricParser';
 import { Practice } from '../shell/loaders/practiceLoader';
 
