@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CapabilityMetric } from '../../scripts/insights-data';
+import type { CapabilityMetric } from '../../frontend/scripts/insights-data';
 import type { TeamMetric } from '../../parsers/yaml/metricParser';
 import { parseCapabilityMetricYaml, parseTeamMetricYaml } from '../../parsers/yaml/metricParser';
 

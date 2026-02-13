@@ -57,7 +57,12 @@ export const TeamSchema = z.object({
       z.array(TeamCapabilityReferenceSchema), // New format: just capability IDs
     ])
     .optional()
-    .default([]),
+    .default([])
+    .transform((caps): z.infer<typeof TeamCapabilitySchema>[] =>
+      caps.map(cap =>
+        typeof cap === 'string' ? { id: cap, currentScore: null, trend: null } : cap
+      )
+    ),
   nonTargetedCapabilities: z.array(TeamCapabilitySchema).optional().default([]),
   activeExperiments: z.array(ActiveExperimentSchema).optional().default([]),
 });
@@ -73,25 +78,8 @@ export type Team = z.infer<typeof TeamSchema>;
 
 /**
  * Normalizes team capabilities to consistent format
- * Converts new format (strings) to old format (objects with null scores)
- * This ensures internal data structure stays consistent
+ * With the schema transform, targetedCapabilities is always TeamCapability[]
  */
 export function normalizeTeamCapabilities(team: Team): TeamCapability[] {
-  if (!team.targetedCapabilities || team.targetedCapabilities.length === 0) {
-    return [];
-  }
-
-  const first = team.targetedCapabilities[0];
-
-  // Old format: objects with id, currentScore, trend
-  if (typeof first === 'object' && 'id' in first) {
-    return team.targetedCapabilities as TeamCapability[];
-  }
-
-  // New format: just strings - convert to objects with null scores
-  return (team.targetedCapabilities as string[]).map(id => ({
-    id,
-    currentScore: null,
-    trend: null,
-  }));
+  return team.targetedCapabilities || [];
 }

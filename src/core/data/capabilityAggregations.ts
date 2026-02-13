@@ -24,8 +24,8 @@ export function enrichCapabilitiesWithTeamData(
         capabilityScores.set(tc.id, { scores: [], trends: [], teamCount: 0 });
       }
       const data = capabilityScores.get(tc.id)!;
-      data.scores.push(tc.currentScore);
-      data.trends.push(tc.trend);
+      if (tc.currentScore !== null) data.scores.push(tc.currentScore);
+      if (tc.trend !== null) data.trends.push(tc.trend);
       data.teamCount++;
     });
   });

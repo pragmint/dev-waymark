@@ -63,6 +63,7 @@ export function enrichCapabilitiesWithMetrics(
         // Group data by team, filtering to only include teams with files in the filesystem
         const teamDataMap = new Map<string, typeof metric.data>();
         metric.data.forEach(dataPoint => {
+          if (!dataPoint.team) return;
           // Only include teams that have files in examples/teams/
           if (validTeamIds.has(dataPoint.team)) {
             if (!teamDataMap.has(dataPoint.team)) {
