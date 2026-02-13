@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { findTeamById, findExperimentById } from '../src/core/data/teamQueries';
-import type { Team } from '../src/core/data/teamTypes';
+import { findTeamById, findExperimentById } from './teamQueries';
+import type { Team } from './teamTypes';
 
 describe('Team Queries', () => {
   const teams: Team[] = [

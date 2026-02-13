@@ -1,0 +1,12 @@
+# Configure the test runner
+[test]
+root = "./src"                # Only look for tests in /src
+
+# Configure the package manager
+[install]
+registry = "https://registry.npmjs.org"
+lockfile = true
+
+# Environment variables (Specific to Bun's loading)
+[env]
+file = true # Automatically load .env files

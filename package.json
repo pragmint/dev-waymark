@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run index.tsx",
+    "test": "bun test ./src",
     "dev": "bun --watch index.tsx",
     "build": "bun run build:css && bun run build:js",
     "build:css": "sass src/styles/main.scss:resources/public/style.css",
