@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { parseExperimentYaml } from './experimentParser';
-import { ValidationError } from '../../core/errors';
+import { ValidationError } from '../../shell/middleware/errorHandler';
 
 const minimalExperimentYaml = `
 context:

@@ -2,7 +2,8 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 import type { Experiment } from '../../core/data/experimentTypes';
 import { ExperimentFileSchema } from '../../core/data/experimentTypes';
-import { ValidationError } from '../../core/errors';
+import { ValidationError } from '../../shell/middleware/errorHandler';
+
 function filenameToTitle(filename: string): string {
   const lowercaseWords = new Set(['a', 'the', 'and', 'to', 'of', 'in']);
 

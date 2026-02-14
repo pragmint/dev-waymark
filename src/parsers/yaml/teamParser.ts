@@ -2,7 +2,7 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 import type { Team } from '../../core/data/teamTypes';
 import { TeamSchema } from '../../core/data/teamTypes';
-import { ValidationError } from '../../core/errors';
+import { ValidationError } from '../../shell/middleware/errorHandler';
 
 export function parseTeamYaml(content: string, filename: string): Team {
   const raw = parse(content);

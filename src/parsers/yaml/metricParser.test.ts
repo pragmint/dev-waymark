@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { parseCapabilityMetricYaml, parseTeamMetricYaml } from './metricParser';
-import { ValidationError } from '../../core/errors';
+import { ValidationError } from '../../shell/middleware/errorHandler';
 
 describe('parseCapabilityMetricYaml', () => {
   test('parses simple numeric values', () => {

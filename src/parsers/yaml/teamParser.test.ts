@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { parseTeamYaml } from './teamParser';
-import { ValidationError } from '../../core/errors';
+import { ValidationError } from '../../shell/middleware/errorHandler';
 
 describe('parseTeamYaml', () => {
   test('parses a minimal team with only required fields', () => {
