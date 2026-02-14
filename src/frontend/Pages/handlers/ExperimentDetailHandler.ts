@@ -1,8 +1,8 @@
 import type { Team } from '../../../core/data/teamTypes';
 import type { Experiment } from '../../../core/data/experimentTypes';
 import { loadPracticeFromFilesystem } from '../../../loaders/practiceLoader';
-import { NotFoundError } from '../../../core/errors';
 import type { ExperimentDetailPageProps } from '../ExperimentDetailPage';
+import { NotFoundError } from '../../../shell/middleware/errorHandler';
 
 /**
  * Prepares all data needed for the Experiment Detail page

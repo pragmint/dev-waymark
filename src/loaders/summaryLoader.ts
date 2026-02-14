@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { Summary } from '../core/data/summaryTypes';
 import { SummaryDateSchema } from '../core/data/summaryTypes';
-import { ValidationError } from '../core/errors';
 import { parseDate } from '../core/utils/dateFormatter';
 import { parseMarkdown } from '../parsers/markdown';
+import { ValidationError } from '../shell/middleware/errorHandler';
 
 // Pure I/O function - loads summaries from filesystem
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {

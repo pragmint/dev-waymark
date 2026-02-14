@@ -4,12 +4,12 @@ import { loadDataContext } from '../loaders/loadDataContext';
 import { Capability, TrendDirection } from '../core/data/capabilitySchemas';
 import { Experiment } from '../core/data/experimentSchemas';
 import { Team, TeamCapability } from '../core/data/teamSchemas';
-import { NotFoundError } from '../core/errors';
 import { loadPracticeFromFilesystem } from '../loaders/loadPractice';
 import { TeamMetric } from '../frontend/scripts/insights-data';
 import { parseDate } from '../frontend/scripts/insights-utils';
 import type { MetricValue, Metric } from '../parsers/yaml/metricParser';
 import { Practice } from '../loaders/practiceLoader';
+import { NotFoundError } from '../shell/middleware/errorHandler';
 
 const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } =
   await loadDataContext();

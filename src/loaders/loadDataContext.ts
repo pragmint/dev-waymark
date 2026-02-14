@@ -8,10 +8,7 @@ import {
   enrichCapabilitiesWithAssessment,
 } from './capabilityLoader';
 import { loadExperimentsFromFilesystem } from './experimentLoader';
-import {
-  loadCapabilityMetricsFromFilesystem,
-  loadTeamMetricsFromFilesystem,
-} from './metricLoader';
+import { loadCapabilityMetricsFromFilesystem, loadTeamMetricsFromFilesystem } from './metricLoader';
 import { loadSummariesFromFilesystem } from './summaryLoader';
 import { loadTeamsFromFilesystem } from './teamLoader';
 

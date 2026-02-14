@@ -39,11 +39,7 @@ describe('parseExperimentYaml', () => {
   });
 
   test('title capitalizes AI specially', () => {
-    const result = parseExperimentYaml(
-      minimalExperimentYaml,
-      'team-a',
-      'integrate-ai-code-review'
-    );
+    const result = parseExperimentYaml(minimalExperimentYaml, 'team-a', 'integrate-ai-code-review');
     expect(result.title).toBe('Integrate AI Code Review');
   });
 

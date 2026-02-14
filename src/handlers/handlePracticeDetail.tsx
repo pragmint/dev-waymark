@@ -1,8 +1,8 @@
 import { Context } from 'hono';
-import { NotFoundError } from '../core/errors';
 import { PracticeDetailPage } from '../frontend/Pages/PracticeDetailPage';
 import { loadPracticeFromFilesystem } from '../loaders/practiceLoader';
 import { loadDataContext } from '../loaders/loadDataContext';
+import { NotFoundError } from '../shell/middleware/errorHandler';
 
 const { teams } = await loadDataContext();
 
