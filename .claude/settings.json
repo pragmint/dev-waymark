@@ -2,14 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(bun test:*)",
-      "Bash(bun run lint)",
-      "Bash(bun run lint:fix)",
+      "Bash(bun check)",
+      "Bash(bun run check)",
+      "Bash(bun fix)",
+      "Bash(bun run fix)",
       "Bash(ls *)",
       "Bash(grep *)",
       "Bash(tree *)",
       "Bash(echo *)"
     ],
-    "deny": ["Read(resources/public)"]
+    "deny": ["Read(dist)"]
   },
   "hooks": {
     "PostToolUse": [
@@ -18,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/runLint.sh"
+            "command": "scripts/claude_hooks/check.sh"
           }
         ]
       }
