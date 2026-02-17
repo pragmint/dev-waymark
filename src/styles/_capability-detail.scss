@@ -173,7 +173,7 @@
   &:focus {
     outline: none;
     border-color: $primary-color;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
+    box-shadow: 0 0 0 0.2rem rgba(42, 171, 133, 0.15);
   }
 }
 
@@ -264,7 +264,7 @@
 
 .maturity-progress-fill {
   height: 100%;
-  background: linear-gradient(to right, #007bff, #0056b3);
+  background: linear-gradient(to right, #2aab85, #1d785d);
   transition: width 0.3s ease;
 }
 
@@ -318,7 +318,7 @@
 .dimension-note {
   display: flex;
   padding: $spacing-lg;
-  background-color: #e7f3ff;
+  background-color: #e7f5ef;
   border-left: 0.4rem solid $primary-color;
   border-radius: $border-radius-sm;
   margin-bottom: $spacing-lg;
@@ -379,8 +379,8 @@
   &.current {
     border-color: $primary-color;
     border-width: 0.3rem;
-    background-color: #f0f7ff;
-    box-shadow: 0 0 0 0.3rem rgba(0, 123, 255, 0.1);
+    background-color: #f0f7f4;
+    box-shadow: 0 0 0 0.3rem rgba(42, 171, 133, 0.1);
   }
 
   &.approaching {
@@ -509,7 +509,7 @@
     color: white;
 
     &:hover {
-      background-color: #0056b3;
+      background-color: #1d785d;
     }
   }
 

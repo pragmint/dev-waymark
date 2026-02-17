@@ -31,7 +31,7 @@ function parseFlexibleDate(dateString?: string | null): Date | null {
 
 function getStatusBadge(status: string): string {
   const statusColors: Record<string, { bg: string; text: string }> = {
-    'in-progress': { bg: '#e8f4f8', text: '#0066cc' },
+    'in-progress': { bg: '#e8f5f0', text: '#228b6b' },
     blocked: { bg: '#f8d7da', text: '#721c24' },
     paused: { bg: '#fff3cd', text: '#856404' },
   };
