@@ -6,7 +6,7 @@ import type { Experiment } from '../../core/domain/experimentTypes';
 import type { Capability } from '../../core/domain/capabilityTypes';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 import type { TeamMetric } from '../../parsers/yaml/metricParser';
-import { parseDate } from '../../core/utils/dateFormatter';
+import { parseDate } from '../../core/domain/parseDate';
 
 function getStatusBadge(status: string): string {
   const statusColors: Record<string, { bg: string; text: string }> = {

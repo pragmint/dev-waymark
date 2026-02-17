@@ -4,7 +4,7 @@ import { Team, TeamCapability } from './teamSchemas';
 import { loadPracticeFromFilesystem, Practice } from '../../loaders/loadPracticeFromFilesystem';
 import { TeamMetric } from '../../frontend/scripts/insights-data';
 import type { Metric } from '../../parsers/yaml/metricParser';
-import { NotFoundError } from '../../shell/middleware/errorHandler';
+import { NotFoundError } from './errors';
 import { TeamDetailPageProps } from '../../frontend/Pages/TeamDetailPage';
 import { enrichTeamCapability } from './metricAggregations';
 

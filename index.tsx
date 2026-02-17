@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
-import { errorHandler } from './src/shell/middleware/errorHandler';
 import { trimTrailingSlash } from 'hono/trailing-slash';
+import { NotFoundError, isAppError, formatErrorForLogging } from './src/core/domain/errors';
 import { handleOverview } from './src/handlers/handleOverview';
 import { handleInsight } from './src/handlers/handleInsight';
 import { handleCapabilityCatalog } from './src/handlers/handleCapabilityCatalog';
@@ -15,7 +16,18 @@ import { handleExperimentDetail } from './src/handlers/handleExperimentDetail';
 // Core business logic is imported as pure functions
 const app = new Hono();
 
-app.onError(errorHandler);
+app.onError(async (err: Error, c: Context) => {
+  console.log(formatErrorForLogging(err, { path: c.req.path, method: c.req.method }));
+
+  if (isAppError(err)) {
+    if (err instanceof NotFoundError) {
+      return c.text(err.message, 404);
+    }
+    return c.text(`Server error: ${err.message}`, 500);
+  }
+
+  return c.text('An unexpected error occurred', 500);
+});
 app.use(trimTrailingSlash());
 app.use('/public/*', serveStatic({ root: './' }));
 

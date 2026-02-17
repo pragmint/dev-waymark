@@ -3,7 +3,7 @@ import { getCapabilityScoreForTeam } from '../core/domain/capabilityQueries';
 import { CapabilityDetailPage } from '../frontend/Pages/CapabilityDetailPage';
 import { loadCapabilityMarkdown } from '../loaders/loadCapabilityMarkdown';
 import { loadDataContext } from '../loaders/loadDataContext';
-import { NotFoundError } from '../shell/middleware/errorHandler';
+import { NotFoundError } from '../core/domain/errors';
 
 const { capabilities, teams, capabilityMetrics } = await loadDataContext();
 

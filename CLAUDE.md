@@ -26,15 +26,14 @@ Filesystem (YAML/Markdown) → Loaders → Parsers (Zod validation) → Aggregat
 
 ### Layer responsibilities
 
-- **`index.tsx`** — App entry point. Route definitions and middleware. "Imperative shell" — all I/O wiring happens here.
+- **`index.tsx`** — App entry point. Route definitions, middleware, and error handler. "Imperative shell" — all I/O wiring happens here.
 - **`src/handlers/`** — Route handlers. Should be thin: load data, call prepare functions, render a Page component. No business logic.
 - **`src/loaders/`** — Read YAML/Markdown files from `examples/` and `resources/` directories. Return parsed data.
 - **`src/parsers/`** — YAML and Markdown parsing with Zod schema validation. `yaml/` for team/experiment/metric schemas, `markdown/` for capability content and maturity assessments.
-- **`src/core/domain/`** — Pure business logic. Schemas (`*Schemas.ts`), types (`*Types.ts`), queries (`*Queries.ts`), and aggregations (`*Aggregations.ts`). Data transformations like `prepareTeamDetailData.ts` structure data for page rendering.
+- **`src/core/domain/`** — Pure business logic. Schemas (`*Schemas.ts`), types (`*Types.ts`), queries (`*Queries.ts`), aggregations (`*Aggregations.ts`), error classes (`errors.ts`), and date parsing (`parseDate.ts`). Data transformations like `prepareTeamDetailData.ts` structure data for page rendering.
 - **`src/frontend/Pages/`** — Full page components. Some pages have co-located handler logic in `Pages/handlers/`.
 - **`src/frontend/components/`** — Reusable view components (`Layout`, `Page`, `Sidebar`, tiles).
 - **`src/frontend/scripts/`** — Client-side vanilla JS (compiled to `public/`). Handles minimal interactivity like toggles and Chart.js visualizations.
-- **`src/shell/middleware/`** — Error handling middleware with custom error classes (NotFoundError, ValidationError, DataLoadError).
 
 ### Data sources
 

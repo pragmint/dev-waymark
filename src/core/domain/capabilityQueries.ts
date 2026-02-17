@@ -1,6 +1,6 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
 import type { Metric } from '../../parsers/yaml/metricParser';
-import { parseDate } from '../utils/dateFormatter';
+import { parseDate } from './parseDate';
 import { isDimensionScore, getNumericScore, calculateTrend } from './metricHelpers';
 
 // Pure query functions - no I/O, no mutation

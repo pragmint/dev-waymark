@@ -1,7 +1,7 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
 import type { Metric } from '../../parsers/yaml/metricParser';
 import type { Team, TeamCapability } from './teamTypes';
-import { parseDate } from '../utils/dateFormatter';
+import { parseDate } from './parseDate';
 import { getNumericScore, calculateTrend } from './metricHelpers';
 
 /**

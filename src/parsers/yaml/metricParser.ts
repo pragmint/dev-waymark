@@ -1,6 +1,6 @@
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { ValidationError } from '../../shell/middleware/errorHandler';
+import { ValidationError } from '../../core/domain/errors';
 
 // Zod schemas for capability metric data validation
 // Value can be:
