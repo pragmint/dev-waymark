@@ -1,6 +1,6 @@
 import type { Team } from '../../../core/data/teamTypes';
 import type { Experiment } from '../../../core/data/experimentTypes';
-import { loadPracticeFromFilesystem } from '../../../loaders/practiceLoader';
+import { loadPracticeFromFilesystem } from '../../../loaders/loadPracticeFromFilesystem';
 import type { ExperimentDetailPageProps } from '../ExperimentDetailPage';
 import { NotFoundError } from '../../../shell/middleware/errorHandler';
 

@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { TeamDetailPage } from '../frontend/Pages/TeamDetailPage';
 import { loadDataContext } from '../loaders/loadDataContext';
-import { prepareTeamDetailData } from '../loaders/teamDetailLoader';
+import { prepareTeamDetailData } from '../core/data/prepareTeamDetailData';
 
 const { enrichedExperiments, capabilities, teams, teamMetrics, capabilityMetrics } =
   await loadDataContext();

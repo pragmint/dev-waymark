@@ -1,4 +1,3 @@
-import type { Practice } from './practiceLoader';
 import {
   parseMarkdown,
   extractTitle,
@@ -7,26 +6,26 @@ import {
   transformResourceLinks,
 } from '../parsers/markdown';
 
-async function readMarkdownFile(practiceId: string): Promise<string> {
-  const filename = `${practiceId}.md`;
-  const filePath = `resources/practices/${filename}`;
-  return await Bun.file(filePath).text();
+export interface Practice {
+  id: string;
+  title: string;
+  content: string;
 }
 
+/**
+ * Loads and parses a single practice by ID
+ */
 export async function loadPracticeFromFilesystem(practiceId: string): Promise<Practice | null> {
   try {
-    // Load markdown
-    const markdown = await readMarkdownFile(practiceId);
+    const filePath = `resources/practices/${practiceId}.md`;
+    const markdown = await Bun.file(filePath).text();
 
-    // Parse markdown to HTML
     const rawHtml = await parseMarkdown(markdown);
 
-    // Transform links
     let html = transformCapabilityLinks(rawHtml);
     html = transformPracticeLinks(html);
     html = transformResourceLinks(html);
 
-    // Extract metadata
     const title = extractTitle(markdown, practiceId);
 
     return {

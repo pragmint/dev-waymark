@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { PracticeDetailPage } from '../frontend/Pages/PracticeDetailPage';
-import { loadPracticeFromFilesystem } from '../loaders/practiceLoader';
+import { loadPracticeFromFilesystem } from '../loaders/loadPracticeFromFilesystem';
 import { loadDataContext } from '../loaders/loadDataContext';
 import { NotFoundError } from '../shell/middleware/errorHandler';
 

@@ -1,12 +1,12 @@
 import { Context } from 'hono';
 import { PracticesCatalogPage } from '../frontend/Pages/PracticesCatalogPage';
-import { loadAllPracticesFromFilesystem } from '../loaders/practiceLoader';
+import { loadPracticesFromFilesystem } from '../loaders/loadPracticesFromFilesystem';
 import { loadDataContext } from '../loaders/loadDataContext';
 
 const { teams } = await loadDataContext();
 
 export async function handlePracticeCatalog(c: Context) {
-  const practices = await loadAllPracticesFromFilesystem();
+  const practices = await loadPracticesFromFilesystem();
 
   return c.html(<PracticesCatalogPage teams={teams} practices={practices} />);
 }

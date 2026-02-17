@@ -1,16 +1,15 @@
+import { enrichCapabilitiesWithAssessment } from '../core/data/capabilityAggregations';
 import {
   enrichTeamsWithMetrics,
   enrichCapabilitiesWithMetrics,
   enrichExperimentsWithMetrics,
 } from '../core/data/metricAggregations';
-import {
-  loadCapabilitiesFromFilesystem,
-  enrichCapabilitiesWithAssessment,
-} from './capabilityLoader';
-import { loadExperimentsFromFilesystem } from './experimentLoader';
-import { loadCapabilityMetricsFromFilesystem, loadTeamMetricsFromFilesystem } from './metricLoader';
-import { loadSummariesFromFilesystem } from './summaryLoader';
-import { loadTeamsFromFilesystem } from './teamLoader';
+import { loadCapabilitiesFromFilesystem } from './loadCapabilitiesFromFilesystem';
+import { loadCapabilityMetricsFromFilesystem } from './loadCapabilityMetricsFromFilesystem';
+import { loadExperimentsFromFilesystem } from './loadExperimentsFromFilesystem';
+import { loadSummariesFromFilesystem } from './loadSummariesFromFilesystem';
+import { loadTeamMetricsFromFilesystem } from './loadTeamMetricsFromFilesystem';
+import { loadTeamsFromFilesystem } from './loadTeamsFromFilesystem';
 
 const rawCapabilities = await loadCapabilitiesFromFilesystem();
 const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(rawCapabilities);

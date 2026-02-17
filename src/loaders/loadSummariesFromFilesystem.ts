@@ -7,7 +7,10 @@ import { parseDate } from '../core/utils/dateFormatter';
 import { parseMarkdown } from '../parsers/markdown';
 import { ValidationError } from '../shell/middleware/errorHandler';
 
-// Pure I/O function - loads summaries from filesystem
+/**
+ * Loads summaries from filesystem
+ * Directory structure: resources/summaries/{dd.mm.yyyy}.md
+ */
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
   const dir = 'resources/summaries';
 
@@ -16,13 +19,12 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
 
     const summaries = await Promise.all(
       files
-        .filter((file: string) => file.endsWith('.md'))
-        .map(async (file: string) => {
+        .filter(file => file.endsWith('.md'))
+        .map(async file => {
           const filePath = join(dir, file);
           const dateString = file.replace('.md', '');
 
           try {
-            // Validate date format
             SummaryDateSchema.parse(dateString);
           } catch (error) {
             if (error instanceof z.ZodError) {
@@ -36,7 +38,6 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
             throw error;
           }
 
-          // Read and convert markdown to HTML
           const content = await Bun.file(filePath).text();
           const htmlContent = await parseMarkdown(content);
 
@@ -49,8 +50,7 @@ export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
         })
     );
 
-    // Sort summaries by date, most recent first
-    summaries.sort((a: Summary, b: Summary) => {
+    summaries.sort((a, b) => {
       const dateA = parseDate(a.dateString);
       const dateB = parseDate(b.dateString);
       return dateB.getTime() - dateA.getTime();
