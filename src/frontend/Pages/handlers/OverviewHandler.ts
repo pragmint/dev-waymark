@@ -1,6 +1,6 @@
 import type { Team } from '../../../core/data/teamTypes';
 import type { Capability } from '../../../core/data/capabilityTypes';
-import type { Summary } from '../../../core/data/summaryTypes';
+import type { Summary } from '../../../core/data/summarySchemas';
 import { getTopThreeCapabilities } from '../../../core/data/capabilityQueries';
 import type { OverviewPageProps } from '../OverviewPage';
 

@@ -3,33 +3,11 @@ import { Experiment } from './experimentSchemas';
 import { Team, TeamCapability } from './teamSchemas';
 import { loadPracticeFromFilesystem, Practice } from '../../loaders/loadPracticeFromFilesystem';
 import { TeamMetric } from '../../frontend/scripts/insights-data';
-import { parseDate } from '../../frontend/scripts/insights-utils';
-import type { MetricValue, Metric } from '../../parsers/yaml/metricParser';
+import { parseDate } from '../utils/dateFormatter';
+import type { Metric } from '../../parsers/yaml/metricParser';
 import { NotFoundError } from '../../shell/middleware/errorHandler';
 import { TeamDetailPageProps } from '../../frontend/Pages/TeamDetailPage';
-
-/**
- * Helper function to check if a value is a dimension score object
- */
-function isDimensionScore(value: MetricValue): value is Record<string, number> {
-  return typeof value === 'object' && !Array.isArray(value) && value !== null;
-}
-
-/**
- * Helper function to calculate average score from a metric value
- * If the value is a dimension score object, returns the average across all dimensions
- * Otherwise, returns the value as-is if it's a number, or 0 if it's a string
- */
-function getNumericScore(value: MetricValue): number {
-  if (typeof value === 'number') {
-    return value;
-  }
-  if (isDimensionScore(value)) {
-    const scores = Object.values(value);
-    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  }
-  return 0; // String values or other types default to 0
-}
+import { getNumericScore } from './metricHelpers';
 
 /**
  * Helper function to enrich a capability with team's metric data

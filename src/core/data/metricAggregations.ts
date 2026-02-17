@@ -1,31 +1,9 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric, TeamMetric, MetricValue } from '../../parsers/yaml/metricParser';
+import type { Metric, TeamMetric } from '../../parsers/yaml/metricParser';
 import type { Team, TeamCapability } from './teamTypes';
 import type { Experiment } from './experimentTypes';
 import { parseDate } from '../utils/dateFormatter';
-
-/**
- * Helper function to check if a value is a dimension score object
- */
-function isDimensionScore(value: MetricValue): value is Record<string, number> {
-  return typeof value === 'object' && !Array.isArray(value) && value !== null;
-}
-
-/**
- * Helper function to calculate average score from a metric value
- * If the value is a dimension score object, returns the average across all dimensions
- * Otherwise, returns the value as-is if it's a number, or 0 if it's a string
- */
-function getNumericScore(value: MetricValue): number {
-  if (typeof value === 'number') {
-    return value;
-  }
-  if (isDimensionScore(value)) {
-    const scores = Object.values(value);
-    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  }
-  return 0; // String values or other types default to 0
-}
+import { getNumericScore } from './metricHelpers';
 
 /**
  * Aggregates metrics to enrich capabilities with computed scores and trends
