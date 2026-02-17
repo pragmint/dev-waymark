@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
-import type { TeamCapability } from '../../core/data/teamTypes';
-import type { Capability } from '../../core/data/capabilityTypes';
+import type { TeamCapability } from '../../core/domain/teamTypes';
+import type { Capability } from '../../core/domain/capabilityTypes';
 
 function getTrendIcon(trend: string): string {
   switch (trend) {

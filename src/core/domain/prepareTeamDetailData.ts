@@ -1,67 +1,12 @@
-import { Capability, TrendDirection } from './capabilitySchemas';
+import { Capability } from './capabilitySchemas';
 import { Experiment } from './experimentSchemas';
 import { Team, TeamCapability } from './teamSchemas';
 import { loadPracticeFromFilesystem, Practice } from '../../loaders/loadPracticeFromFilesystem';
 import { TeamMetric } from '../../frontend/scripts/insights-data';
-import { parseDate } from '../utils/dateFormatter';
 import type { Metric } from '../../parsers/yaml/metricParser';
 import { NotFoundError } from '../../shell/middleware/errorHandler';
 import { TeamDetailPageProps } from '../../frontend/Pages/TeamDetailPage';
-import { getNumericScore } from './metricHelpers';
-
-/**
- * Helper function to enrich a capability with team's metric data
- */
-function enrichCapabilityWithTeamMetrics(
-  capabilityId: string,
-  teamId: string,
-  metrics: Metric[]
-): TeamCapability {
-  const metric = metrics.find(m => m.capabilityId === capabilityId);
-
-  if (!metric) {
-    return {
-      id: capabilityId,
-      currentScore: null,
-      trend: null,
-    };
-  }
-
-  const teamData = metric.data.filter(d => d.team === teamId);
-
-  if (teamData.length === 0) {
-    return {
-      id: capabilityId,
-      currentScore: null,
-      trend: null,
-    };
-  }
-
-  const sortedData = teamData.sort(
-    (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
-  );
-  const currentScore = getNumericScore(sortedData[0].value);
-
-  let trend: TrendDirection | null = 'stable';
-  if (sortedData.length >= 2) {
-    const currentValue = getNumericScore(sortedData[0].value);
-    const previousValue = getNumericScore(sortedData[1].value);
-    const scoreDiff = currentValue - previousValue;
-    if (scoreDiff > 0) {
-      trend = 'up';
-    } else if (scoreDiff < 0) {
-      trend = 'down';
-    }
-  } else {
-    trend = null;
-  }
-
-  return {
-    id: capabilityId,
-    currentScore,
-    trend,
-  };
-}
+import { enrichTeamCapability } from './metricAggregations';
 
 /**
  * Prepares all data needed for the Team Detail page
@@ -86,13 +31,19 @@ export async function prepareTeamDetailData(
 
   const capabilityMap = new Map(capabilities.map(cap => [cap.id, cap]));
 
+  const metricsMap = new Map<string, Metric>();
+  capabilityMetrics.forEach(metric => {
+    metricsMap.set(metric.capabilityId, metric);
+  });
+
   const teamCapabilityMap = new Map<string, TeamCapability>();
   for (const capability of capabilities) {
-    const enrichedCapability = enrichCapabilityWithTeamMetrics(
-      capability.id,
-      teamId,
-      capabilityMetrics
-    );
+    const minimalCapability: TeamCapability = {
+      id: capability.id,
+      currentScore: null,
+      trend: null,
+    };
+    const enrichedCapability = enrichTeamCapability(minimalCapability, teamId, metricsMap);
     teamCapabilityMap.set(capability.id, enrichedCapability);
   }
 

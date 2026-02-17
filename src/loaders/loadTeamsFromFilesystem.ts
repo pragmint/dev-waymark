@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Team } from '../core/data/teamTypes';
+import type { Team } from '../core/domain/teamTypes';
 import { parseTeamYaml } from '../parsers/yaml/teamParser';
 
 /**

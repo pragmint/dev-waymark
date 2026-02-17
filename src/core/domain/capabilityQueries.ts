@@ -1,7 +1,7 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
 import type { Metric } from '../../parsers/yaml/metricParser';
 import { parseDate } from '../utils/dateFormatter';
-import { isDimensionScore, getNumericScore } from './metricHelpers';
+import { isDimensionScore, getNumericScore, calculateTrend } from './metricHelpers';
 
 // Pure query functions - no I/O, no mutation
 
@@ -56,19 +56,7 @@ export function getCapabilityScoreForTeam(
   const justification = sortedData[0].justification;
   const dimensionJustifications = sortedData[0].dimensionJustifications;
 
-  // Calculate trend
-  let trend: TrendDirection = 'stable';
-  if (sortedData.length >= 2) {
-    const currentValue = getNumericScore(sortedData[0].value);
-    const previousValue = getNumericScore(sortedData[1].value);
-    const scoreDiff = currentValue - previousValue;
-
-    if (scoreDiff > 0) {
-      trend = 'up';
-    } else if (scoreDiff < 0) {
-      trend = 'down';
-    }
-  }
+  const trend = calculateTrend(sortedData);
 
   return {
     ...capability,

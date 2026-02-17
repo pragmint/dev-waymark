@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { getCapabilityScoreForTeam } from '../core/data/capabilityQueries';
+import { getCapabilityScoreForTeam } from '../core/domain/capabilityQueries';
 import { CapabilityDetailPage } from '../frontend/Pages/CapabilityDetailPage';
 import { loadCapabilityMarkdown } from '../loaders/loadCapabilityMarkdown';
 import { loadDataContext } from '../loaders/loadDataContext';

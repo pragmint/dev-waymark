@@ -1,5 +1,5 @@
-import type { Team } from '../../../core/data/teamTypes';
-import type { Capability } from '../../../core/data/capabilityTypes';
+import type { Team } from '../../../core/domain/teamTypes';
+import type { Capability } from '../../../core/domain/capabilityTypes';
 import type { TeamMetric } from '../../../parsers/yaml/metricParser';
 import { CapabilityMetric } from '../../scripts/insights-data';
 

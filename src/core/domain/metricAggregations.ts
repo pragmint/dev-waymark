@@ -1,9 +1,8 @@
 import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric, TeamMetric } from '../../parsers/yaml/metricParser';
+import type { Metric } from '../../parsers/yaml/metricParser';
 import type { Team, TeamCapability } from './teamTypes';
-import type { Experiment } from './experimentTypes';
 import { parseDate } from '../utils/dateFormatter';
-import { getNumericScore } from './metricHelpers';
+import { getNumericScore, calculateTrend } from './metricHelpers';
 
 /**
  * Aggregates metrics to enrich capabilities with computed scores and trends
@@ -150,7 +149,7 @@ export function enrichTeamsWithMetrics(teams: Team[], metrics: Metric[]): Team[]
   });
 }
 
-function enrichTeamCapability(
+export function enrichTeamCapability(
   teamCapability: TeamCapability,
   teamId: string,
   metricsMap: Map<string, Metric>
@@ -158,7 +157,6 @@ function enrichTeamCapability(
   const metric = metricsMap.get(teamCapability.id);
 
   if (!metric) {
-    // No metrics for this capability, return with null values
     return {
       ...teamCapability,
       currentScore: null,
@@ -166,11 +164,9 @@ function enrichTeamCapability(
     };
   }
 
-  // Find the most recent data point for this team
   const teamData = metric.data.filter(d => d.team === teamId);
 
   if (teamData.length === 0) {
-    // No data for this team, return with null values
     return {
       ...teamCapability,
       currentScore: null,
@@ -178,42 +174,15 @@ function enrichTeamCapability(
     };
   }
 
-  // Get most recent score
   const sortedData = teamData.sort(
     (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
   );
   const currentScore = getNumericScore(sortedData[0].value);
-
-  // Calculate trend
-  let trend: TrendDirection = 'stable';
-  if (sortedData.length >= 2) {
-    const currentValue = getNumericScore(sortedData[0].value);
-    const previousValue = getNumericScore(sortedData[1].value);
-    const scoreDiff = currentValue - previousValue;
-    if (scoreDiff > 0) {
-      trend = 'up';
-    } else if (scoreDiff < 0) {
-      trend = 'down';
-    }
-  }
+  const trend = calculateTrend(sortedData);
 
   return {
     ...teamCapability,
     currentScore,
     trend,
   };
-}
-
-/**
- * Enriches experiments with resolved metric data
- * This allows the UI to display actual metric values referenced in experiments
- */
-export function enrichExperimentsWithMetrics(
-  experiments: Experiment[],
-  _teamMetrics: TeamMetric[]
-): Experiment[] {
-  // No transformation needed for now - just pass through
-  // In future, we could resolve metric references to include actual data
-  // For now, experiments just store the reference strings
-  return experiments;
 }

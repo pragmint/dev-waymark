@@ -1,9 +1,8 @@
-import { enrichCapabilitiesWithAssessment } from '../core/data/capabilityAggregations';
+import { enrichCapabilitiesWithAssessment } from '../core/domain/capabilityAggregations';
 import {
   enrichTeamsWithMetrics,
   enrichCapabilitiesWithMetrics,
-  enrichExperimentsWithMetrics,
-} from '../core/data/metricAggregations';
+} from '../core/domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from './loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from './loadCapabilityMetricsFromFilesystem';
 import { loadExperimentsFromFilesystem } from './loadExperimentsFromFilesystem';
@@ -26,8 +25,13 @@ const capabilities = enrichCapabilitiesWithMetrics(
   capabilityMetrics,
   teams
 );
-const enrichedExperiments = enrichExperimentsWithMetrics(experiments, teamMetrics);
-
 export async function loadDataContext() {
-  return { enrichedExperiments, capabilities, summaries, teams, teamMetrics, capabilityMetrics };
+  return {
+    enrichedExperiments: experiments,
+    capabilities,
+    summaries,
+    teams,
+    teamMetrics,
+    capabilityMetrics,
+  };
 }

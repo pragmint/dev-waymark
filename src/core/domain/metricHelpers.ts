@@ -1,4 +1,5 @@
 import type { MetricValue } from '../../parsers/yaml/metricParser';
+import type { TrendDirection } from './capabilityTypes';
 
 /**
  * Helper function to check if a value is a dimension score object
@@ -21,4 +22,13 @@ export function getNumericScore(value: MetricValue): number {
     return scores.reduce((sum, score) => sum + score, 0) / scores.length;
   }
   return 0; // String values or other types default to 0
+}
+
+export function calculateTrend(sortedData: { value: MetricValue }[]): TrendDirection {
+  if (sortedData.length >= 2) {
+    const scoreDiff = getNumericScore(sortedData[0].value) - getNumericScore(sortedData[1].value);
+    if (scoreDiff > 0) return 'up';
+    if (scoreDiff < 0) return 'down';
+  }
+  return 'stable';
 }

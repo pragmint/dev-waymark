@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import { z } from 'zod';
-import type { Experiment } from '../../core/data/experimentTypes';
-import { ExperimentFileSchema } from '../../core/data/experimentTypes';
+import type { Experiment } from '../../core/domain/experimentTypes';
+import { ExperimentFileSchema } from '../../core/domain/experimentTypes';
 import { ValidationError } from '../../shell/middleware/errorHandler';
 
 function filenameToTitle(filename: string): string {

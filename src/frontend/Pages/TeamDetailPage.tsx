@@ -1,9 +1,9 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, TeamCapability } from '../../core/data/teamTypes';
-import type { Experiment } from '../../core/data/experimentTypes';
-import type { Capability } from '../../core/data/capabilityTypes';
+import type { Team, TeamCapability } from '../../core/domain/teamTypes';
+import type { Experiment } from '../../core/domain/experimentTypes';
+import type { Capability } from '../../core/domain/capabilityTypes';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 import type { TeamMetric } from '../../parsers/yaml/metricParser';
 import { parseDate } from '../../core/utils/dateFormatter';

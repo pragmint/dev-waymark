@@ -4,7 +4,7 @@
 
 ### Naming Conventions
 
-#### src/core/data/
+#### src/core/domain/
 
 - **Schemas**: `[entity]Schemas.ts` (camelCase prefix, PascalCase suffix)
 - **Types**: `[entity]Types.ts` (camelCase prefix, PascalCase suffix)
@@ -22,7 +22,7 @@ Entity prefixes: `capability`, `experiment`, `team`, `metric`, `summary`
 
 ### Category Folder Standards
 
-#### src/core/data/ Structure
+#### src/core/domain/ Structure
 
 Pure business logic layer - no I/O except in prepare functions:
 

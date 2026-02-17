@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../core/data/teamTypes';
-import type { Capability, MaturityLevel } from '../../core/data/capabilityTypes';
+import type { Team } from '../../core/domain/teamTypes';
+import type { Capability, MaturityLevel } from '../../core/domain/capabilityTypes';
 function getTrendIcon(trend: string): string {
   switch (trend) {
     case 'up':
