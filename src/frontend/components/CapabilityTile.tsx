@@ -1,12 +1,8 @@
-import type { FC } from 'hono/jsx';
-import type { Capability } from '../../domain/capabilityTypes';
 import { TrendIcon } from './TrendIcon';
+import { CapabilityProps } from '../../types/global';
 
-interface CapabilityTileProps {
-  capability: Capability;
-}
 
-export const CapabilityTile: FC<CapabilityTileProps> = ({ capability }) => {
+export const CapabilityTile = ({ capability }: CapabilityProps) => {
   return (
     <a href={`/catalog/capability/${capability.id}`} style="text-decoration: none; color: inherit;">
       <div class="capability-tile" data-capability-id={capability.id}>

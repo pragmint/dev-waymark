@@ -1,11 +1,7 @@
-import { Capability } from '../../../domain/capabilityTypes';
+import { CapabilityProps } from '../../../types/global';
 import { TrendLabel } from '../TrendLabel';
 
-type CapabilityHeaderProps = {
-  capability: Capability;
-};
-
-export const CapabilityHeader = ({ capability }: CapabilityHeaderProps) => {
+export const CapabilityHeader = ({ capability }: CapabilityProps) => {
   return (
     <div class="capability-header">
       <div class="capability-header-main">

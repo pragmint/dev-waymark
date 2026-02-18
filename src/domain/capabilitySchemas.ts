@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Zod schemas for runtime validation
 export const TrendDirectionSchema = z.enum(['up', 'down', 'stable']);
 
 export const MaturityLevelSchema = z.object({
@@ -18,12 +17,9 @@ export const CapabilitySchema = z.object({
   teamsTargeting: z.number().min(0).optional().default(0),
   description: z.string().optional(),
   maturityLevels: z.array(MaturityLevelSchema).optional(),
-  // Dimension-specific scores (e.g., { "new-code": 2, "previously-written-code": 3 })
-  dimensionScores: z.record(z.string(), z.number()).optional(),
-  // Justification for the overall score (when not using dimensions)
-  justification: z.string().optional(),
-  // Justifications for individual dimensions (e.g., { "new-code": "justification text" })
-  dimensionJustifications: z.record(z.string(), z.string()).optional(),
+  dimensionScores: z.record(z.string(), z.number()).optional(), // Dimension-specific scores (e.g., { "new-code": 2, "previously-written-code": 3 })
+  justification: z.string().optional(), // Justification for the overall score (when not using dimensions)
+  dimensionJustifications: z.record(z.string(), z.string()).optional(), // Justifications for individual dimensions (e.g., { "new-code": "justification text" })
 });
 
 // Derive TypeScript types from schemas (single source of truth)

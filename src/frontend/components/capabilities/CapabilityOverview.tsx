@@ -1,10 +1,6 @@
-import { Capability } from '../../../domain/capabilityTypes';
+import { CapabilityProps } from '../../../types/global';
 
-type CapabilityOverviewProps = {
-  capability: Capability;
-};
-
-export const CapabilityOverview = ({ capability }: CapabilityOverviewProps) => (
+export const CapabilityOverview = ({ capability }: CapabilityProps) => (
   <>
     {capability.description && (
       <section class="capability-section">
