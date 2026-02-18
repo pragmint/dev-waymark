@@ -1,18 +1,7 @@
 import type { FC } from 'hono/jsx';
 import type { TeamCapability } from '../../domain/teamTypes';
 import type { Capability } from '../../domain/capabilityTypes';
-
-function getTrendIcon(trend: string): string {
-  switch (trend) {
-    case 'up':
-      return '↑';
-    case 'down':
-      return '↓';
-    case 'stable':
-    default:
-      return '→';
-  }
-}
+import { TrendIcon } from './TrendIcon';
 
 interface TeamCapabilityTileProps {
   teamCapability: TeamCapability;
@@ -26,7 +15,6 @@ export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({
   teamId,
 }) => {
   const scoreDisplay = teamCapability.currentScore !== null ? teamCapability.currentScore : '-';
-  const trendIcon = teamCapability.trend !== null ? getTrendIcon(teamCapability.trend) : '';
 
   // Build URL with team query parameter if teamId is provided
   const capabilityUrl = teamId
@@ -38,9 +26,7 @@ export const TeamCapabilityTile: FC<TeamCapabilityTileProps> = ({
       <div class="capability-tile" data-capability-id={capability.id}>
         <div class="capability-tile-header">
           <h3 class="capability-tile-name">{capability.name}</h3>
-          {teamCapability.trend !== null && (
-            <span class={`capability-tile-trend ${teamCapability.trend}`}>{trendIcon}</span>
-          )}
+          {teamCapability.trend !== null && <TrendIcon trend={teamCapability.trend} />}
         </div>
         <div class="capability-tile-score">
           <span class="capability-tile-score-current">{scoreDisplay}</span>

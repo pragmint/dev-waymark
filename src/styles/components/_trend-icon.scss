@@ -1,0 +1,19 @@
+@use '../variables' as *;
+
+.trend-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+
+  &.up {
+    color: $success-color;
+  }
+
+  &.down {
+    color: $danger-color;
+  }
+
+  &.stable {
+    color: $muted-color;
+  }
+}

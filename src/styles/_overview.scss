@@ -49,24 +49,9 @@
   min-height: 4.68rem; /* Height of 2 lines: font-size * line-height * 2 */
 }
 
-.capability-tile-trend {
-  display: flex;
-  align-items: center;
+.capability-tile-header .trend-icon {
   font-size: $font-xl;
-  line-height: 1;
   margin-left: $spacing-sm;
-
-  &.up {
-    color: $success-color;
-  }
-
-  &.down {
-    color: $danger-color;
-  }
-
-  &.stable {
-    color: $muted-color;
-  }
 }
 
 .capability-tile-score {

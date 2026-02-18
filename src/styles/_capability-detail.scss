@@ -66,61 +66,6 @@
   }
 }
 
-.capability-trend {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-lg;
-  border-radius: $border-radius-sm;
-  background-color: $bg-light;
-
-  .trend-icon {
-    font-size: $font-xxl;
-    line-height: 1;
-  }
-
-  .trend-label {
-    font-size: $font-sm;
-    font-weight: 600;
-  }
-
-  &.up {
-    background-color: #d4edda;
-
-    .trend-icon {
-      color: $success-color;
-    }
-
-    .trend-label {
-      color: #155724;
-    }
-  }
-
-  &.down {
-    background-color: #f8d7da;
-
-    .trend-icon {
-      color: $danger-color;
-    }
-
-    .trend-label {
-      color: #721c24;
-    }
-  }
-
-  &.stable {
-    background-color: #e2e3e5;
-
-    .trend-icon {
-      color: $muted-color;
-    }
-
-    .trend-label {
-      color: #383d41;
-    }
-  }
-}
-
 .capability-teams-info {
   color: $text-secondary;
   font-size: $font-base;

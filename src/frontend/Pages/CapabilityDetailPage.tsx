@@ -2,29 +2,8 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../../domain/teamTypes';
 import type { Capability, MaturityLevel } from '../../domain/capabilityTypes';
-function getTrendIcon(trend: string): string {
-  switch (trend) {
-    case 'up':
-      return '↑';
-    case 'down':
-      return '↓';
-    case 'stable':
-    default:
-      return '→';
-  }
-}
+import { TrendLabel } from '../components/TrendLabel';
 
-function getTrendLabel(trend: string): string {
-  switch (trend) {
-    case 'up':
-      return 'Improving';
-    case 'down':
-      return 'Declining';
-    case 'stable':
-    default:
-      return 'Stable';
-  }
-}
 
 function getMaturityLevelLabel(level: number): string {
   switch (level) {
@@ -203,9 +182,6 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
   selectedTeam,
   markdownContent,
 }) => {
-  const trendIcon = getTrendIcon(capability.trend);
-  const trendLabel = getTrendLabel(capability.trend);
-
   // Build team options for dropdown
   const teamOptions = [
     { value: 'all', label: 'Average' },
@@ -247,10 +223,7 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
                 <span class="score-current">{capability.currentScore}</span>
                 <span class="score-max">/ 4</span>
               </div>
-              <div class={`capability-trend ${capability.trend}`}>
-                <span class="trend-icon">{trendIcon}</span>
-                <span class="trend-label">{trendLabel}</span>
-              </div>
+              <TrendLabel trend={capability.trend} />
             </div>
           </div>
           <div class="capability-teams-info">
@@ -339,3 +312,4 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
     </Page>
   );
 };
+
