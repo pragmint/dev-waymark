@@ -1,4 +1,3 @@
-
 export const CapabilityActionFooter = () => (
   <div class="capability-actions">
     <a href="/" class="btn btn-secondary">
@@ -8,4 +7,4 @@ export const CapabilityActionFooter = () => (
       View All Capabilities
     </a>
   </div>
-)
+);

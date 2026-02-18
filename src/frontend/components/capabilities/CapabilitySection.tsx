@@ -1,4 +1,4 @@
-import { Capability, MaturityLevel } from "../../../domain/capabilityTypes";
+import { Capability, MaturityLevel } from '../../../domain/capabilityTypes';
 
 function getMaturityLevelLabel(level: number): string {
   switch (level) {
@@ -87,12 +87,11 @@ function getDimensionJustification(
   return undefined;
 }
 
-
 type MaturityLevelsProps = {
-  capability: Capability
-}
+  capability: Capability;
+};
 
-const MaturityLevels = ({ capability }:MaturityLevelsProps) => {
+const MaturityLevels = ({ capability }: MaturityLevelsProps) => {
   if (!capability.maturityLevels || capability.maturityLevels.length === 0) {
     return <></>;
   }
@@ -164,13 +163,13 @@ const MaturityLevels = ({ capability }:MaturityLevelsProps) => {
       })}
     </div>
   );
-}
+};
 
 type CapabilitySectionProps = {
   capability: Capability;
-}
+};
 
-export const CapabilitySection = ({capability}: CapabilitySectionProps) => {
+export const CapabilitySection = ({ capability }: CapabilitySectionProps) => {
   return (
     <section class="capability-section">
       <h2>Current State</h2>
@@ -193,25 +192,17 @@ export const CapabilitySection = ({capability}: CapabilitySectionProps) => {
                 ></div>
               </div>
               <div class="maturity-levels">
-                <span class={`level ${capability.currentScore >= 1 ? 'achieved' : ''}`}>
-                  1
-                </span>
-                <span class={`level ${capability.currentScore >= 2 ? 'achieved' : ''}`}>
-                  2
-                </span>
-                <span class={`level ${capability.currentScore >= 3 ? 'achieved' : ''}`}>
-                  3
-                </span>
-                <span class={`level ${capability.currentScore >= 4 ? 'achieved' : ''}`}>
-                  4
-                </span>
+                <span class={`level ${capability.currentScore >= 1 ? 'achieved' : ''}`}>1</span>
+                <span class={`level ${capability.currentScore >= 2 ? 'achieved' : ''}`}>2</span>
+                <span class={`level ${capability.currentScore >= 3 ? 'achieved' : ''}`}>3</span>
+                <span class={`level ${capability.currentScore >= 4 ? 'achieved' : ''}`}>4</span>
               </div>
             </div>
           </div>
           <p>
             The organization is currently at level {capability.currentScore}, demonstrating{' '}
-            {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of
-            this capability.
+            {getMaturityLevelLabel(capability.currentScore).toLowerCase()} implementation of this
+            capability.
           </p>
           {capability.justification && (
             <div class="justification-section">
@@ -226,6 +217,5 @@ export const CapabilitySection = ({capability}: CapabilitySectionProps) => {
         </div>
       )}
     </section>
-  )
-}
-
+  );
+};

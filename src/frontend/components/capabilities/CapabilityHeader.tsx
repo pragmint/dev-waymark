@@ -1,9 +1,9 @@
-import { Capability } from "../../../domain/capabilityTypes";
-import { TrendLabel } from "../TrendLabel";
+import { Capability } from '../../../domain/capabilityTypes';
+import { TrendLabel } from '../TrendLabel';
 
 type CapabilityHeaderProps = {
   capability: Capability;
-}
+};
 
 export const CapabilityHeader = ({ capability }: CapabilityHeaderProps) => {
   return (
@@ -22,5 +22,5 @@ export const CapabilityHeader = ({ capability }: CapabilityHeaderProps) => {
         {capability.teamsTargeting !== 1 ? 's' : ''} currently targeting this capability
       </div>
     </div>
-  )
-}
+  );
+};

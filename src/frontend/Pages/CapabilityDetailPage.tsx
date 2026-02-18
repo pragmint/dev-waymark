@@ -33,7 +33,6 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
   return (
     <Page title={capability.name} heading="" activePage="capabilities" teams={teams}>
       <div class="capability-detail-container">
-
         <div class="capability-page-header">
           <h1>{capability.name}</h1>
           {teams.length > 1 && (
@@ -69,5 +68,3 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
     </Page>
   );
 };
-
-

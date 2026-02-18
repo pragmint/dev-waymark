@@ -1,11 +1,7 @@
-
 type MarkdownRendererProps = {
-  content: string | null
-}
+  content: string | null;
+};
 
 export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => (
-  <>
-    {content && <div class="markdown-content" dangerouslySetInnerHTML={{ __html: content }} />}
-  </>
-)
-
+  <>{content && <div class="markdown-content" dangerouslySetInnerHTML={{ __html: content }} />}</>
+);

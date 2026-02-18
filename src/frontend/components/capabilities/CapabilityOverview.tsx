@@ -1,8 +1,8 @@
-import { Capability } from "../../../domain/capabilityTypes";
+import { Capability } from '../../../domain/capabilityTypes';
 
 type CapabilityOverviewProps = {
   capability: Capability;
-}
+};
 
 export const CapabilityOverview = ({ capability }: CapabilityOverviewProps) => (
   <>
@@ -13,5 +13,4 @@ export const CapabilityOverview = ({ capability }: CapabilityOverviewProps) => (
       </section>
     )}
   </>
-)
-
+);
