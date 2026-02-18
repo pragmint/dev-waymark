@@ -1,8 +1,8 @@
-import type { Team } from '../../../core/domain/teamTypes';
-import type { Experiment } from '../../../core/domain/experimentTypes';
+import type { Team } from '../../../domain/teamTypes';
+import type { Experiment } from '../../../domain/experimentTypes';
 import { loadPracticeFromFilesystem } from '../../../loaders/loadPracticeFromFilesystem';
 import type { ExperimentDetailPageProps } from '../ExperimentDetailPage';
-import { NotFoundError } from '../../../core/domain/errors';
+import { NotFoundError } from '../../../domain/errors';
 
 /**
  * Prepares all data needed for the Experiment Detail page

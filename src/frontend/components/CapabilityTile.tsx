@@ -1,5 +1,5 @@
 import type { FC } from 'hono/jsx';
-import type { Capability } from '../../core/domain/capabilityTypes';
+import type { Capability } from '../../domain/capabilityTypes';
 
 function getTrendIcon(trend: string): string {
   switch (trend) {

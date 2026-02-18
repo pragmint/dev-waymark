@@ -2,8 +2,8 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { CapabilityTile } from '../components/CapabilityTile';
 import { ExecutiveSummary } from '../components/ExecutiveSummary';
-import type { Team } from '../../core/domain/teamTypes';
-import type { Capability } from '../../core/domain/capabilityTypes';
+import type { Team } from '../../domain/teamTypes';
+import type { Capability } from '../../domain/capabilityTypes';
 
 export interface OverviewPageProps {
   teams: Team[];

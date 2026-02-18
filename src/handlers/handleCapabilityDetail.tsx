@@ -1,9 +1,9 @@
 import { Context } from 'hono';
-import { getCapabilityScoreForTeam } from '../core/domain/capabilityQueries';
+import { getCapabilityScoreForTeam } from '../domain/capabilityQueries';
 import { CapabilityDetailPage } from '../frontend/Pages/CapabilityDetailPage';
 import { loadCapabilityMarkdown } from '../loaders/loadCapabilityMarkdown';
 import { loadDataContext } from '../loaders/loadDataContext';
-import { NotFoundError } from '../core/domain/errors';
+import { NotFoundError } from '../domain/errors';
 
 const { capabilities, teams, capabilityMetrics } = await loadDataContext();
 

@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import type { Capability } from '../core/domain/capabilityTypes';
+import type { Capability } from '../domain/capabilityTypes';
 
 function filenameToTitle(filename: string): string {
   const lowercaseWords = new Set(['a', 'the', 'and', 'to', 'of', 'in']);

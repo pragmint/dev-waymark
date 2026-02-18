@@ -1,12 +1,12 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../core/domain/teamTypes';
+import type { Team } from '../../domain/teamTypes';
 import type {
   Experiment,
   ExperimentActionItem,
   ExperimentDecisionRolesItem,
   ExperimentSuccessCriteriaItem,
-} from '../../core/domain/experimentTypes';
+} from '../../domain/experimentTypes';
 function parseFlexibleDate(dateString?: string | null): Date | null {
   if (!dateString) return null;
 

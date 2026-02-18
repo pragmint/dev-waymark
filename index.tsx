@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { trimTrailingSlash } from 'hono/trailing-slash';
-import { NotFoundError, isAppError, formatErrorForLogging } from './src/core/domain/errors';
+import { NotFoundError, isAppError, formatErrorForLogging } from './src/domain/errors';
 import { handleOverview } from './src/handlers/handleOverview';
 import { handleInsight } from './src/handlers/handleInsight';
 import { handleCapabilityCatalog } from './src/handlers/handleCapabilityCatalog';

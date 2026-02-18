@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import type { MaturityLevel } from '../../core/domain/capabilitySchemas';
+import type { MaturityLevel } from '../../domain/capabilitySchemas';
 //parseAssessmentMarkdown
 // We need to mock `readFile` since parseAssessmentMarkdown reads from the filesystem.
 // Instead, we test the parsing logic by providing controlled markdown content.

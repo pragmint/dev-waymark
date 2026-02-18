@@ -1,11 +1,11 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { Summary } from '../core/domain/summarySchemas';
-import { SummaryDateSchema } from '../core/domain/summarySchemas';
-import { parseDate } from '../core/domain/parseDate';
+import type { Summary } from '../domain/summarySchemas';
+import { SummaryDateSchema } from '../domain/summarySchemas';
+import { parseDate } from '../domain/parseDate';
 import { parseMarkdown } from '../parsers/markdown';
-import { ValidationError } from '../core/domain/errors';
+import { ValidationError } from '../domain/errors';
 
 /**
  * Loads summaries from filesystem

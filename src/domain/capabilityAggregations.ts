@@ -1,5 +1,5 @@
 import type { Capability } from './capabilityTypes';
-import { parseAssessmentMarkdown } from '../../parsers/markdown/assessmentParser';
+import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
 
 /**
  * Enriches capabilities with maturity level descriptions from the assessment markdown

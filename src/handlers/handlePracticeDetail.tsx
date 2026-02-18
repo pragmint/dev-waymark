@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { PracticeDetailPage } from '../frontend/Pages/PracticeDetailPage';
 import { loadPracticeFromFilesystem } from '../loaders/loadPracticeFromFilesystem';
 import { loadDataContext } from '../loaders/loadDataContext';
-import { NotFoundError } from '../core/domain/errors';
+import { NotFoundError } from '../domain/errors';
 
 const { teams } = await loadDataContext();
 

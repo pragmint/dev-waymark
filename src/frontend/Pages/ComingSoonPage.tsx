@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../core/domain/teamTypes';
+import type { Team } from '../../domain/teamTypes';
 
 interface ComingSoonPageProps {
   teams: Team[];

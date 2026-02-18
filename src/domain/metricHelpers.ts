@@ -1,4 +1,4 @@
-import type { MetricValue } from '../../parsers/yaml/metricParser';
+import type { MetricValue } from '../parsers/yaml/metricParser';
 import type { TrendDirection } from './capabilityTypes';
 
 /**

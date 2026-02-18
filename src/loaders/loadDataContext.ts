@@ -1,8 +1,8 @@
-import { enrichCapabilitiesWithAssessment } from '../core/domain/capabilityAggregations';
+import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
 import {
   enrichTeamsWithMetrics,
   enrichCapabilitiesWithMetrics,
-} from '../core/domain/metricAggregations';
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from './loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from './loadCapabilityMetricsFromFilesystem';
 import { loadExperimentsFromFilesystem } from './loadExperimentsFromFilesystem';

@@ -1,7 +1,7 @@
-import type { Team } from '../../../core/domain/teamTypes';
-import type { Capability } from '../../../core/domain/capabilityTypes';
-import type { Summary } from '../../../core/domain/summarySchemas';
-import { getTopThreeCapabilities } from '../../../core/domain/capabilityQueries';
+import type { Team } from '../../../domain/teamTypes';
+import type { Capability } from '../../../domain/capabilityTypes';
+import type { Summary } from '../../../domain/summarySchemas';
+import { getTopThreeCapabilities } from '../../../domain/capabilityQueries';
 import type { OverviewPageProps } from '../OverviewPage';
 
 /**
