@@ -10,7 +10,7 @@
     "watch:css": "sass --watch src/styles/main.scss:public/style.css",
     "check": "prettier --check . && eslint . && tsc",
     "fix": "prettier --write . && eslint . --fix",
-    "test:e2e": "playwright test",
+    "test:pw": "bun b && playwright test",
     "clean": "bun ./scripts/clean.ts"
   },
   "dependencies": {

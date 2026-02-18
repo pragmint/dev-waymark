@@ -1,7 +1,7 @@
-import type { Team } from '../../../domain/teamTypes';
-import type { Capability } from '../../../domain/capabilityTypes';
-import type { TeamMetric } from '../../../parsers/yaml/metricParser';
-import { CapabilityMetric } from '../../scripts/insights-data';
+import type { Team } from './teamTypes';
+import type { Capability } from './capabilityTypes';
+import type { TeamMetric } from '../parsers/yaml/metricParser';
+import { CapabilityMetric } from '../frontend/scripts/insights-data';
 
 export interface MetricOption {
   id: string;

@@ -1,8 +1,8 @@
-import type { Team } from '../../../domain/teamTypes';
-import type { Capability } from '../../../domain/capabilityTypes';
-import type { Summary } from '../../../domain/summarySchemas';
-import { getTopThreeCapabilities } from '../../../domain/capabilityQueries';
-import type { OverviewPageProps } from '../OverviewPage';
+import type { Team } from './teamTypes';
+import type { Capability } from './capabilityTypes';
+import type { Summary } from './summarySchemas';
+import { getTopThreeCapabilities } from './capabilityQueries';
+import type { OverviewPageProps } from '../frontend/Pages/OverviewPage';
 
 /**
  * Prepares all data needed for the Overview page

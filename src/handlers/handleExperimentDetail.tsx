@@ -1,7 +1,13 @@
 import { Context } from 'hono';
-import { ExperimentDetailPage } from '../frontend/Pages/ExperimentDetailPage';
-import { prepareExperimentDetailData } from '../frontend/Pages/handlers/ExperimentDetailHandler';
+import {
+  ExperimentDetailPage,
+  ExperimentDetailPageProps,
+} from '../frontend/Pages/ExperimentDetailPage';
 import { loadDataContext } from '../loaders/loadDataContext';
+import { Team } from '../domain/teamSchemas';
+import { Experiment } from '../domain/experimentSchemas';
+import { NotFoundError } from '../domain/errors';
+import { loadPracticeFromFilesystem } from '../loaders/loadPracticeFromFilesystem';
 
 const { enrichedExperiments, teams } = await loadDataContext();
 
@@ -9,4 +15,31 @@ export async function handleExperimentDetail(c: Context) {
   const experimentId = c.req.param('experimentId');
   const data = await prepareExperimentDetailData(experimentId, teams, enrichedExperiments);
   return c.html(<ExperimentDetailPage {...data} />);
+}
+
+/**
+ * Prepares all data needed for the Experiment Detail page
+ * Pure, testable function that orchestrates data loading
+ * @throws {NotFoundError} if experiment is not found
+ */
+export async function prepareExperimentDetailData(
+  experimentId: string,
+  teams: Team[],
+  experiments: Experiment[]
+): Promise<ExperimentDetailPageProps> {
+  const experiment = experiments.find(exp => exp.id === experimentId);
+  if (experiment === undefined) throw new NotFoundError('Experiment', experimentId);
+
+  const team = teams.find(t => t.id === experiment.teamId);
+  if (team === undefined) throw new NotFoundError('Team', experiment.teamId);
+
+  const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
+  const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
+
+  return {
+    teams,
+    team,
+    experiment,
+    practiceName,
+  };
 }

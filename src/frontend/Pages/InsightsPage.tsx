@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../../domain/teamTypes';
-import type { MetricOption } from './handlers/InsightsHandler';
+import type { MetricOption } from '../../domain/prepareInsightsData';
 
 export interface InsightsPageProps {
   teams: Team[];

@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`bun b`** — Build frontend assets (JS + CSS to public/)
 - **`bun b:prod`** — Production build (bundles server + assets to dist/)
 - **`bun test`** — Run unit tests (Bun test runner, searches `./src`)
-- **`bun test:e2e`** — Run Playwright E2E tests (requires server on :3000)
+- **`bun test:e`** — Run Playwright E2E tests (requires server on :3000)
 
 Unit tests live alongside source files as `*.test.ts`. Run a single test file with `bun test path/to/file.test.ts`.
 
