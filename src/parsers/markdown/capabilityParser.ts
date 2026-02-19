@@ -178,33 +178,55 @@ function parseSupportingPractices(content: string) {
 function parseAdjacentCapabilities(content: string, capabilityTitle: string) {
   const { intro, items } = splitIntoH3Sections(content);
 
-  validateAdjacentIntro(intro, capabilityTitle);
+  if (items.length > 0) {
+    validateAdjacentIntro(intro, capabilityTitle);
 
-  if (items.length === 0) {
+    return items.map(item => {
+      const linkMatch = item.heading.match(
+        /^\[(.+?)]\(\/capabilities\/(.+?)\.md\)\s+-\s+(Upstream|Downstream|Related)$/
+      );
+      if (!linkMatch) {
+        throw new CapabilityParseError(
+          `Invalid heading format: "${item.heading}". ` +
+            'Expected: [Title](/capabilities/id.md) - Upstream|Downstream|Related',
+          'Adjacent Capabilities'
+        );
+      }
+      return {
+        id: linkMatch[2],
+        title: linkMatch[1],
+        relationship: linkMatch[3].toLowerCase() as 'upstream' | 'downstream' | 'related',
+        description: collapseParagraphs(item.content),
+      };
+    });
+  }
+
+  // Fallback: bullet-list format (e.g. continuous-delivery.md)
+  const bulletRegex = /^- \[(.+?)]\(\/capabilities\/(.+?)\.md\)\s+(.+)$/gm;
+  const capabilities: {
+    id: string;
+    title: string;
+    relationship: 'upstream' | 'downstream' | 'related';
+    description: string;
+  }[] = [];
+
+  for (const match of content.matchAll(bulletRegex)) {
+    capabilities.push({
+      id: match[2],
+      title: match[1],
+      relationship: 'upstream',
+      description: match[3].trim(),
+    });
+  }
+
+  if (capabilities.length === 0) {
     throw new CapabilityParseError(
-      'Expected at least one capability (### heading)',
+      'Expected at least one capability (### heading or bullet list)',
       'Adjacent Capabilities'
     );
   }
 
-  return items.map(item => {
-    const linkMatch = item.heading.match(
-      /^\[(.+?)]\(\/capabilities\/(.+?)\.md\)\s+-\s+(Upstream|Downstream|Related)$/
-    );
-    if (!linkMatch) {
-      throw new CapabilityParseError(
-        `Invalid heading format: "${item.heading}". ` +
-          'Expected: [Title](/capabilities/id.md) - Upstream|Downstream|Related',
-        'Adjacent Capabilities'
-      );
-    }
-    return {
-      id: linkMatch[2],
-      title: linkMatch[1],
-      relationship: linkMatch[3].toLowerCase() as 'upstream' | 'downstream' | 'related',
-      description: collapseParagraphs(item.content),
-    };
-  });
+  return capabilities;
 }
 
 function validateAdjacentIntro(intro: string, capabilityTitle: string): void {

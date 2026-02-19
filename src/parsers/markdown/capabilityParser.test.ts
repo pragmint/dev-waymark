@@ -348,6 +348,75 @@ describe('supporting practices parsing', () => {
   });
 });
 
+describe('adjacent capabilities bullet-list format', () => {
+  const BULLET_LIST_MARKDOWN = `# [Continuous Delivery](https://dora.dev/capabilities/continuous-delivery/)
+
+Introduction to continuous delivery.
+
+## Nuances
+
+Nuance intro.
+
+### A Nuance
+
+Nuance content.
+
+## Assessment
+
+Assessment intro.
+
+1. Low: Level one.
+2. Medium: Level two.
+3. High: Level three.
+4. Expert: Level four.
+
+Assessment outro.
+
+## Supporting Practices
+
+Practices intro.
+
+### A Practice
+
+Practice description.
+
+## Adjacent Capabilities
+
+These capabilities are pre-requisites for Continuous Delivery:
+
+- [Code Maintainability](/capabilities/code-maintainability.md) ensures a clean codebase.
+- [Continuous Integration](/capabilities/continuous-integration.md) integrates code changes regularly.
+`;
+
+  test('parses bullet-list adjacent capabilities as upstream', () => {
+    const result = parseCapabilityMarkdown(BULLET_LIST_MARKDOWN);
+
+    expect(result.linked_capabilities).toHaveLength(2);
+    expect(result.linked_capabilities[0]).toEqual({
+      id: 'code-maintainability',
+      title: 'Code Maintainability',
+      relationship: 'upstream',
+      description: 'ensures a clean codebase.',
+    });
+    expect(result.linked_capabilities[1]).toEqual({
+      id: 'continuous-integration',
+      title: 'Continuous Integration',
+      relationship: 'upstream',
+      description: 'integrates code changes regularly.',
+    });
+  });
+
+  test('throws when bullet-list has no matching items', () => {
+    const markdown = BULLET_LIST_MARKDOWN.replace(
+      /- \[Code Maintainability].*\n- \[Continuous Integration].*/,
+      'No capabilities listed here.'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      '[Adjacent Capabilities] Expected at least one capability (### heading or bullet list)'
+    );
+  });
+});
+
 describe('adjacent capabilities parsing', () => {
   test('throws on invalid heading format', () => {
     const markdown = VALID_MARKDOWN.replace(
