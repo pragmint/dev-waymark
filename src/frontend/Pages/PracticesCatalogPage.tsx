@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../domain/teamTypes';
+import type { Team } from '../../schemas/teamSchemas';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 
 export interface PracticesCatalogPageProps {

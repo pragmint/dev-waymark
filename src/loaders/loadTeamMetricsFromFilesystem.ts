@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { TeamMetric } from '../parsers/yaml/metricParser';
+import type { TeamMetric } from '../schemas/metricSchemas';
 import { parseTeamMetricYaml } from '../parsers/yaml/metricParser';
 
 /**

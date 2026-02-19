@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from './metricAggregations';
-import type { Metric } from '../parsers/yaml/metricParser';
-import type { Team } from './teamTypes';
-import type { Capability } from './capabilityTypes';
+import type { Metric } from '../schemas/metricSchemas';
+import type { Team } from '../schemas/teamSchemas';
+import type { Capability } from '../schemas/capabilitySchemas';
 
 describe('Metric Aggregations - Multiple Submissions', () => {
   test('enrichTeamsWithMetrics uses most recent date for team with multiple submissions', () => {

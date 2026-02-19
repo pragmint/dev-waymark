@@ -1,8 +1,8 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { CapabilityTile } from '../components/CapabilityTile';
-import type { Team } from '../../domain/teamTypes';
-import type { Capability } from '../../domain/capabilityTypes';
+import type { Team } from '../../schemas/teamSchemas';
+import type { Capability } from '../../schemas/capabilitySchemas';
 
 export interface CapabilityCatalogPageProps {
   teams: Team[];

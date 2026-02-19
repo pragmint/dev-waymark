@@ -1,7 +1,7 @@
 import type { FC, Child } from 'hono/jsx';
 import { Layout } from './Layout';
 import { Sidebar } from './Sidebar';
-import type { Team } from '../../domain/teamTypes';
+import type { Team } from '../../schemas/teamSchemas';
 
 interface PageProps {
   title: string;

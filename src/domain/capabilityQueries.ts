@@ -1,5 +1,5 @@
-import type { Capability, TrendDirection } from './capabilityTypes';
-import type { Metric } from '../parsers/yaml/metricParser';
+import type { Capability, TrendDirection } from '../schemas/capabilitySchemas';
+import type { Metric } from '../schemas/metricSchemas';
 import { parseDate } from './parseDate';
 import { isDimensionScore, getNumericScore, calculateTrend } from './metricHelpers';
 

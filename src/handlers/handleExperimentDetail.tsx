@@ -4,8 +4,8 @@ import {
   ExperimentDetailPageProps,
 } from '../frontend/Pages/ExperimentDetailPage';
 import { loadDataContext } from '../loaders/loadDataContext';
-import { Team } from '../domain/teamSchemas';
-import { Experiment } from '../domain/experimentSchemas';
+import { Team } from '../schemas/teamSchemas';
+import { Experiment } from '../schemas/experimentSchemas';
 import { NotFoundError } from '../domain/errors';
 import { loadPracticeFromFilesystem } from '../loaders/loadPracticeFromFilesystem';
 

@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
-import type { TeamCapability } from '../../domain/teamTypes';
-import type { Capability } from '../../domain/capabilityTypes';
+import type { TeamCapability } from '../../schemas/teamSchemas';
+import type { Capability } from '../../schemas/capabilitySchemas';
 import { TrendIcon } from './TrendIcon';
 
 interface TeamCapabilityTileProps {

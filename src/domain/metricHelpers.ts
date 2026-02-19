@@ -1,5 +1,5 @@
-import type { MetricValue } from '../parsers/yaml/metricParser';
-import type { TrendDirection } from './capabilityTypes';
+import type { MetricValue } from '../schemas/metricSchemas';
+import type { TrendDirection } from '../schemas/capabilitySchemas';
 
 /**
  * Helper function to check if a value is a dimension score object

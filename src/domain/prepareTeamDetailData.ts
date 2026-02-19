@@ -1,9 +1,9 @@
-import { Capability } from './capabilitySchemas';
-import { Experiment } from './experimentSchemas';
-import { Team, TeamCapability } from './teamSchemas';
+import { Capability } from '../schemas/capabilitySchemas';
+import { Experiment } from '../schemas/experimentSchemas';
+import { Team, TeamCapability } from '../schemas/teamSchemas';
 import { loadPracticeFromFilesystem, Practice } from '../loaders/loadPracticeFromFilesystem';
 import { TeamMetric } from '../frontend/scripts/insights-data';
-import type { Metric } from '../parsers/yaml/metricParser';
+import type { Metric } from '../schemas/metricSchemas';
 import { NotFoundError } from './errors';
 import { TeamDetailPageProps } from '../frontend/Pages/TeamDetailPage';
 import { enrichTeamCapability } from './metricAggregations';

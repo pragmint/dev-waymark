@@ -1,11 +1,11 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
-import type { Team, TeamCapability } from '../../domain/teamTypes';
-import type { Experiment } from '../../domain/experimentTypes';
-import type { Capability } from '../../domain/capabilityTypes';
+import type { Team, TeamCapability } from '../../schemas/teamSchemas';
+import type { Experiment } from '../../schemas/experimentSchemas';
+import type { Capability } from '../../schemas/capabilitySchemas';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
-import type { TeamMetric } from '../../parsers/yaml/metricParser';
+import type { TeamMetric } from '../../schemas/metricSchemas';
 import { parseDate } from '../../domain/parseDate';
 
 function getStatusBadge(status: string): string {

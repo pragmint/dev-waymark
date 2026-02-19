@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { getTopThreeCapabilities } from './capabilityQueries';
-import type { Capability } from './capabilityTypes';
+import type { Capability } from '../schemas/capabilitySchemas';
 
 describe('Capability Data Transformations', () => {
   test('getTopThreeCapabilities returns top 3 by score', () => {

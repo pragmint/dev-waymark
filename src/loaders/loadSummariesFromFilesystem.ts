@@ -1,8 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { Summary } from '../domain/summarySchemas';
-import { SummaryDateSchema } from '../domain/summarySchemas';
+import type { Summary } from '../schemas/summarySchemas';
+import { SummaryDateSchema } from '../schemas/summarySchemas';
 import { parseDate } from '../domain/parseDate';
 import { parseMarkdown } from '../parsers/markdown';
 import { ValidationError } from '../domain/errors';

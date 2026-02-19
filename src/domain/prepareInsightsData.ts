@@ -1,6 +1,6 @@
-import type { Team } from './teamTypes';
-import type { Capability } from './capabilityTypes';
-import type { TeamMetric } from '../parsers/yaml/metricParser';
+import type { Team } from '../schemas/teamSchemas';
+import type { Capability } from '../schemas/capabilitySchemas';
+import type { TeamMetric } from '../schemas/metricSchemas';
 import { CapabilityMetric } from '../frontend/scripts/insights-data';
 
 export interface MetricOption {

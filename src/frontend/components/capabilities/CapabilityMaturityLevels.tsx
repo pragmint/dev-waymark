@@ -1,4 +1,4 @@
-import { Capability, MaturityLevel } from '../../../domain/capabilityTypes';
+import { Capability, MaturityLevel } from '../../../schemas/capabilitySchemas';
 import { CapabilityProps } from '../../../types/global';
 import { CapabilityJustification } from './CapabilityJustification';
 

@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../domain/teamTypes';
-import type { Capability } from '../../domain/capabilityTypes';
+import type { Team } from '../../schemas/teamSchemas';
+import type { Capability } from '../../schemas/capabilitySchemas';
 import { CapabilityOverview } from '../components/capabilities/CapabilityOverview';
 import { CapabilityHeader } from '../components/capabilities/CapabilityHeader';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';

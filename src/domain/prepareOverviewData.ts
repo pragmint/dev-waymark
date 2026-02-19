@@ -1,6 +1,6 @@
-import type { Team } from './teamTypes';
-import type { Capability } from './capabilityTypes';
-import type { Summary } from './summarySchemas';
+import type { Team } from '../schemas/teamSchemas';
+import type { Capability } from '../schemas/capabilitySchemas';
+import type { Summary } from '../schemas/summarySchemas';
 import { getTopThreeCapabilities } from './capabilityQueries';
 import type { OverviewPageProps } from '../frontend/Pages/OverviewPage';
 

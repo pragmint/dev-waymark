@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Experiment } from '../domain/experimentTypes';
+import type { Experiment } from '../schemas/experimentSchemas';
 import { parseExperimentYaml } from '../parsers/yaml/experimentParser';
 
 /**

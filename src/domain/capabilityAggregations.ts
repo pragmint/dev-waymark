@@ -1,4 +1,4 @@
-import type { Capability } from './capabilityTypes';
+import type { Capability } from '../schemas/capabilitySchemas';
 import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
 
 /**

@@ -1,4 +1,4 @@
-import { TrendDirection } from '../../domain/capabilityTypes';
+import { TrendDirection } from '../../schemas/capabilitySchemas';
 
 export type Trend = 'up' | 'down' | 'stable';
 export type TrendIconChar = '↑' | '↓' | '→';

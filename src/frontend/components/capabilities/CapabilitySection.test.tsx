@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { CapabilitySection } from './CapabilitySection';
-import type { Capability } from '../../../domain/capabilityTypes';
+import type { Capability } from '../../../schemas/capabilitySchemas';
 
 const render = (capability: Capability) =>
   (<CapabilitySection capability={capability} />).toString();

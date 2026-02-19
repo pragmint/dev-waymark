@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { MaturityLevel } from '../../domain/capabilitySchemas';
+import type { MaturityLevel } from '../../schemas/capabilitySchemas';
 
 /**
  * Pure I/O function - parses the capabilities maturity assessment markdown file
