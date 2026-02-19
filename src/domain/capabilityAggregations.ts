@@ -1,14 +1,12 @@
-import type { Capability } from '../schemas/capabilitySchemas';
-import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
+import type { Capability, MaturityLevel } from '../schemas/capabilitySchemas';
 
 /**
  * Enriches capabilities with maturity level descriptions from the assessment markdown
  */
 export async function enrichCapabilitiesWithAssessment(
-  capabilities: Capability[]
+  capabilities: Capability[],
+  assessmentData: Map<string, MaturityLevel[]>
 ): Promise<Capability[]> {
-  const assessmentData = await parseAssessmentMarkdown();
-
   return capabilities.map(capability => {
     const maturityLevels = assessmentData.get(capability.id);
     if (maturityLevels) {

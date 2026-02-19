@@ -50,7 +50,7 @@ describe('loadSummariesFromFilesystem', () => {
     expect(result[0].date).toBe('16.1.2026');
     expect(result[0].dateString).toBe('16.1.2026');
     expect(result[0].htmlContent).toContain('Summary content');
-    expect(result[0].filePath).toBe('resources/summaries/16.1.2026.md');
+    expect(result[0].filePath).toBe('examples/summaries/16.1.2026.md');
   });
 
   it('sorts summaries by date in descending order (newest first)', async () => {
@@ -180,6 +180,6 @@ describe('loadSummariesFromFilesystem', () => {
     await loadSummariesFromFilesystem();
 
     // Assert
-    expect(mockReaddir).toHaveBeenCalledWith('resources/summaries');
+    expect(mockReaddir).toHaveBeenCalledWith('examples/summaries');
   });
 });

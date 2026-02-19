@@ -12,7 +12,7 @@ import { ValidationError } from '../domain/errors';
  * Directory structure: resources/summaries/{dd.mm.yyyy}.md
  */
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
-  const dir = 'resources/summaries';
+  const dir = 'examples/summaries';
 
   try {
     const files = await readdir(dir);
