@@ -12,14 +12,16 @@ import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMe
 import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
 
-export async function handleExperimentDetail(c: Context) {
-  const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
-  const rawTeams = await loadTeamsFromFilesystem();
-  const experiments = await loadExperimentsFromFilesystem();
-  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
+const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
+const rawTeams = await loadTeamsFromFilesystem();
+const experiments = await loadExperimentsFromFilesystem();
+const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
 
+export async function handleExperimentDetail(c: Context) {
   const experimentId = c.req.param('experimentId');
+  
   const data = await prepareExperimentDetailData(experimentId, teams, experiments);
+
   return c.html(<ExperimentDetailPage {...data} />);
 }
 

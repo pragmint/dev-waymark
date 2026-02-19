@@ -1,12 +1,13 @@
 import type { FC } from 'hono/jsx';
-import type { TeamIdentity } from '../../schemas/teamSchemas';
+import { loadTeamIdentitiesFromFilesystem } from '../../loaders/loadTeamIdentitiesFromFilesystem';
 
 interface SidebarProps {
-  teams: TeamIdentity[];
   activePage: string;
 }
 
-export const Sidebar: FC<SidebarProps> = ({ teams, activePage }) => {
+const teams = await loadTeamIdentitiesFromFilesystem();
+
+export const Sidebar: FC<SidebarProps> = ({ activePage }) => {
   return (
     <nav class="sidebar">
       <h2>Step Engine</h2>

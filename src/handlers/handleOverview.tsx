@@ -33,12 +33,7 @@ export const handleOverview = async (c: Context) => {
     capabilityMetrics,
     teams
   );
-  const date = c.req.param('date');
-  if (date === undefined) {
-    const data = prepareOverviewData(capabilities, summaries);
-    return c.html(<OverviewPage {...data} />);
-  } else {
-    const data = prepareOverviewData(capabilities, summaries, date);
-    return c.html(<OverviewPage {...data} />);
-  }
+
+  const data = prepareOverviewData(capabilities, summaries, c.req.param('date'));
+  return c.html(<OverviewPage {...data} />);
 };
