@@ -7,6 +7,7 @@ import type {
   ExperimentDecisionRolesItem,
   ExperimentSuccessCriteriaItem,
 } from '../../schemas/experimentSchemas';
+
 function parseFlexibleDate(dateString?: string | null): Date | null {
   if (!dateString) return null;
 
@@ -68,7 +69,6 @@ function calculateEndDate(startDate?: string | null, duration?: string): string 
 }
 
 export interface ExperimentDetailPageProps {
-  teams: Team[];
   team: Team;
   experiment: Experiment;
   practiceName: string;
@@ -216,7 +216,6 @@ const DecisionRolesSection: FC<{ roles?: ExperimentDecisionRolesItem[] }> = ({ r
 };
 
 export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
-  teams,
   team,
   experiment,
   practiceName,
@@ -241,7 +240,6 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
       title={`${practiceName} - ${team.name}`}
       heading={`Experiment: ${practiceName}`}
       activePage={team.id}
-      teams={teams}
     >
       <div class="experiment-detail-container">
         <div class="experiment-detail-header">

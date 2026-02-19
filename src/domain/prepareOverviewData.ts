@@ -1,4 +1,3 @@
-import type { Team } from '../schemas/teamSchemas';
 import type { Capability } from '../schemas/capabilitySchemas';
 import type { Summary } from '../schemas/summarySchemas';
 import { getTopThreeCapabilities } from './capabilityQueries';
@@ -9,7 +8,6 @@ import type { OverviewPageProps } from '../frontend/Pages/OverviewPage';
  * Pure, testable function
  */
 export function prepareOverviewData(
-  teams: Team[],
   capabilities: Capability[],
   summaries: Summary[],
   requestedDate?: string
@@ -30,7 +28,6 @@ export function prepareOverviewData(
   const availableSummaryDates = summaries.map(s => s.dateString);
 
   return {
-    teams,
     topThree,
     allCapabilities: capabilities,
     summaryHtml,

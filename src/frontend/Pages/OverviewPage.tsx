@@ -2,11 +2,9 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { CapabilityTile } from '../components/CapabilityTile';
 import { ExecutiveSummary } from '../components/ExecutiveSummary';
-import type { Team } from '../../schemas/teamSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
 
 export interface OverviewPageProps {
-  teams: Team[];
   topThree: Capability[];
   allCapabilities: Capability[];
   summaryHtml: string;
@@ -15,7 +13,6 @@ export interface OverviewPageProps {
 }
 
 export const OverviewPage: FC<OverviewPageProps> = ({
-  teams,
   topThree,
   allCapabilities,
   summaryHtml,
@@ -23,7 +20,7 @@ export const OverviewPage: FC<OverviewPageProps> = ({
   availableSummaryDates,
 }) => {
   return (
-    <Page title="Overview" heading="Overview" activePage="overview" teams={teams}>
+    <Page title="Overview" heading="Overview" activePage="overview">
       <div class="capability-tiles-container">
         <div id="top-capabilities" class="capability-tiles-grid">
           {topThree.map(capability => (

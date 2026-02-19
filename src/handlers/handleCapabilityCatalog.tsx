@@ -1,7 +1,10 @@
 import { Context } from 'hono';
 import { CapabilityCatalogPage } from '../frontend/Pages/CapabilityCatalogPage';
 import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
-import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from '../domain/metricAggregations';
+import {
+  enrichTeamsWithMetrics,
+  enrichCapabilitiesWithMetrics,
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
@@ -18,7 +21,7 @@ export async function handleCapabilityCatalog(c: Context) {
     rawCapabilities,
     assessmentData
   ); // should come from parsed capabilities instead
-  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics); // why...
+  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
 
   // --- PURE TRANSFORMATION ---
   const capabilities = enrichCapabilitiesWithMetrics(
@@ -27,5 +30,5 @@ export async function handleCapabilityCatalog(c: Context) {
     teams
   );
 
-  return c.html(<CapabilityCatalogPage teams={teams} allCapabilities={capabilities} />);
+  return c.html(<CapabilityCatalogPage allCapabilities={capabilities} />);
 }

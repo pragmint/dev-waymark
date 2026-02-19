@@ -4,7 +4,10 @@ import { CapabilityDetailPage } from '../frontend/Pages/CapabilityDetailPage';
 import { loadCapabilityMarkdown } from '../loaders/loadCapabilityMarkdown';
 import { NotFoundError } from '../domain/errors';
 import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
-import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from '../domain/metricAggregations';
+import {
+  enrichTeamsWithMetrics,
+  enrichCapabilitiesWithMetrics,
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
@@ -20,7 +23,7 @@ export async function handleCapabilityDetail(c: Context) {
   const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(
     rawCapabilities,
     assessmentData
-  ); 
+  );
   const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
 
   const capabilities = enrichCapabilitiesWithMetrics(

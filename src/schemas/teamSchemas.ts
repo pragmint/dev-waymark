@@ -67,6 +67,11 @@ export const TeamSchema = z.object({
   activeExperiments: z.array(ActiveExperimentSchema).optional().default([]),
 });
 
+export const TeamIdentitySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
 // Derive TypeScript types from schemas (single source of truth)
 export type ActionItem = z.infer<typeof ActionItemSchema>;
 export type SupportingEvidence = z.infer<typeof SupportingEvidenceSchema>;
@@ -75,3 +80,4 @@ export type DecisionRoles = z.infer<typeof DecisionRolesSchema>;
 export type ActiveExperiment = z.infer<typeof ActiveExperimentSchema>;
 export type TeamCapability = z.infer<typeof TeamCapabilitySchema>;
 export type Team = z.infer<typeof TeamSchema>;
+export type TeamIdentity = z.infer<typeof TeamIdentitySchema>;

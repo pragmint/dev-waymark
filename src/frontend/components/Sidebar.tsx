@@ -1,8 +1,8 @@
 import type { FC } from 'hono/jsx';
-import type { Team } from '../../schemas/teamSchemas';
+import type { TeamIdentity } from '../../schemas/teamSchemas';
 
 interface SidebarProps {
-  teams: Team[];
+  teams: TeamIdentity[];
   activePage: string;
 }
 

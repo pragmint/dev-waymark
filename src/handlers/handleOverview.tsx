@@ -2,7 +2,10 @@ import { Context } from 'hono';
 import { prepareOverviewData } from '../domain/prepareOverviewData';
 import { OverviewPage } from '../frontend/Pages/OverviewPage';
 import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
-import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from '../domain/metricAggregations';
+import {
+  enrichTeamsWithMetrics,
+  enrichCapabilitiesWithMetrics,
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadSummariesFromFilesystem } from '../loaders/loadSummariesFromFilesystem';
@@ -32,10 +35,10 @@ export const handleOverview = async (c: Context) => {
   );
   const date = c.req.param('date');
   if (date === undefined) {
-    const data = prepareOverviewData(teams, capabilities, summaries);
+    const data = prepareOverviewData(capabilities, summaries);
     return c.html(<OverviewPage {...data} />);
   } else {
-    const data = prepareOverviewData(teams, capabilities, summaries, date);
+    const data = prepareOverviewData(capabilities, summaries, date);
     return c.html(<OverviewPage {...data} />);
   }
 };

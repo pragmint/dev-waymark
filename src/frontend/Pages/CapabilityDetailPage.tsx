@@ -31,7 +31,7 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
   ];
 
   return (
-    <Page title={capability.name} heading="" activePage="capabilities" teams={teams}>
+    <Page title={capability.name} heading="" activePage="capabilities">
       <div class="capability-detail-container">
         <div class="capability-page-header">
           <h1>{capability.name}</h1>

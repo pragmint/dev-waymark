@@ -2,11 +2,12 @@ import { Context } from 'hono';
 import { InsightsPage } from '../frontend/Pages/InsightsPage';
 import { prepareInsightsData } from '../domain/prepareInsightsData';
 import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
-import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from '../domain/metricAggregations';
+import {
+  enrichTeamsWithMetrics,
+  enrichCapabilitiesWithMetrics,
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
-import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFilesystem';
-import { loadSummariesFromFilesystem } from '../loaders/loadSummariesFromFilesystem';
 import { loadTeamMetricsFromFilesystem } from '../loaders/loadTeamMetricsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
 import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
@@ -23,10 +24,8 @@ export async function handleInsight(c: Context) {
     assessmentData
   ); // should come from parsed capabilities instead
 
-  const experiments = await loadExperimentsFromFilesystem();
   const teamMetrics = await loadTeamMetricsFromFilesystem();
-  const summaries = await loadSummariesFromFilesystem();
-  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics); // why...
+  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
 
   // --- PURE TRANSFORMATION ---
   const capabilities = enrichCapabilitiesWithMetrics(

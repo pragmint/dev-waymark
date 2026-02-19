@@ -1,17 +1,15 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../schemas/teamSchemas';
 
 interface ComingSoonPageProps {
-  teams: Team[];
   title: string;
   heading: string;
   activePage: string;
 }
 
-export const ComingSoonPage: FC<ComingSoonPageProps> = ({ teams, title, heading, activePage }) => {
+export const ComingSoonPage: FC<ComingSoonPageProps> = ({ title, heading, activePage }) => {
   return (
-    <Page title={title} heading={heading} activePage={activePage} teams={teams}>
+    <Page title={title} heading={heading} activePage={activePage}>
       <p>This page is coming soon.</p>
     </Page>
   );

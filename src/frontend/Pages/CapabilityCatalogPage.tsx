@@ -1,20 +1,17 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { CapabilityTile } from '../components/CapabilityTile';
-import type { Team } from '../../schemas/teamSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
 
 export interface CapabilityCatalogPageProps {
-  teams: Team[];
   allCapabilities: Capability[];
 }
 
 export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({
-  teams,
   allCapabilities,
 }) => {
   return (
-    <Page title="Capabilities" heading="Capabilities" activePage="capabilities" teams={teams}>
+    <Page title="Capabilities" heading="Capabilities" activePage="capabilities">
       <div class="capability-tiles-container">
         <div class="capability-tiles-grid">
           {allCapabilities.map(capability => (

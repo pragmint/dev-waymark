@@ -22,7 +22,6 @@ function getStatusBadge(status: string): string {
 }
 
 export interface TeamDetailPageProps {
-  teams: Team[];
   team: Team;
   allCapabilities: Capability[];
   capabilityMap: Map<string, Capability>;
@@ -33,7 +32,6 @@ export interface TeamDetailPageProps {
 }
 
 export const TeamDetailPage: FC<TeamDetailPageProps> = ({
-  teams,
   team,
   allCapabilities,
   capabilityMap,
@@ -43,7 +41,7 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teamMetrics: _teamMetrics,
 }) => {
   return (
-    <Page title={team.name} heading={team.name} activePage={team.id} teams={teams}>
+    <Page title={team.name} heading={team.name} activePage={team.id}>
       <div class="team-detail-container">
         {team.description && (
           <div class="team-description">

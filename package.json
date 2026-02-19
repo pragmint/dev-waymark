@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun ./scripts/start.ts",
-    "dev": "bun ./scripts/dev.ts",
+    "dev": "bun b && bun ./scripts/dev.ts",
     "b": "bun ./scripts/build.ts",
     "b:prod": "bun ./scripts/build.ts --prod",
     "watch:css": "sass --watch src/styles/main.scss:public/style.css",

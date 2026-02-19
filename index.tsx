@@ -11,6 +11,7 @@ import { handlePracticeCatalog } from './src/handlers/handlePracticeCatalog';
 import { handlePracticeDetail } from './src/handlers/handlePracticeDetail';
 import { handleTeamDetail } from './src/handlers/handleTeamDetail';
 import { handleExperimentDetail } from './src/handlers/handleExperimentDetail';
+import { createMiddleware } from 'hono/factory';
 
 // Imperative Shell - All I/O happens here
 // Core business logic is imported as pure functions
@@ -28,6 +29,14 @@ app.onError(async (err: Error, c: Context) => {
 
   return c.text('An unexpected error occurred', 500);
 });
+
+const logger = createMiddleware(async (c, next) => {
+  console.log(`[${c.req.method}] ${c.req.url}`)
+  await next()
+})
+
+app.use(logger)
+
 app.use(trimTrailingSlash());
 app.use('/public/*', serveStatic({ root: './' }));
 

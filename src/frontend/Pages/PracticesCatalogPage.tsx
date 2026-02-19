@@ -1,16 +1,14 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Team } from '../../schemas/teamSchemas';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 
 export interface PracticesCatalogPageProps {
-  teams: Team[];
   practices: Practice[];
 }
 
-export const PracticesCatalogPage: FC<PracticesCatalogPageProps> = ({ teams, practices }) => {
+export const PracticesCatalogPage: FC<PracticesCatalogPageProps> = ({ practices }) => {
   return (
-    <Page title="Practices" heading="Practices" activePage="practices" teams={teams}>
+    <Page title="Practices" heading="Practices" activePage="practices">
       <div class="practices-container">
         <div class="practices-intro">
           <p>

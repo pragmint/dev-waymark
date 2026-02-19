@@ -2,7 +2,10 @@ import { Context } from 'hono';
 import { TeamDetailPage } from '../frontend/Pages/TeamDetailPage';
 import { prepareTeamDetailData } from '../domain/prepareTeamDetailData';
 import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
-import { enrichTeamsWithMetrics, enrichCapabilitiesWithMetrics } from '../domain/metricAggregations';
+import {
+  enrichTeamsWithMetrics,
+  enrichCapabilitiesWithMetrics,
+} from '../domain/metricAggregations';
 import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFilesystem';

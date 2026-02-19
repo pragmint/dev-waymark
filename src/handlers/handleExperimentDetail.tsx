@@ -43,7 +43,6 @@ export async function prepareExperimentDetailData(
   const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
 
   return {
-    teams,
     team,
     experiment,
     practiceName,
