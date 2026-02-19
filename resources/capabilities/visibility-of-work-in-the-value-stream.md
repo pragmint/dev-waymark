@@ -94,6 +94,6 @@ Visibility of Work in the Value Stream identifies exactly where delays occur in 
 
 VSM tracks key metrics like lead time, process time, and percent complete and accurate (%C/A) to identify bottlenecks and inefficiencies. Visual Management complements VSM and takes it a step further, by ensuring teams consistently monitor these metrics. This enables timely adjustments to keep work flowing efficiently.
 
-### [Empowering Teams to Choose Tools](/capabilities/empowering-teams-to-choose-tools.md)- Downstream
+### [Empowering Teams to Choose Tools](/capabilities/empowering-teams-to-choose-tools.md) - Downstream
 
 Visibility of Work in the Value Stream is a prerequisite for the Empoweringing Teams to Choose Tools capability. Teams must first identify bottlenecks in the value stream, then exercise the autonomy to select tools that solve for those bottlenecks and best support the workflow. Choosing tools for areas that aren't solving for bottlenecks is an ineffective and inefficient use of time.

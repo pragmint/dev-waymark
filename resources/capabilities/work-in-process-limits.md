@@ -57,9 +57,9 @@ Start by setting limits that feel ambitious. This forces teams to make deliberat
 
 The following capabilities will be valuable for you and your team to explore, as they are either:
 
-- Related (they cover similar territory to Work in Process Limits)
-- Upstream (they are a pre-requisite for Work in Process Limits)
-- Downstream (Work in Process Limits is a pre-requisite for them)
+- Related (they cover similar territory to Work-in-Process Limits)
+- Upstream (they are a pre-requisite for Work-in-Process Limits)
+- Downstream (Work-in-Process Limits is a pre-requisite for them)
 
 ### [Visibility of Work in the Value Stream](/capabilities/visibility-of-work-in-the-value-stream.md) - Upstream
 

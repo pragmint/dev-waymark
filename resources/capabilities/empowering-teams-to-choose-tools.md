@@ -1,8 +1,10 @@
-# [Empowering Teams To Choose Tools](https://dora.dev/capabilities/teams-empowered-to-choose-tools/)
+# [Empowering Teams to Choose Tools](https://dora.dev/capabilities/teams-empowered-to-choose-tools/)
 
 This capability is about empowering teams to select the tools and technologies that best support their unique workflows and tasks. The DORA research has found that the most qualified decision-makers are the individual contributors themselves. When teams are empowered to choose their own tools, we tend to see higher software delivery performance and increases in job satisfaction.
 
 ## Nuances
+
+This section outlines common pitfalls, challenges, or limitations teams commonly encounter when applying this capability. The goal here is not to discourage you. Rather, the goal is to arm you with the appropriate context so that you can make an informed decision about when and how to implement the capability with your teams.
 
 ### Balance Choice with Complexity
 

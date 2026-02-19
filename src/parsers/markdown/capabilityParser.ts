@@ -162,7 +162,7 @@ function parseAssessment(content: string) {
     .filter(Boolean);
 
   const ratings = ratingLines.map(line => {
-    const match = line.match(/^(\d+)\.\s+(.+?):\s+(.+)$/);
+    const match = line.match(/^(\d+)\.\s+\*{0,2}(.+?):\*{0,2}\s+(.+)$/);
     if (!match) {
       throw new CapabilityParseError(`Invalid rating format: "${line}"`, 'Assessment');
     }
@@ -348,6 +348,3 @@ export function parseCapabilityMarkdown(content: string): ParsedCapability {
 
   return parsed.data;
 }
-
-console.log(parseCapabilityMarkdown(await Bun.file("/Users/tristanbarrow/Projects/step-engine/resources/capabilities/job-satisfaction.md").text()))
-

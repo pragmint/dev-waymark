@@ -1,4 +1,4 @@
-# [User-centric Focus](https://dora.dev/capabilities/user-centric-focus/)
+# [User-centric focus](https://dora.dev/capabilities/user-centric-focus/)
 
 The value of software is ultimately defined by its usefulness to human beings, making a user-centric focus the essential "North Star" for development teams. In the era of AI-assisted coding, this focus on the user ensures that increased velocity leads to meaningful solutions rather than just faster mistakes. By prioritizing actual user outcomes over simple technical output, organizations achieve significantly higher performance and job satisfaction.
 
