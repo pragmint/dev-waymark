@@ -1,6 +1,6 @@
-import { Capability, MaturityLevel } from "../../../domain/capabilityTypes";
-import { CapabilityProps } from "../../../types/global";
-import { CapabilityJustification } from "./CapabilityJustification";
+import { Capability, MaturityLevel } from '../../../domain/capabilityTypes';
+import { CapabilityProps } from '../../../types/global';
+import { CapabilityJustification } from './CapabilityJustification';
 
 function toKey(dim: string) {
   return dim.toLowerCase().replace(/\s+/g, '-');
@@ -53,7 +53,7 @@ export const CapabilityMaturityLevels = ({ capability }: CapabilityProps) => {
               </h3>
             )}
             <div class="maturity-grid">
-              {levels.map((level) => {
+              {levels.map(level => {
                 const isExactMatch = score === level.level;
                 const isApproaching = score % 1 !== 0 && Math.ceil(score) === level.level;
 
@@ -79,4 +79,3 @@ export const CapabilityMaturityLevels = ({ capability }: CapabilityProps) => {
     </div>
   );
 };
-

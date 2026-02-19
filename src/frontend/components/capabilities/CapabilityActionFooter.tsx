@@ -1,4 +1,3 @@
-
 export const CapabilityActionFooter = () => (
   <div class="capability-actions">
     <a href="/" class="btn btn-secondary">

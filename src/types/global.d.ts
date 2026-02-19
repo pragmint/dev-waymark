@@ -1,1 +1,1 @@
-export type CapabilityProps = { capability: Capability }
+export type CapabilityProps = { capability: Capability };

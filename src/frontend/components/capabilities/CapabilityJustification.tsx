@@ -1,4 +1,3 @@
-
 export const CapabilityJustification = ({ text }: { text: string | undefined }) => {
   if (!text) return <></>;
   return (
@@ -12,4 +11,3 @@ export const CapabilityJustification = ({ text }: { text: string | undefined }) 
     </div>
   );
 };
-

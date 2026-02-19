@@ -1,13 +1,13 @@
-import { TrendDirection } from "../../domain/capabilityTypes";
+import { TrendDirection } from '../../domain/capabilityTypes';
 
 export type Trend = 'up' | 'down' | 'stable';
-export type TrendIcon = '↑' | '↓' | '→';
+export type TrendIconChar = '↑' | '↓' | '→';
 
 type TrendIconProps = {
   trend: TrendDirection;
 };
 
-const trendIconLookup = new Map<Trend, TrendIcon>([
+const trendIconLookup = new Map<Trend, TrendIconChar>([
   ['up', '↑'],
   ['down', '↓'],
   ['stable', '→'],

@@ -1,6 +1,5 @@
-import { TrendIcon } from './TrendIcon';
 import { CapabilityProps } from '../../types/global';
-
+import { TrendIcon } from './TrendIcon';
 
 export const CapabilityTile = ({ capability }: CapabilityProps) => {
   return (

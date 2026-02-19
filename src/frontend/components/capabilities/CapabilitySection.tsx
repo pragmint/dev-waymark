@@ -33,10 +33,8 @@ export const CapabilitySection = ({ capability }: CapabilityProps) => {
                 ></div>
               </div>
               <div class="maturity-levels">
-                {[1, 2, 3, 4].map((n) => (
-                  <span class={`level ${capability.currentScore >= n ? 'achieved' : ''}`}>
-                    {n}
-                  </span>
+                {[1, 2, 3, 4].map(n => (
+                  <span class={`level ${capability.currentScore >= n ? 'achieved' : ''}`}>{n}</span>
                 ))}
               </div>
             </div>
