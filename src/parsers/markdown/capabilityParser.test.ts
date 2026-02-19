@@ -378,6 +378,20 @@ describe('adjacent capabilities parsing', () => {
       '[Adjacent Capabilities] Introduction does not match expected format'
     );
   });
+
+  test('throws a specific error when the intro structure matches but the title differs', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      '- Related (they cover similar territory to Job Satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job Satisfaction)\n' +
+        '- Downstream (Job Satisfaction is a pre-requisite for them)',
+      '- Related (they cover similar territory to Job satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job satisfaction)\n' +
+        '- Downstream (Job satisfaction is a pre-requisite for them)'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      '[Adjacent Capabilities] Introduction uses "Job satisfaction" but the document title is "Job Satisfaction"'
+    );
+  });
 });
 
 describe('paragraph collapsing', () => {

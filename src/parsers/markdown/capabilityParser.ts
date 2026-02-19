@@ -265,12 +265,25 @@ function validateAdjacentIntro(intro: string, capabilityTitle: string): void {
   ];
   const expected = expectedLines.join('\n');
 
-  if (intro !== expected) {
+  if (intro === expected) return;
+
+  // Check if the structure matches but the title is wrong
+  const titlePattern =
+    /^The following capabilities will be valuable for you and your team to explore, as they are either:\n\n- Related \(they cover similar territory to (.+?)\)\n- Upstream \(they are a pre-requisite for (.+?)\)\n- Downstream \((.+?) is a pre-requisite for them\)$/;
+  const match = intro.match(titlePattern);
+
+  if (match) {
+    const usedTitle = match[1];
     throw new CapabilityParseError(
-      `Introduction does not match expected format.\nExpected:\n${expected}\n\nGot:\n${intro}`,
+      `Introduction uses "${usedTitle}" but the document title is "${capabilityTitle}"`,
       'Adjacent Capabilities'
     );
   }
+
+  throw new CapabilityParseError(
+    `Introduction does not match expected format.\nExpected:\n${expected}\n\nGot:\n${intro}`,
+    'Adjacent Capabilities'
+  );
 }
 
 // --- Main Parser ---
