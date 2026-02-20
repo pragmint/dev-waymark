@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 
 if (!existsSync('dist')) {
-  console.error('\nError: dist/ folder not found. Run `bun build:prod` first.\n');
+  console.error('\nError: dist/ folder not found. Run `bun b:prod` first.\n');
   process.exit(1);
 }
 

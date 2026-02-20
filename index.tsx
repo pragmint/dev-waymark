@@ -39,6 +39,7 @@ app.use(logger)
 
 app.use(trimTrailingSlash());
 app.use('/public/*', serveStatic({ root: './' }));
+app.get('/favicon.ico', serveStatic({ path: './assets/favicon.ico' }));
 
 app.get('/', handleOverview);
 app.get('/archive/:date', handleOverview);
