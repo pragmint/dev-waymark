@@ -3,24 +3,40 @@
     "allow": [
       "Bash(bun test:*)",
       "Bash(bun check)",
+      "Bash(bun b)",
       "Bash(bun run check)",
       "Bash(bun fix)",
       "Bash(bun run fix)",
       "Bash(ls *)",
       "Bash(grep *)",
       "Bash(tree *)",
+      "Bash(head *)",
+      "Bash(cat *)",
       "Bash(echo *)"
     ],
     "deny": ["Read(dist)"]
   },
   "hooks": {
-    "PostToolUse": [
+    "Stop": [
       {
-        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
             "command": "scripts/claude_hooks/check.sh"
+          },
+          {
+            "type": "command",
+            "command": "scripts/claude_hooks/test.sh"
+          },
+          {
+            "type": "agent",
+            "prompt": "You are running a completion gate.\n\nAs bun-tester: ensure meaningful unit tests exist for changed pure logic; run bun test / bun check.\n\nBlock completion if anything fails. Return JSON only: {\"ok\": true} or {\"ok\": false, \"reason\": \"...\"}.\n\nContext: $ARGUMENTS",
+            "timeout": 120
+          },
+          {
+            "type": "agent",
+            "prompt": "You are running a completion gate.\n\nAs code-standardizer: verify naming/structure/locality conventions; ensure changes match sibling patterns.\n\nBlock completion if anything fails. Return JSON only: {\"ok\": true} or {\"ok\": false, \"reason\": \"...\"}.\n\nContext: $ARGUMENTS",
+            "timeout": 120
           }
         ]
       }

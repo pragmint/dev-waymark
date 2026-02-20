@@ -11,15 +11,17 @@ bun b
 # Development with hot reload
 bun dev
 
-# Run tests
+# Run unit tests
 bun test
+
+# Run ui tests
+bun test:pw  # Note: You may need to run `bunx playwright install` to install the browsers playwright depends on
 
 # Build for Production
 bun b:prod
 
 # Start app from dist
 bun start
-
 ```
 
 While developing you may find some structures or patterns around. Here are some patterns you'll find and want to keep so things stay organized:
