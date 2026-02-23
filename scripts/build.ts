@@ -1,6 +1,6 @@
 import { $ } from 'bun';
 import { build } from 'bun';
-import { globSync } from 'node:fs';
+import { globSync } from 'glob';
 import { cpSync, rmSync, mkdirSync } from 'node:fs';
 
 const isProd = process.argv.includes('--prod');
