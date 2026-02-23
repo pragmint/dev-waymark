@@ -5,6 +5,9 @@ A simple website that helps software and data engineering teams continuously exp
 ## Getting Started
 
 ```bash
+# get deps
+bun install
+
 # Build the js/css
 bun b
 
