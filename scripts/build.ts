@@ -6,7 +6,7 @@ import { cpSync, rmSync, mkdirSync } from 'node:fs';
 const isProd = process.argv.includes('--prod');
 
 // Always build frontend assets to public/
-const files = globSync('src/frontend/scripts/*.ts');
+const files = globSync('src/frontend/scripts/*.ts', { ignore: '**/*.test.ts' });
 await build({
   entrypoints: files,
   outdir: 'public',

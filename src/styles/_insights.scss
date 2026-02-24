@@ -122,11 +122,8 @@
   border: 0.1rem solid $border-color-light;
   padding: $spacing-xxxl;
   box-shadow: $shadow-sm;
-  min-height: 40rem;
-
-  canvas {
-    max-height: 50rem;
-  }
+  height: 50rem;
+  position: relative;
 }
 
 .chart-message {
