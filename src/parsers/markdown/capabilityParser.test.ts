@@ -125,6 +125,128 @@ describe('parseCapabilityMarkdown', () => {
     });
   });
 
+  test('parses simple assessment without dimensions', () => {
+    const result = parseCapabilityMarkdown(VALID_MARKDOWN);
+
+    // Verify that ratings in simple format don't have dimension property set
+    for (const rating of result.assessment.ratings) {
+      expect(rating.dimension).toBeUndefined();
+    }
+  });
+
+  test('parses multi-dimensional assessment correctly', () => {
+    const markdown = `# [Code Maintainability](https://dora.dev/capabilities/code-maintainability/)
+
+Introduction text.
+
+## Nuances
+
+Nuance intro.
+
+### Nuance One
+
+Nuance content.
+
+## Assessment
+
+Assessment intro text before dimensions.
+
+### New Code
+
+1. **Growing Tech Debt:** Code is rarely refactored.
+2. **Occasional Maintenance:** Teams sometimes prioritize delivery.
+3. **Reactive Maintenance:** Code is maintained as problems arise.
+4. **Proactive Maintenance:** Teams proactively refactor the codebase.
+
+### Previously Written Code
+
+1. **Brittle Codebase:** Changing any code is time-consuming.
+2. **Fairly Complex Codebase:** Most changes require significant refactoring.
+3. **Partially Modular Codebase:** Most parts are modular and easy to update.
+4. **Well-organized Codebase:** Changes don't require much rework.
+
+Assessment outro text after dimensions.
+
+## Supporting Practices
+
+Practices intro.
+
+### Practice One
+
+Practice description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Code Maintainability)
+- Upstream (they are a pre-requisite for Code Maintainability)
+- Downstream (Code Maintainability is a pre-requisite for them)
+
+### [Testing](/capabilities/testing.md) - Upstream
+
+Testing description.
+`;
+
+    const result = parseCapabilityMarkdown(markdown);
+
+    expect(result.assessment.intro).toBe('Assessment intro text before dimensions.');
+    expect(result.assessment.outro).toBe('Assessment outro text after dimensions.');
+    expect(result.assessment.ratings).toHaveLength(8);
+
+    // Verify first dimension's ratings
+    expect(result.assessment.ratings[0]).toEqual({
+      rating: 1,
+      title: 'Growing Tech Debt',
+      description: 'Code is rarely refactored.',
+      dimension: 'New Code',
+    });
+    expect(result.assessment.ratings[1]).toEqual({
+      rating: 2,
+      title: 'Occasional Maintenance',
+      description: 'Teams sometimes prioritize delivery.',
+      dimension: 'New Code',
+    });
+    expect(result.assessment.ratings[2]).toEqual({
+      rating: 3,
+      title: 'Reactive Maintenance',
+      description: 'Code is maintained as problems arise.',
+      dimension: 'New Code',
+    });
+    expect(result.assessment.ratings[3]).toEqual({
+      rating: 4,
+      title: 'Proactive Maintenance',
+      description: 'Teams proactively refactor the codebase.',
+      dimension: 'New Code',
+    });
+
+    // Verify second dimension's ratings
+    expect(result.assessment.ratings[4]).toEqual({
+      rating: 1,
+      title: 'Brittle Codebase',
+      description: 'Changing any code is time-consuming.',
+      dimension: 'Previously Written Code',
+    });
+    expect(result.assessment.ratings[5]).toEqual({
+      rating: 2,
+      title: 'Fairly Complex Codebase',
+      description: 'Most changes require significant refactoring.',
+      dimension: 'Previously Written Code',
+    });
+    expect(result.assessment.ratings[6]).toEqual({
+      rating: 3,
+      title: 'Partially Modular Codebase',
+      description: 'Most parts are modular and easy to update.',
+      dimension: 'Previously Written Code',
+    });
+    expect(result.assessment.ratings[7]).toEqual({
+      rating: 4,
+      title: 'Well-organized Codebase',
+      description: "Changes don't require much rework.",
+      dimension: 'Previously Written Code',
+    });
+  });
+
   test('parses supporting practices with and without links', () => {
     const result = parseCapabilityMarkdown(VALID_MARKDOWN);
 
@@ -333,6 +455,157 @@ describe('assessment parsing errors', () => {
       '1. Unfulfilling Work: Employees often feel undervalued and disconnected.\n3. Limited Engagement: Employees are somewhat satisfied but lack autonomy.\n3. Satisfactory Engagement: Employees are generally content with some room for growth.\n4. Exceptional Engagement: Employees are highly motivated and empowered.'
     );
     expect(() => parseCapabilityMarkdown(markdown)).toThrow('Expected rating 2 but found 3');
+  });
+
+  test('throws when multi-dimensional assessment has no intro', () => {
+    const markdown = `# [Title](https://dora.dev/capabilities/title/)
+
+Intro.
+
+## Nuances
+
+Nuance intro.
+
+### Nuance
+
+Content.
+
+## Assessment
+
+### Dimension One
+
+1. **Low:** Description.
+2. **Medium:** Description.
+3. **High:** Description.
+4. **Expert:** Description.
+
+Outro text.
+
+## Supporting Practices
+
+Practices intro.
+
+### Practice
+
+Description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Title)
+- Upstream (they are a pre-requisite for Title)
+- Downstream (Title is a pre-requisite for them)
+
+### [Cap](/capabilities/cap.md) - Related
+
+Description.
+`;
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      'Expected introduction text before dimensions'
+    );
+  });
+
+  test('throws when multi-dimensional assessment has no outro', () => {
+    const markdown = `# [Title](https://dora.dev/capabilities/title/)
+
+Intro.
+
+## Nuances
+
+Nuance intro.
+
+### Nuance
+
+Content.
+
+## Assessment
+
+Intro text.
+
+### Dimension One
+
+1. **Low:** Description.
+2. **Medium:** Description.
+3. **High:** Description.
+4. **Expert:** Description.
+
+## Supporting Practices
+
+Practices intro.
+
+### Practice
+
+Description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Title)
+- Upstream (they are a pre-requisite for Title)
+- Downstream (Title is a pre-requisite for them)
+
+### [Cap](/capabilities/cap.md) - Related
+
+Description.
+`;
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow('Expected text after dimensions');
+  });
+
+  test('throws when dimension has no numbered list', () => {
+    const markdown = `# [Title](https://dora.dev/capabilities/title/)
+
+Intro.
+
+## Nuances
+
+Nuance intro.
+
+### Nuance
+
+Content.
+
+## Assessment
+
+Intro text.
+
+### Dimension One
+
+No ratings here.
+
+### Dimension Two
+
+1. **Low:** Description.
+2. **Medium:** Description.
+3. **High:** Description.
+4. **Expert:** Description.
+
+Outro text.
+
+## Supporting Practices
+
+Practices intro.
+
+### Practice
+
+Description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Title)
+- Upstream (they are a pre-requisite for Title)
+- Downstream (Title is a pre-requisite for them)
+
+### [Cap](/capabilities/cap.md) - Related
+
+Description.
+`;
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      'Expected numbered rating list in dimension "Dimension One"'
+    );
   });
 });
 

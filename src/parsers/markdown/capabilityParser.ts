@@ -84,6 +84,95 @@ function parseNuances(content: string) {
 }
 
 function parseAssessment(content: string) {
+  // Check if there are H3 subsections (dimensions)
+  const { intro, items } = splitIntoH3Sections(content);
+
+  // Multi-dimensional assessment (e.g., code-maintainability.md)
+  if (items.length > 0) {
+    const allRatings: Array<{
+      rating: number;
+      title: string;
+      description: string;
+      dimension: string;
+    }> = [];
+    let outro = '';
+
+    // Parse each dimension
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const dimensionName = item.heading;
+      const dimensionContent = item.content;
+
+      // Find the numbered list in this dimension
+      const blocks = dimensionContent
+        .split(/\n\n+/)
+        .map(b => b.trim())
+        .filter(Boolean);
+
+      const listBlockIndex = blocks.findIndex(b => /^1\.\s+/.test(b));
+      if (listBlockIndex === -1) {
+        throw new CapabilityParseError(
+          `Expected numbered rating list in dimension "${dimensionName}"`,
+          'Assessment'
+        );
+      }
+
+      const listBlock = blocks[listBlockIndex];
+      const ratingLines = listBlock
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+
+      const dimensionRatings = ratingLines.map(line => {
+        const match = line.match(/^(\d+)\.\s+\*{0,2}(.+?):\*{0,2}\s+(.+)$/);
+        if (!match) {
+          throw new CapabilityParseError(
+            `Invalid rating format in dimension "${dimensionName}": "${line}"`,
+            'Assessment'
+          );
+        }
+        return {
+          rating: parseInt(match[1], 10),
+          title: match[2].trim(),
+          description: match[3].trim(),
+          dimension: dimensionName,
+        };
+      });
+
+      // Validate sequential numbering within this dimension
+      for (let j = 0; j < dimensionRatings.length; j++) {
+        if (dimensionRatings[j].rating !== j + 1) {
+          throw new CapabilityParseError(
+            `In dimension "${dimensionName}": expected rating ${j + 1} but found ${dimensionRatings[j].rating}`,
+            'Assessment'
+          );
+        }
+      }
+
+      allRatings.push(...dimensionRatings);
+
+      // If this is the last dimension, extract outro (text after the numbered list)
+      if (i === items.length - 1) {
+        const outroBlocks = blocks.slice(listBlockIndex + 1);
+        outro = outroBlocks.join('\n');
+      }
+    }
+
+    if (!intro) {
+      throw new CapabilityParseError('Expected introduction text before dimensions', 'Assessment');
+    }
+    if (!outro) {
+      throw new CapabilityParseError('Expected text after dimensions', 'Assessment');
+    }
+
+    return {
+      intro,
+      outro,
+      ratings: allRatings,
+    };
+  }
+
+  // Simple flat assessment (e.g., continuous-integration.md)
   const blocks = content
     .split(/\n\n+/)
     .map(b => b.trim())

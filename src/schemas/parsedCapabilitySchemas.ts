@@ -11,6 +11,7 @@ const AssessmentRatingSchema = z.object({
   rating: z.number().min(1).max(4),
   title: z.string().min(1),
   description: z.string().min(1),
+  dimension: z.string().optional(),
 });
 
 const SupportingPracticeSchema = z.object({
@@ -37,7 +38,7 @@ export const ParsedCapabilitySchema = z.object({
   assessment: z.object({
     intro: z.string().min(1),
     outro: z.string().min(1),
-    ratings: z.array(AssessmentRatingSchema).length(4),
+    ratings: z.array(AssessmentRatingSchema).min(4),
   }),
   supporting_practices: z.object({
     intro: z.string().min(1),

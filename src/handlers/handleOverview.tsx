@@ -1,28 +1,20 @@
 import { Context } from 'hono';
 import { prepareOverviewData } from '../domain/prepareOverviewData';
 import { OverviewPage } from '../frontend/Pages/OverviewPage';
-import { enrichCapabilitiesWithAssessment } from '../domain/capabilityAggregations';
 import {
   enrichTeamsWithMetrics,
   enrichCapabilitiesWithMetrics,
 } from '../domain/metricAggregations';
-import { loadCapabilitiesFromFilesystem } from '../loaders/loadCapabilitiesFromFilesystem';
+import { loadAndParseCapabilities } from '../loaders/loadAndParseCapabilities';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadSummariesFromFilesystem } from '../loaders/loadSummariesFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
-import { parseAssessmentMarkdown } from '../parsers/markdown/assessmentParser';
 
 export const handleOverview = async (c: Context) => {
-  const rawCapabilities = await loadCapabilitiesFromFilesystem();
+  const capabilitiesWithAssessment = await loadAndParseCapabilities();
   const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
 
   const rawTeams = await loadTeamsFromFilesystem();
-
-  const assessmentData = await parseAssessmentMarkdown();
-  const capabilitiesWithAssessment = await enrichCapabilitiesWithAssessment(
-    rawCapabilities,
-    assessmentData
-  );
 
   const summaries = await loadSummariesFromFilesystem();
   const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
