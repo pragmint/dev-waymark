@@ -10,8 +10,11 @@ import { parseDate } from '../../domain/parseDate';
 
 function getStatusBadge(status: string): string {
   const statusColors: Record<string, { bg: string; text: string }> = {
+    active: { bg: '#e8f5f0', text: '#228b6b' },
     'in-progress': { bg: '#e8f5f0', text: '#228b6b' },
+    backlog: { bg: '#e0ecf8', text: '#2a6cb8' },
     blocked: { bg: '#f8d7da', text: '#721c24' },
+    polish: { bg: '#fff3e0', text: '#ef8e59' },
     paused: { bg: '#fff3cd', text: '#856404' },
   };
 
