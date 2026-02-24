@@ -1,87 +1,88 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    Our build times have increased from 8 minutes to over 25 minutes in the last 6 months,
+    significantly slowing down our feedback loop. Developers are context-switching while
+    waiting for builds, and CI queue times have become unpredictable during peak hours.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Reduce build times to under 10 minutes for typical feature work, improve CI reliability,
+    and give developers fast, predictable feedback so they can maintain flow state and
+    iterate quickly on changes.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we implement incremental builds, optimize our test parallelization strategy, and
+    add build caching, then we will reduce build times by at least 60% while maintaining
+    the same level of test coverage and quality gates.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - Our current build configuration has significant room for optimization.
+    - The overhead of cache management won't negate the performance gains.
+    - Test parallelization won't introduce flakiness or increase infrastructure costs prohibitively.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Cache invalidation bugs could lead to incorrect builds passing CI.
+    - Parallel tests might reveal hidden test dependencies and cause flakiness.
+    - Initial setup effort might be larger than expected, delaying other priorities.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Start with a cache warming strategy and aggressive cache invalidation rules.
+    - Run parallel tests alongside sequential for 2 weeks to identify flaky tests.
+    - Time-box the initial implementation to 3 weeks; if not showing 40% improvement, reassess approach.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: continuous-integration
   related_capabilities:
-    - continuous-integration
-    - code-maintainability
+    - test-automation
+    - deployment-automation
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Optimize CI pipeline by implementing build caching, parallelizing test execution
+    across multiple runners, and enabling incremental builds. Track build times and
+    success rates throughout the rollout to measure impact and catch regressions early.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: ci-build-time
+      target: under 10 minutes for 90% of builds
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
-      measurement_window: after_experiment
+        Track P50, P90, and P99 build times. Goal is to see steady improvement week over week,
+        with P90 dropping below 10 minutes by week 6.
+    - metric: ci-build-success-rate
+      target: maintain above 95%
+      measurement_window: during_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: active # possible states: active, backlog, blocked, pitch, polish
-  start-date: 14.1.2026
-  expected-duration-in-weeks: 12
+        Ensure optimizations don't introduce instability. If success rate drops below 90%,
+        roll back the most recent change and investigate.
+  status: active
+  start-date: 10.1.2026
+  expected-duration-in-weeks: 8
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Audit current build process and identify bottlenecks
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
+        - Sarah Chen
+        - Marcus Rodriguez
+      link: https://linear.app/team/issue/BUILD-123
       status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
+    - title: Implement build caching for dependencies and intermediate artifacts
       assigned-to:
-        - Example Person 1
-      link:
+        - Sarah Chen
+      link: https://linear.app/team/issue/BUILD-124
+      status: complete
+    - title: Parallelize test suite across 4 runners
+      assigned-to:
+        - Marcus Rodriguez
+      link: https://linear.app/team/issue/BUILD-125
       status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
+    - title: Enable incremental TypeScript compilation
       assigned-to:
-        - Example Person 2
+        - Sarah Chen
+      link: https://linear.app/team/issue/BUILD-126
+      status: backlog
+    - title: Document new CI pipeline and update team runbooks
+      assigned-to:
+        - Elena Kowalski
       link:
       status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
-      assigned-to:
-        - Example Person 2
-      link:
-      status: blocked
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - Sarah Chen
+      - Marcus Rodriguez
   - accountable:
-      - Example Person 3
+      - Alex Thompson
   - consulted:
+      - DevOps Team
   - informed:
-      - Example Person 4
+      - Engineering Team

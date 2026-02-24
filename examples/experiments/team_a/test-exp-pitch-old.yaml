@@ -1,84 +1,88 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    We're spending 30% of our sprint capacity on production incidents and hotfixes,
+    leaving little time for planned work. Many incidents are discovered by users
+    rather than our monitoring systems, leading to poor user experience and reactive firefighting.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Shift from reactive incident response to proactive problem detection by implementing
+    comprehensive monitoring and alerting that notifies us of issues before users are impacted.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we implement symptom-based alerts for our critical user journeys and establish
+    on-call runbooks, then we will reduce time-to-detection by 75% and decrease
+    user-reported incidents by 60%.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - We can identify and instrument the most critical user journeys within 4 weeks.
+    - Alert noise won't overwhelm the team if we tune thresholds carefully.
+    - Engineers are willing to participate in on-call rotation.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Too many false positives could lead to alert fatigue and ignored notifications.
+    - Inadequate runbooks might leave on-call engineers struggling to respond effectively.
+    - Monitoring overhead could impact application performance.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Start with 5-10 high-value alerts and tune aggressively before expanding.
+    - Create runbooks iteratively as incidents occur, not all upfront.
+    - Use sampling and async logging to minimize performance impact.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: implement-symptom-based-alerts
+  related_capabilities:
+    - monitoring-and-observability
+    - proactive-failure-notification
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Identify the top 5 critical user journeys (login, checkout, data export, etc.)
+    and implement symptom-based alerts that trigger when success rates drop or
+    latency increases beyond acceptable thresholds. Create basic runbooks and
+    establish an on-call rotation.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: mean-time-to-detection
+      target: reduce from 45min to under 10min
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
+        Measure time between when an issue starts affecting users and when our
+        monitoring alerts. Track this for all P1/P2 incidents.
+    - metric: user-reported-incidents
+      target: reduce by 50%
       measurement_window: after_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: pitch # possible states: active, backlog, blocked, pitch, polish
-  start-date: 1.1.2026
-  expected-duration-in-weeks: 12
+        Compare incidents reported via support tickets vs caught by monitoring.
+        Goal is to catch issues before users notice.
+  status: pitch
+  start-date:
+  expected-duration-in-weeks: 10
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Map critical user journeys and define SLOs
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
-      status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
-      assigned-to:
-        - Example Person 1
-      link:
-      status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
-      assigned-to:
-        - Example Person 2
+        - Dev Team
+        - Product Team
       link:
       status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
+    - title: Implement monitoring instrumentation for top 5 journeys
       assigned-to:
-        - Example Person 2
+        - TBD
       link:
-      status: blocked
+      status: backlog
+    - title: Configure alerts with appropriate thresholds
+      assigned-to:
+        - TBD
+      link:
+      status: backlog
+    - title: Create incident runbooks for common failure modes
+      assigned-to:
+        - TBD
+      link:
+      status: backlog
+    - title: Establish on-call rotation and escalation procedures
+      assigned-to:
+        - Engineering Manager
+      link:
+      status: backlog
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - TBD
   - accountable:
-      - Example Person 3
+      - Engineering Manager
   - consulted:
+      - Product Team
+      - SRE Team
   - informed:
-      - Example Person 4
+      - Executive Team

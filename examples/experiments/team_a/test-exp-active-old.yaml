@@ -1,84 +1,90 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    We have no automated test coverage for our API endpoints, and manual testing
+    is catching bugs inconsistently. Recent production incidents stemmed from
+    regression bugs that would have been caught by basic integration tests.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Establish a sustainable automated testing practice that catches regressions
+    before they reach production, gives developers confidence to refactor, and
+    reduces the time spent on manual regression testing.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we adopt TDD for all new API endpoints and retrofit tests for our most
+    critical existing endpoints, then we will reduce production bugs by 50%
+    and enable faster feature delivery through improved confidence in changes.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - The team has sufficient knowledge of testing frameworks or can learn quickly.
+    - We can identify a clear "critical path" of endpoints to test first.
+    - Test execution time will remain reasonable as coverage grows.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Writing tests for legacy code might uncover deeper architectural issues.
+    - Team might write brittle tests that break frequently and erode confidence.
+    - Initial productivity dip while learning TDD practices.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Pair senior and junior engineers during initial test writing to transfer knowledge.
+    - Establish test patterns and templates early to avoid inconsistent approaches.
+    - Set a target of 60% coverage initially rather than 100% to maintain momentum.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: implement-tdd
+  related_capabilities:
+    - test-automation
+    - code-maintainability
+    - continuous-integration
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Introduce TDD practices for new API development and retroactively add integration
+    tests for the 20 most critical existing endpoints. Pair programming sessions will
+    help spread testing knowledge across the team. Track test coverage and bug escape
+    rate to measure impact.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: test-coverage
+      target: 60% for API layer
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
+        Focus on integration tests that cover actual HTTP request/response cycles.
+        Track weekly progress toward the 60% goal.
+    - metric: production-bug-count
+      target: reduce by 40%
       measurement_window: after_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: active # possible states: active, backlog, blocked, pitch, polish
-  start-date: 1.1.2026
-  expected-duration-in-weeks: 12
+        Compare bug counts 8 weeks before experiment vs 8 weeks after. Focus on
+        bugs that could have been caught by automated tests.
+  status: active
+  start-date: 5.11.2025
+  expected-duration-in-weeks: 16
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Set up testing framework and establish patterns
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
+        - Jamie Liu
+      link: https://github.com/team/repo/issues/45
       status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
+    - title: Write integration tests for top 20 critical endpoints
       assigned-to:
-        - Example Person 1
+        - Jamie Liu
+        - Priya Sharma
+      link: https://github.com/team/repo/issues/46
+      status: complete
+    - title: Enforce TDD for all new API endpoints
+      assigned-to:
+        - Team
       link:
       status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
+    - title: Run weekly test review sessions to share learnings
       assigned-to:
-        - Example Person 2
+        - Jamie Liu
       link:
-      status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
+      status: active
+    - title: Integrate coverage reporting into CI pipeline
       assigned-to:
-        - Example Person 2
-      link:
-      status: blocked
+        - Marcus Rodriguez
+      link: https://github.com/team/repo/issues/48
+      status: active
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - Jamie Liu
+      - Priya Sharma
   - accountable:
-      - Example Person 3
+      - Alex Thompson
   - consulted:
+      - QA Team
   - informed:
-      - Example Person 4
+      - Product Team

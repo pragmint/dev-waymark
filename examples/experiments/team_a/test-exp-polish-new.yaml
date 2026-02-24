@@ -1,84 +1,105 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    Our deployment process requires manual steps, coordination across multiple teams,
+    and a 4-hour maintenance window. We can only deploy once every two weeks, which
+    creates large, risky batches and slows down our ability to respond to customer
+    feedback or production issues.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Enable on-demand deployments with zero-downtime through automated scripts and
+    infrastructure changes. Reduce deployment time from 4 hours to under 20 minutes
+    and eliminate the need for maintenance windows.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we automate our deployment scripts, implement blue-green deployments, and
+    add automated health checks, then we can achieve zero-downtime deployments and
+    increase deployment frequency from biweekly to daily.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - Our architecture can support blue-green or rolling deployments without major changes.
+    - Health checks can reliably detect deployment failures before routing traffic.
+    - Database migrations can be made backwards-compatible.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Automated rollback might fail, leaving the system in a broken state.
+    - Insufficient testing of automation scripts could cause deployment failures.
+    - Zero-downtime deployments might reveal race conditions not seen in full restarts.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Test automation thoroughly in staging with production-like load.
+    - Maintain manual rollback procedures as a backup safety net.
+    - Deploy to a canary environment first before full production rollout.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: automate-deployment-scripts
+  related_capabilities:
+    - deployment-automation
+    - continuous-delivery
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Build automated deployment pipeline using GitHub Actions and infrastructure-as-code
+    tooling. Implement blue-green deployment strategy with automated health checks
+    and rollback capabilities. Document the new process and train the team on the
+    deployment workflow and incident response procedures.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: deployment-duration
+      target: reduce from 4 hours to under 20 minutes
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
-      measurement_window: after_experiment
+        Measure actual wall-clock time from deployment trigger to full production
+        rollout. Track for 10 consecutive deployments.
+    - metric: deployment-success-rate
+      target: maintain above 95%
+      measurement_window: during_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: polish # possible states: active, backlog, blocked, pitch, polish
-  start-date: 1.1.2026
-  expected-duration-in-weeks: 12
+        Track successful vs failed deployments. Any deployment requiring manual
+        intervention or rollback counts as a failure.
+  status: polish
+  start-date: 15.12.2025
+  expected-duration-in-weeks: 14
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Design blue-green deployment architecture
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
+        - Sarah Chen
+        - Marcus Rodriguez
+      link: https://linear.app/team/issue/DEPLOY-201
       status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
+    - title: Build automated deployment scripts with health checks
       assigned-to:
-        - Example Person 1
-      link:
+        - Sarah Chen
+      link: https://linear.app/team/issue/DEPLOY-202
+      status: complete
+    - title: Test deployment automation in staging environment
+      assigned-to:
+        - Marcus Rodriguez
+        - QA Team
+      link: https://linear.app/team/issue/DEPLOY-203
+      status: complete
+    - title: Perform first production deployment using new automation
+      assigned-to:
+        - Sarah Chen
+        - Marcus Rodriguez
+      link: https://linear.app/team/issue/DEPLOY-204
+      status: complete
+    - title: Document deployment procedures and train team
+      assigned-to:
+        - Elena Kowalski
+      link: https://linear.app/team/issue/DEPLOY-205
       status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
+    - title: Create runbook for deployment failure scenarios
       assigned-to:
-        - Example Person 2
+        - Elena Kowalski
+        - SRE Team
+      link: https://linear.app/team/issue/DEPLOY-206
+      status: active
+    - title: Present deployment metrics and retrospective to leadership
+      assigned-to:
+        - Alex Thompson
       link:
       status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
-      assigned-to:
-        - Example Person 2
-      link:
-      status: blocked
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - Sarah Chen
+      - Marcus Rodriguez
   - accountable:
-      - Example Person 3
+      - Alex Thompson
   - consulted:
+      - SRE Team
+      - Infrastructure Team
   - informed:
-      - Example Person 4
+      - All Engineering
+      - Product Team

@@ -1,84 +1,91 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    Our documentation is scattered across Confluence, GitHub wikis, Google Docs,
+    and various README files. Engineers waste hours searching for information,
+    often giving up and asking teammates directly, which fragments knowledge
+    and creates bottlenecks around specific individuals.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Centralize documentation in a searchable system where engineers can quickly
+    find architecture decisions, API specs, runbooks, and onboarding guides without
+    interrupting teammates or relying on tribal knowledge.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we consolidate documentation into a single platform with robust search
+    and implement a documentation-as-code workflow, then we will reduce time
+    spent searching for information by 70% and improve onboarding efficiency.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - A single platform can serve all our documentation needs adequately.
+    - Engineers will adopt docs-as-code practices if integrated into PR workflows.
+    - Migration effort is feasible within 12 weeks.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Migration might be more complex than estimated, especially for legacy content.
+    - Team might resist changing established workflows and documentation habits.
+    - Search quality might not meet expectations without significant tuning.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Start with high-value documentation (onboarding, architecture) rather than migrating everything.
+    - Assign documentation champions to model best practices and support adoption.
+    - Pilot search functionality with sample docs before committing to platform.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: implement-a-documentation-search-engine
+  related_capabilities:
+    - documentation-quality
+    - learning-culture
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Evaluate and select a documentation platform (options: GitBook, Docusaurus, or
+    internal tool), migrate critical documentation, and implement search functionality.
+    Establish docs-as-code practices where documentation lives alongside code and
+    is reviewed in PRs.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
-      measurement_window: during_experiment
-      notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
+    - metric: time-to-find-documentation
+      target: under 2 minutes for common queries
       measurement_window: after_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: blocked # possible states: active, backlog, blocked, pitch, polish
-  start-date: 1.1.2026
+        Survey engineers monthly about time spent searching for docs. Track improvement
+        in search efficiency as content is migrated and indexed.
+    - metric: documentation-freshness
+      target: 80% of docs updated within 3 months
+      measurement_window: after_experiment
+      notes: >
+        Track last-modified dates to ensure docs stay current. Automated reminders
+        for stale documentation.
+  status: blocked
+  start-date: 1.2.2026
   expected-duration-in-weeks: 12
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Evaluate documentation platforms and select vendor
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
-      status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
-      assigned-to:
-        - Example Person 1
-      link:
+        - Elena Kowalski
+        - Sarah Chen
+      link: https://github.com/team/docs/issues/12
       status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
+    - title: Secure budget approval for selected platform
       assigned-to:
-        - Example Person 2
+        - Alex Thompson
       link:
-      status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
+      status: blocked
+    - title: Migrate onboarding and architecture docs (high-priority)
       assigned-to:
-        - Example Person 2
+        - TBD
+      link:
+      status: blocked
+    - title: Configure search indexing and test with sample queries
+      assigned-to:
+        - TBD
+      link:
+      status: blocked
+    - title: Train team on docs-as-code workflow
+      assigned-to:
+        - Elena Kowalski
       link:
       status: blocked
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - Elena Kowalski
+      - Sarah Chen
   - accountable:
-      - Example Person 3
+      - Alex Thompson
   - consulted:
+      - Engineering Team
+      - DevRel Team
   - informed:
-      - Example Person 4
+      - All Engineering

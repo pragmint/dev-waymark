@@ -1,84 +1,96 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    Database schema changes require extensive coordination between teams, manual
+    migration scripts, and risky production deployments that often happen outside
+    business hours. We've had two incidents in the last quarter where migrations
+    failed mid-deployment, causing downtime and requiring emergency rollbacks.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Make database changes routine, safe, and reversible through automated migration
+    tooling and practices that enable continuous delivery without scheduling
+    maintenance windows or manual intervention.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we adopt automated database migration tooling with rollback capabilities
+    and integrate migrations into our CI/CD pipeline, then we will eliminate
+    migration-related incidents and reduce schema change lead time from 2 weeks to 2 days.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - Our database technology supports automated migration patterns.
+    - We can migrate existing manual scripts to the new tooling without data loss.
+    - Developers will learn migration best practices (backwards compatibility, etc.).
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Automated migrations might introduce subtle bugs not caught in testing environments.
+    - Rollback logic for complex migrations could be difficult to write correctly.
+    - Performance of large migrations in production could be unpredictable.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Require all migrations to be backwards compatible for at least one release cycle.
+    - Test migrations against production-size datasets in staging environment.
+    - Implement automated rollback testing as part of CI pipeline.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: automate-database-migrations
+  related_capabilities:
+    - database-change-management
+    - continuous-delivery
+    - deployment-automation
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Implement Flyway or Liquibase for database migrations, establish migration
+    patterns and conventions, and integrate into CI/CD pipeline. Train team on
+    writing backwards-compatible migrations and testing rollback procedures.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: migration-failure-rate
+      target: zero failed migrations
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
+        Track all migration deployments. Any failure triggers a retrospective
+        to understand root cause and improve tooling/practices.
+    - metric: schema-change-lead-time
+      target: reduce from 14 days to under 3 days
       measurement_window: after_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: blocked # possible states: active, backlog, blocked, pitch, polish
-  start-date: 14.1.2026
-  expected-duration-in-weeks: 12
+        Measure time from PR creation to schema change deployed in production.
+        Should become routine part of feature delivery.
+  status: blocked
+  start-date: 20.1.2026
+  expected-duration-in-weeks: 10
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Select migration tooling (Flyway vs Liquibase vs custom)
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
+        - Marcus Rodriguez
+        - Priya Sharma
+      link: https://linear.app/team/issue/DB-89
       status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
+    - title: Get approval from database administrators for new approach
       assigned-to:
-        - Example Person 1
+        - Alex Thompson
       link:
-      status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
+      status: blocked
+    - title: Set up migration tooling in development and staging
       assigned-to:
-        - Example Person 2
+        - Marcus Rodriguez
       link:
-      status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
+      status: blocked
+    - title: Establish migration patterns and document conventions
       assigned-to:
-        - Example Person 2
+        - Priya Sharma
+      link:
+      status: blocked
+    - title: Migrate existing manual scripts to new tooling
+      assigned-to:
+        - Team
+      link:
+      status: blocked
+    - title: Integrate migrations into CI/CD pipeline
+      assigned-to:
+        - Marcus Rodriguez
       link:
       status: blocked
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - Marcus Rodriguez
+      - Priya Sharma
   - accountable:
-      - Example Person 3
+      - Alex Thompson
   - consulted:
+      - DBA Team
+      - Platform Team
   - informed:
-      - Example Person 4
+      - Engineering Team

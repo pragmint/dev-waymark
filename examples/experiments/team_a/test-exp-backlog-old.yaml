@@ -1,84 +1,89 @@
 context:
   problem_statement: >
-    We are seeing avoidable runtime errors and inconsistent code patterns because
-    type expectations are not enforced consistently across the codebase. As the
-    system grows and dependencies evolve, these issues compound and turn into
-    larger, more painful upgrade and refactor efforts.
+    Our codebase has grown organically over 4 years without clear architectural
+    boundaries. Business logic is scattered across controllers, services, and
+    utility files. Testing is difficult because components are tightly coupled,
+    and simple changes often have unpredictable ripple effects.
   desired_outcome: >
-    Reduce defects and "surprise" breakage by enforcing type-safety through
-    linting and making type violations visible early (ideally at build time),
-    so we steadily shrink the surface area for hard-to-debug issues and future
-    dependency upgrade risk.
+    Establish clear architectural boundaries that separate business logic from
+    I/O concerns, making the codebase easier to understand, test, and change.
+    Enable developers to reason about the impact of changes without needing to
+    understand the entire system.
 hypothesis:
   statement: >
-    If we enforce type-safety using a linter and progressively remediate the
-    existing type violations in a representative slice of the system, then we
-    will eliminate an entire class of avoidable errors and reduce long-term
-    upgrade friction by preventing type issues from accumulating unnoticed.
+    If we refactor a core module to follow the Functional Core, Imperative Shell
+    pattern and use it as a reference implementation, then we will reduce bug
+    density in that module by 60% and improve test coverage from 30% to 80%.
   assumptions:
-    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
-    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
-    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+    - The team can learn functional programming concepts without significant training.
+    - A single reference implementation will be sufficient to establish patterns.
+    - The refactoring effort won't block feature delivery for more than 2 sprints.
   risks:
-    - The initial violation backlog is larger than expected, causing the effort to sprawl.
-    - Overly strict rules create noise (false positives) and slow delivery.
-    - CI failures frustrate developers if remediation guidance is unclear.
-    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+    - Refactoring might uncover deep-rooted architectural problems requiring larger rewrites.
+    - Team might struggle with functional patterns, leading to inconsistent adoption.
+    - Benefits might not be immediately visible, leading to pushback on continuing.
   risk_mitigations:
-    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
-    - Calibrate rules by beginning with high-signal checks, then tighten over time.
-    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
-    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+    - Choose a well-understood module with clear boundaries for initial refactor.
+    - Provide lunch-and-learn sessions on functional architecture patterns.
+    - Measure and communicate test coverage improvements throughout the effort.
 intervention:
-  practice_under_test: automate-coding-standards
+  practice_under_test: follow-functional-core-imperative-shell
+  related_capabilities:
+    - code-maintainability
+    - test-automation
   description: >
-    Introduce and enforce type-safety via a linter, starting with a vertical slice
-    of the codebase. Remediate existing violations in that slice, then configure
-    CI to fail builds on violations for the slice to prevent regressions. Use the
-    rollout to establish norms, documentation, and a sustainable remediation path.
+    Refactor the user authentication module to separate pure business logic
+    (functional core) from I/O operations (imperative shell). Document the
+    approach, measure improvements in testability and bug density, and use
+    this as a reference for future refactoring efforts.
   success_criteria:
-    - metric: linter-error-count
-      target: '0 (for the defined slice)'
+    - metric: test-coverage
+      target: increase from 30% to 80% for auth module
       measurement_window: during_experiment
       notes: >
-        Track the count over time; the goal is to reach zero for the slice and keep it there
-        by failing the build on new violations.
-    - metric: anecdotes-on-code-quality
-      target: improved sentiment
+        Pure business logic should reach 100% coverage. I/O boundaries should
+        have integration tests. Track weekly progress.
+    - metric: bug-density
+      target: reduce by 50% within 6 months post-refactor
       measurement_window: after_experiment
       notes: >
-        Look for qualitative signals that developers find the code safer and easier to change,
-        especially after the team has addressed roughly half of the slice's violations.
-  status: backlog # possible states: active, backlog, blocked, pitch, polish
-  start-date: 1.1.2026
-  expected-duration-in-weeks: 12
+        Compare bug reports in the auth module before and after refactor.
+        Track for 6 months to account for lag in user-reported issues.
+  status: backlog
+  start-date:
+  expected-duration-in-weeks: 6
   action-plan:
-    - title: Fix a vertical slice of linting errors in cm back-end
+    - title: Identify candidate module and map current architecture
       assigned-to:
-        - Example Person 1
-      link: https://www.atlassian.com/software/jira
-      status: complete
-    - title: Configure linters to fail the build when there are errors in the fixed slice
-      assigned-to:
-        - Example Person 1
-      link:
-      status: active
-    - title: Create and present a lightning talk to the team to showcase new changes
-      assigned-to:
-        - Example Person 2
+        - TBD
       link:
       status: backlog
-    - title: Present the linter error metric at each stand-up until the value gets to 0
+    - title: Design functional core interfaces and imperative shell boundaries
       assigned-to:
-        - Example Person 2
+        - TBD
       link:
-      status: blocked
+      status: backlog
+    - title: Incrementally refactor with feature flag protection
+      assigned-to:
+        - TBD
+      link:
+      status: backlog
+    - title: Write comprehensive tests for functional core
+      assigned-to:
+        - TBD
+      link:
+      status: backlog
+    - title: Document patterns and present to team
+      assigned-to:
+        - TBD
+      link:
+      status: backlog
 decision-roles:
   - responsible:
-      - Example Person 1
-      - Example Person 2
+      - TBD
   - accountable:
-      - Example Person 3
+      - Engineering Manager
   - consulted:
+      - Senior Engineers
   - informed:
-      - Example Person 4
+      - Engineering Team
