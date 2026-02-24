@@ -7,6 +7,7 @@ import type { Capability } from '../../schemas/capabilitySchemas';
 import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 import type { TeamMetric } from '../../schemas/metricSchemas';
 import { parseDate } from '../../domain/parseDate';
+import { compareExperimentsByStatus } from '../../domain/experimentQueries';
 
 function getStatusBadge(status: string): string {
   const statusColors: Record<string, { bg: string; text: string }> = {
@@ -22,21 +23,6 @@ function getStatusBadge(status: string): string {
   const label = status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
 
   return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
-}
-
-function compareExperimentsByStatus(a: Experiment, b: Experiment): number {
-  const order = ['active', 'blocked', 'backlog', 'polish', 'pitch'] as const;
-  const statusDiff = order.indexOf(a.status) - order.indexOf(b.status);
-  if (statusDiff !== 0) return statusDiff;
-
-  const dateA = a.startDate ? parseDate(a.startDate).getTime() : 0;
-  const dateB = b.startDate ? parseDate(b.startDate).getTime() : 0;
-
-  const chronologicalStatuses = ['active', 'blocked', 'backlog'];
-  if (chronologicalStatuses.includes(a.status)) {
-    return dateA - dateB;
-  }
-  return dateB - dateA;
 }
 
 export interface TeamDetailPageProps {
