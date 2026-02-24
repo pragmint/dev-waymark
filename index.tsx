@@ -31,11 +31,11 @@ app.onError(async (err: Error, c: Context) => {
 });
 
 const logger = createMiddleware(async (c, next) => {
-  console.log(`[${c.req.method}] ${c.req.url}`)
-  await next()
-})
+  console.log(`[${c.req.method}] ${c.req.url}`);
+  await next();
+});
 
-app.use(logger)
+app.use(logger);
 
 app.use(trimTrailingSlash());
 app.use('/public/*', serveStatic({ root: './' }));

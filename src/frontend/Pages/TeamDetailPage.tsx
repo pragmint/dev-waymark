@@ -126,11 +126,18 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
           </p>
           {experiments && experiments.length > 0 ? (
             <div class="experiment-cards">
-              {experiments.map(exp => {
-                const practice = practiceMap.get(exp.intervention.practiceUnderTest);
-                const practiceName = practice ? practice.title : exp.intervention.practiceUnderTest;
-                return <ExperimentCard experiment={exp} practiceName={practiceName} />;
-              })}
+              {experiments
+                .sort((a, b) => {
+                  const order = ['active', 'blocked', 'backlog', 'polish', 'pitch'] as const;
+                  return order.indexOf(a.status) - order.indexOf(b.status);
+                })
+                .map(exp => {
+                  const practice = practiceMap.get(exp.intervention.practiceUnderTest);
+                  const practiceName = practice
+                    ? practice.title
+                    : exp.intervention.practiceUnderTest;
+                  return <ExperimentCard experiment={exp} practiceName={practiceName} />;
+                })}
             </div>
           ) : (
             <p class="empty-state">No active experiments at this time.</p>

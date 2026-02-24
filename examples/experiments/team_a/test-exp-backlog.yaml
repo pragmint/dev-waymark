@@ -1,0 +1,84 @@
+context:
+  problem_statement: >
+    We are seeing avoidable runtime errors and inconsistent code patterns because
+    type expectations are not enforced consistently across the codebase. As the
+    system grows and dependencies evolve, these issues compound and turn into
+    larger, more painful upgrade and refactor efforts.
+  desired_outcome: >
+    Reduce defects and "surprise" breakage by enforcing type-safety through
+    linting and making type violations visible early (ideally at build time),
+    so we steadily shrink the surface area for hard-to-debug issues and future
+    dependency upgrade risk.
+hypothesis:
+  statement: >
+    If we enforce type-safety using a linter and progressively remediate the
+    existing type violations in a representative slice of the system, then we
+    will eliminate an entire class of avoidable errors and reduce long-term
+    upgrade friction by preventing type issues from accumulating unnoticed.
+  assumptions:
+    - The codebase and build pipeline can support type-aware linting without unacceptable developer friction.
+    - Fixing type violations in a vertical slice will surface repeatable patterns we can apply elsewhere.
+    - Engineers will accept stricter enforcement if the rollout is incremental and well-communicated.
+  risks:
+    - The initial violation backlog is larger than expected, causing the effort to sprawl.
+    - Overly strict rules create noise (false positives) and slow delivery.
+    - CI failures frustrate developers if remediation guidance is unclear.
+    - Mixed patterns (legacy code, dynamic behavior) make type-safety hard to adopt uniformly.
+  risk_mitigations:
+    - Start with a defined vertical slice and enforce "no regression" before aiming for "zero issues everywhere."
+    - Calibrate rules by beginning with high-signal checks, then tighten over time.
+    - Add clear fix guidance (docs, examples) and quick feedback loops (local tooling + CI).
+    - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
+intervention:
+  practice_under_test: automate-coding-standards
+  description: >
+    Introduce and enforce type-safety via a linter, starting with a vertical slice
+    of the codebase. Remediate existing violations in that slice, then configure
+    CI to fail builds on violations for the slice to prevent regressions. Use the
+    rollout to establish norms, documentation, and a sustainable remediation path.
+  success_criteria:
+    - metric: linter-error-count
+      target: '0 (for the defined slice)'
+      measurement_window: during_experiment
+      notes: >
+        Track the count over time; the goal is to reach zero for the slice and keep it there
+        by failing the build on new violations.
+    - metric: anecdotes-on-code-quality
+      target: improved sentiment
+      measurement_window: after_experiment
+      notes: >
+        Look for qualitative signals that developers find the code safer and easier to change,
+        especially after the team has addressed roughly half of the slice's violations.
+  status: backlog # possible states: active, backlog, blocked, pitch, polish
+  start-date: 14.1.2026
+  expected-duration-in-weeks: 12
+  action-plan:
+    - title: Fix a vertical slice of linting errors in cm back-end
+      assigned-to:
+        - Example Person 1
+      link: https://www.atlassian.com/software/jira
+      status: complete
+    - title: Configure linters to fail the build when there are errors in the fixed slice
+      assigned-to:
+        - Example Person 1
+      link:
+      status: active
+    - title: Create and present a lightning talk to the team to showcase new changes
+      assigned-to:
+        - Example Person 2
+      link:
+      status: backlog
+    - title: Present the linter error metric at each stand-up until the value gets to 0
+      assigned-to:
+        - Example Person 2
+      link:
+      status: blocked
+decision-roles:
+  - responsible:
+      - Example Person 1
+      - Example Person 2
+  - accountable:
+      - Example Person 3
+  - consulted:
+  - informed:
+      - Example Person 4

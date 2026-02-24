@@ -7,9 +7,7 @@ export interface CapabilityCatalogPageProps {
   allCapabilities: Capability[];
 }
 
-export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({
-  allCapabilities,
-}) => {
+export const CapabilityCatalogPage: FC<CapabilityCatalogPageProps> = ({ allCapabilities }) => {
   return (
     <Page title="Capabilities" heading="Capabilities" activePage="capabilities">
       <div class="capability-tiles-container">

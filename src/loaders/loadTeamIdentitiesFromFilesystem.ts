@@ -8,7 +8,7 @@ import { parse } from 'yaml';
  * Loads only team identities (id + name) from filesystem.
  * Lightweight alternative to loadTeamsFromFilesystem for cases
  * that only need team identifiers (e.g. sidebar navigation).
-     */
+ */
 export async function loadTeamIdentitiesFromFilesystem(): Promise<TeamIdentity[]> {
   const dir = 'examples/teams';
 

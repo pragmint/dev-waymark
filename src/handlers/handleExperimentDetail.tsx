@@ -19,7 +19,7 @@ const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
 
 export async function handleExperimentDetail(c: Context) {
   const experimentId = c.req.param('experimentId');
-  
+
   const data = await prepareExperimentDetailData(experimentId, teams, experiments);
 
   return c.html(<ExperimentDetailPage {...data} />);

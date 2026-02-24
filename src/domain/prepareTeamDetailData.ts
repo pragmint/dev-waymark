@@ -75,7 +75,6 @@ export async function prepareTeamDetailData(
   }
 
   return {
-    teams,
     team,
     allCapabilities: capabilities,
     capabilityMap,
