@@ -42,7 +42,7 @@ export class ChartManager {
             },
           },
           y: {
-            beginAtZero: true,
+            beginAtZero: false,
           },
         },
       },
