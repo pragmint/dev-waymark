@@ -2,13 +2,14 @@ import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Experiment } from '../schemas/experimentSchemas';
 import { parseExperimentYaml } from '../parsers/yaml/experimentParser';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads experiments from filesystem
- * Directory structure: examples/experiments/{team_id}/{experiment-name}.yaml
+ * Directory structure: {userData}/experiments/{team_id}/{experiment-name}.yaml
  */
 export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
-  const dir = 'examples/experiments';
+  const dir = getUserDataPath('experiments');
 
   try {
     const teamDirs = await readdir(dir);

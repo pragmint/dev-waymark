@@ -2,13 +2,14 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TeamMetric } from '../schemas/metricSchemas';
 import { parseTeamMetricYaml } from '../parsers/yaml/metricParser';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads team-specific metrics from filesystem
- * Directory structure: examples/metrics/team_specific/{team_id}/{metric-name}.yaml
+ * Directory structure: {userData}/metrics/team_specific/{team_id}/{metric-name}.yaml
  */
 export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
-  const dir = 'examples/metrics/team_specific';
+  const dir = getUserDataPath('metrics', 'team_specific');
 
   try {
     const teamDirs = await readdir(dir);

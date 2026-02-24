@@ -2,13 +2,14 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CapabilityMetric } from '../frontend/scripts/insights-data';
 import { parseCapabilityMetricYaml } from '../parsers/yaml/metricParser';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads capability metrics from filesystem
- * Directory structure: examples/metrics/capability_scores/{capability-name}.yaml
+ * Directory structure: {userData}/metrics/capability_scores/{capability-name}.yaml
  */
 export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityMetric[]> {
-  const dir = 'examples/metrics/capability_scores';
+  const dir = getUserDataPath('metrics', 'capability_scores');
 
   try {
     const files = await readdir(dir);

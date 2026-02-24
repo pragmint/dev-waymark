@@ -2,13 +2,14 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Team } from '../schemas/teamSchemas';
 import { parseTeamYaml } from '../parsers/yaml/teamParser';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads teams from filesystem
- * Directory structure: examples/teams/{team-name}.yaml
+ * Directory structure: {userData}/teams/{team-name}.yaml
  */
 export async function loadTeamsFromFilesystem(): Promise<Team[]> {
-  const dir = 'examples/teams';
+  const dir = getUserDataPath('teams');
 
   try {
     const files = await readdir(dir);

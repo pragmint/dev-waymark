@@ -10,6 +10,15 @@ mock.module('node:fs/promises', () => ({
   readdir: mockReaddir,
 }));
 
+// Mock the userDataPaths module to return test paths
+mock.module('./userDataPaths', () => ({
+  getUserDataDir: () => process.env.STEP_ENGINE_USER_DATA || 'examples',
+  getUserDataPath: (...paths: string[]) => {
+    const baseDir = process.env.STEP_ENGINE_USER_DATA || 'examples';
+    return [baseDir, ...paths].join('/');
+  },
+}));
+
 const mockText = mock<() => Promise<string>>(() => Promise.resolve(''));
 const savedBunFile = Bun.file.bind(Bun);
 Bun.file = mock((path: string | URL) => {
@@ -31,6 +40,7 @@ afterAll(() => {
 
 describe('loadSummariesFromFilesystem', () => {
   beforeEach(() => {
+    delete process.env.STEP_ENGINE_USER_DATA; // Ensure clean env for each test
     mockReaddir.mockReset();
     mockReaddir.mockResolvedValue([]);
     mockText.mockReset();
@@ -50,7 +60,7 @@ describe('loadSummariesFromFilesystem', () => {
     expect(result[0].date).toBe('16.1.2026');
     expect(result[0].dateString).toBe('16.1.2026');
     expect(result[0].htmlContent).toContain('Summary content');
-    expect(result[0].filePath).toBe('examples/summaries/16.1.2026.md');
+    expect(result[0].filePath).toContain('summaries/16.1.2026.md');
   });
 
   it('sorts summaries by date in descending order (newest first)', async () => {

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { TeamIdentity } from '../schemas/teamSchemas';
 import { TeamIdentitySchema } from '../schemas/teamSchemas';
 import { parse } from 'yaml';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads only team identities (id + name) from filesystem.
@@ -10,7 +11,7 @@ import { parse } from 'yaml';
  * that only need team identifiers (e.g. sidebar navigation).
  */
 export async function loadTeamIdentitiesFromFilesystem(): Promise<TeamIdentity[]> {
-  const dir = 'examples/teams';
+  const dir = getUserDataPath('teams');
 
   try {
     const files = await readdir(dir);

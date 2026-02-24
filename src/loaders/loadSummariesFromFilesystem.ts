@@ -6,13 +6,14 @@ import { SummaryDateSchema } from '../schemas/summarySchemas';
 import { parseDate } from '../domain/parseDate';
 import { parseMarkdown } from '../parsers/markdown';
 import { ValidationError } from '../domain/errors';
+import { getUserDataPath } from './userDataPaths';
 
 /**
  * Loads summaries from filesystem
- * Directory structure: resources/summaries/{dd.mm.yyyy}.md
+ * Directory structure: {userData}/summaries/{dd.mm.yyyy}.md
  */
 export async function loadSummariesFromFilesystem(): Promise<Summary[]> {
-  const dir = 'examples/summaries';
+  const dir = getUserDataPath('summaries');
 
   try {
     const files = await readdir(dir);

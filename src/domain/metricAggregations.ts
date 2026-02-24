@@ -39,7 +39,7 @@ export function enrichCapabilitiesWithMetrics(
         const teamDataMap = new Map<string, typeof metric.data>();
         metric.data.forEach(dataPoint => {
           if (!dataPoint.team) return;
-          // Only include teams that have files in examples/teams/
+          // Only include teams that have files in the teams directory
           if (validTeamIds.has(dataPoint.team)) {
             if (!teamDataMap.has(dataPoint.team)) {
               teamDataMap.set(dataPoint.team, []);

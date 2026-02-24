@@ -14,6 +14,15 @@ mock.module('node:fs/promises', () => ({
   stat: mockStat,
 }));
 
+// Mock the userDataPaths module to return test paths
+mock.module('./userDataPaths', () => ({
+  getUserDataDir: () => process.env.STEP_ENGINE_USER_DATA || 'examples',
+  getUserDataPath: (...paths: string[]) => {
+    const baseDir = process.env.STEP_ENGINE_USER_DATA || 'examples';
+    return [baseDir, ...paths].join('/');
+  },
+}));
+
 const mockText = mock<() => Promise<string>>(() => Promise.resolve(''));
 const savedBunFile = Bun.file.bind(Bun);
 Bun.file = mock((path: string | URL) => {
@@ -45,6 +54,7 @@ intervention:
 
 describe('loadExperimentsFromFilesystem', () => {
   beforeEach(() => {
+    delete process.env.STEP_ENGINE_USER_DATA; // Ensure clean env for each test
     mockReaddir.mockReset();
     mockReaddir.mockResolvedValue([]);
     mockStat.mockReset();
