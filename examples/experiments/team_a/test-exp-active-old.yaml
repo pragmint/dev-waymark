@@ -49,8 +49,8 @@ intervention:
       notes: >
         Look for qualitative signals that developers find the code safer and easier to change,
         especially after the team has addressed roughly half of the slice's violations.
-  status: pitch # possible states: active, backlog, blocked, pitch, polish
-  start-date: 14.1.2026
+  status: active # possible states: active, backlog, blocked, pitch, polish
+  start-date: 1.1.2026
   expected-duration-in-weeks: 12
   action-plan:
     - title: Fix a vertical slice of linting errors in cm back-end

@@ -24,6 +24,21 @@ function getStatusBadge(status: string): string {
   return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
 }
 
+function compareExperimentsByStatus(a: Experiment, b: Experiment): number {
+  const order = ['active', 'blocked', 'backlog', 'polish', 'pitch'] as const;
+  const statusDiff = order.indexOf(a.status) - order.indexOf(b.status);
+  if (statusDiff !== 0) return statusDiff;
+
+  const dateA = a.startDate ? parseDate(a.startDate).getTime() : 0;
+  const dateB = b.startDate ? parseDate(b.startDate).getTime() : 0;
+
+  const chronologicalStatuses = ['active', 'blocked', 'backlog'];
+  if (chronologicalStatuses.includes(a.status)) {
+    return dateA - dateB;
+  }
+  return dateB - dateA;
+}
+
 export interface TeamDetailPageProps {
   team: Team;
   allCapabilities: Capability[];
@@ -129,18 +144,11 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
           </p>
           {experiments && experiments.length > 0 ? (
             <div class="experiment-cards">
-              {experiments
-                .sort((a, b) => {
-                  const order = ['active', 'blocked', 'backlog', 'polish', 'pitch'] as const;
-                  return order.indexOf(a.status) - order.indexOf(b.status);
-                })
-                .map(exp => {
-                  const practice = practiceMap.get(exp.intervention.practiceUnderTest);
-                  const practiceName = practice
-                    ? practice.title
-                    : exp.intervention.practiceUnderTest;
-                  return <ExperimentCard experiment={exp} practiceName={practiceName} />;
-                })}
+              {experiments.sort(compareExperimentsByStatus).map(exp => {
+                const practice = practiceMap.get(exp.intervention.practiceUnderTest);
+                const practiceName = practice ? practice.title : exp.intervention.practiceUnderTest;
+                return <ExperimentCard experiment={exp} practiceName={practiceName} />;
+              })}
             </div>
           ) : (
             <p class="empty-state">No active experiments at this time.</p>
