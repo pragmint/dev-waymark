@@ -31,6 +31,9 @@ hypothesis:
     - Allow scoped exceptions with expiration dates to avoid permanent "lint debt."
 intervention:
   practice_under_test: automate-coding-standards
+  related_capabilities:
+    - continuous-integration
+    - code-maintainability
   description: >
     Introduce and enforce type-safety via a linter, starting with a vertical slice
     of the codebase. Remediate existing violations in that slice, then configure

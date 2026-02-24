@@ -49,6 +49,7 @@ export function parseExperimentYaml(
       },
       intervention: {
         practiceUnderTest: intervention.practice_under_test,
+        relatedCapabilities: intervention.related_capabilities,
         description: intervention.description,
       },
       successCriteria: intervention.success_criteria,

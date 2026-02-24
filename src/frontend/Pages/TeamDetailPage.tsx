@@ -1,6 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
+import { CapabilityBadge } from '../components/CapabilityBadge';
 import type { Team, TeamCapability } from '../../schemas/teamSchemas';
 import type { Experiment } from '../../schemas/experimentSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
@@ -133,7 +134,13 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
               {experiments.sort(compareExperimentsByStatus).map(exp => {
                 const practice = practiceMap.get(exp.intervention.practiceUnderTest);
                 const practiceName = practice ? practice.title : exp.intervention.practiceUnderTest;
-                return <ExperimentCard experiment={exp} practiceName={practiceName} />;
+                return (
+                  <ExperimentCard
+                    experiment={exp}
+                    practiceName={practiceName}
+                    capabilityMap={capabilityMap}
+                  />
+                );
               })}
             </div>
           ) : (
@@ -156,13 +163,20 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   );
 };
 
-const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
-  experiment,
-  practiceName,
-}) => {
+const ExperimentCard: FC<{
+  experiment: Experiment;
+  practiceName: string;
+  capabilityMap: Map<string, Capability>;
+}> = ({ experiment, practiceName, capabilityMap }) => {
   const duration = experiment.expectedDurationInWeeks
     ? `${experiment.expectedDurationInWeeks} weeks`
     : undefined;
+
+  // Resolve capability IDs to names
+  const capabilityNames =
+    experiment.intervention.relatedCapabilities
+      ?.map(capId => capabilityMap.get(capId)?.name)
+      .filter((name): name is string => Boolean(name)) || [];
 
   return (
     <div class="experiment-card">
@@ -178,6 +192,13 @@ const ExperimentCard: FC<{ experiment: Experiment; practiceName: string }> = ({
           {practiceName}
         </a>
       </div>
+      {capabilityNames.length > 0 && (
+        <div class="experiment-capabilities">
+          {capabilityNames.map(name => (
+            <CapabilityBadge capabilityName={name} />
+          ))}
+        </div>
+      )}
       <div class="experiment-meta">
         <span class="experiment-date">
           Started:{' '}

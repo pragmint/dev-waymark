@@ -180,12 +180,36 @@ decision-roles:
     expect(result.decisionRoles![0].informed).toEqual(['Dave']);
   });
 
+  test('parses related capabilities', () => {
+    const yaml = `
+context:
+  problem_statement: "Problem"
+  desired_outcome: "Outcome"
+hypothesis:
+  statement: "It will work"
+intervention:
+  practice_under_test: automate-coding-standards
+  related_capabilities:
+    - continuous-integration
+    - code-maintainability
+  description: "Enforce type-safety"
+  status: active
+`;
+    const result = parseExperimentYaml(yaml, 'team-a', 'type-safety');
+
+    expect(result.intervention.relatedCapabilities).toEqual([
+      'continuous-integration',
+      'code-maintainability',
+    ]);
+  });
+
   test('optional fields default to undefined when absent', () => {
     const result = parseExperimentYaml(minimalExperimentYaml, 'team-a', 'test-exp');
 
     expect(result.hypothesis.assumptions).toBeUndefined();
     expect(result.hypothesis.risks).toBeUndefined();
     expect(result.hypothesis.riskMitigations).toBeUndefined();
+    expect(result.intervention.relatedCapabilities).toBeUndefined();
     expect(result.successCriteria).toBeUndefined();
     expect(result.actionPlan).toBeUndefined();
     expect(result.startDate).toBeUndefined();
@@ -314,5 +338,38 @@ intervention:
       measurement_window: invalid_window
 `;
     expect(() => parseExperimentYaml(yaml, 'team-a', 'bad')).toThrow(ValidationError);
+  });
+
+  test('throws ValidationError when related_capabilities is not an array', () => {
+    const yaml = `
+context:
+  problem_statement: "Problem"
+  desired_outcome: "Outcome"
+hypothesis:
+  statement: "It will work"
+intervention:
+  practice_under_test: tdd
+  related_capabilities: "not-an-array"
+  description: "TDD"
+  status: active
+`;
+    expect(() => parseExperimentYaml(yaml, 'team-a', 'bad')).toThrow(ValidationError);
+  });
+
+  test('parses empty related_capabilities array', () => {
+    const yaml = `
+context:
+  problem_statement: "Problem"
+  desired_outcome: "Outcome"
+hypothesis:
+  statement: "It will work"
+intervention:
+  practice_under_test: tdd
+  related_capabilities: []
+  description: "TDD"
+  status: active
+`;
+    const result = parseExperimentYaml(yaml, 'team-a', 'empty-caps');
+    expect(result.intervention.relatedCapabilities).toEqual([]);
   });
 });

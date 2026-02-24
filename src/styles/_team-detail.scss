@@ -137,6 +137,13 @@
   }
 }
 
+.experiment-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+}
+
 .experiment-meta {
   display: flex;
   align-items: center;

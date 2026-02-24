@@ -33,6 +33,7 @@ export const ExperimentSuccessCriteriaItemSchema = z.object({
 // Intervention schema - practice under test, description, and execution details
 export const ExperimentInterventionSchema = z.object({
   practice_under_test: z.string(),
+  related_capabilities: z.array(z.string()).optional(),
   description: z.string(),
   success_criteria: z.array(ExperimentSuccessCriteriaItemSchema).optional(),
   status: z.enum(['active', 'backlog', 'blocked', 'pitch', 'polish']),
@@ -76,6 +77,7 @@ export interface Experiment {
   };
   intervention: {
     practiceUnderTest: string;
+    relatedCapabilities?: string[];
     description: string;
   };
   successCriteria?: ExperimentSuccessCriteriaItem[];
