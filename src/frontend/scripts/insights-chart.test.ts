@@ -107,6 +107,7 @@ describe('ChartManager', () => {
 
       // Act + Assert
       expect(manager.isRendered()).toBe(false);
+      expect(chartConstructor).toHaveBeenCalledTimes(0);
     });
 
     it('returns true after render is called', () => {
@@ -170,6 +171,7 @@ describe('ChartManager', () => {
 
       // Act + Assert — should not throw
       expect(() => manager.destroy()).not.toThrow();
+      expect(chartConstructor).toHaveBeenCalledTimes(0);
     });
 
     it('is a no-op when called a second time after the chart is already destroyed', () => {
@@ -201,6 +203,7 @@ describe('ChartManager', () => {
       manager.render(data, 'Throughput');
 
       // Assert
+      expect(chartConstructor).toHaveBeenCalledTimes(1);
       expect(instances).toHaveLength(1);
       expect(instances[0].canvas).toBe(canvas);
     });
@@ -214,6 +217,7 @@ describe('ChartManager', () => {
       manager.render(data, 'Throughput');
 
       // Assert
+      expect(chartConstructor).toHaveBeenCalledTimes(1);
       expect(instances[0].config.data).toEqual(data);
     });
 
@@ -297,6 +301,48 @@ describe('ChartManager', () => {
       expect(ticks?.maxRotation).toBe(90);
       expect(ticks?.minRotation).toBe(45);
     });
+
+    it('calls the Chart constructor with canvas and complete config', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const data = makeChartData();
+
+      // Act
+      manager.render(data, 'Test Title');
+
+      // Assert — verify mock was called with expected signature
+      expect(chartConstructor).toHaveBeenCalledTimes(1);
+      const [actualCanvas, actualConfig] = chartConstructor.mock.calls[0];
+      expect(actualCanvas).toBe(canvas);
+      expect(actualConfig).toEqual({
+        type: 'line',
+        data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+            },
+            title: {
+              display: true,
+              text: 'Test Title',
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+              },
+            },
+            y: {
+              beginAtZero: false,
+            },
+          },
+        },
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -326,6 +372,7 @@ describe('ChartManager', () => {
       manager.render(makeChartData(), 'Second');
 
       // Assert — two Chart instances should have been created in total
+      expect(chartConstructor).toHaveBeenCalledTimes(2);
       expect(instances).toHaveLength(2);
     });
 
