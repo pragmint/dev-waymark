@@ -10,23 +10,23 @@ import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMe
 import { loadTeamMetricsFromFilesystem } from '../loaders/loadTeamMetricsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
 
+const capabilitiesWithAssessment = await loadAndParseCapabilities();
+const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
+
+const rawTeams = await loadTeamsFromFilesystem();
+
+const teamMetrics = await loadTeamMetricsFromFilesystem();
+const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
+
+// --- PURE TRANSFORMATION ---
+const capabilities = enrichCapabilitiesWithMetrics(
+  capabilitiesWithAssessment,
+  capabilityMetrics,
+  teams
+);
+const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics, teamMetrics);
+
 export async function handleInsight(c: Context) {
-  const capabilitiesWithAssessment = await loadAndParseCapabilities();
-  const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
-
-  const rawTeams = await loadTeamsFromFilesystem();
-
-  const teamMetrics = await loadTeamMetricsFromFilesystem();
-  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
-
-  // --- PURE TRANSFORMATION ---
-  const capabilities = enrichCapabilitiesWithMetrics(
-    capabilitiesWithAssessment,
-    capabilityMetrics,
-    teams
-  );
-  const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics, teamMetrics);
-
   return c.html(
     <InsightsPage
       teams={insightsData.teams}

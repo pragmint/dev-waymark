@@ -11,23 +11,23 @@ import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFil
 import { loadTeamMetricsFromFilesystem } from '../loaders/loadTeamMetricsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
 
+const capabilitiesWithAssessment = await loadAndParseCapabilities();
+const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
+
+const rawTeams = await loadTeamsFromFilesystem();
+
+const experiments = await loadExperimentsFromFilesystem();
+const teamMetrics = await loadTeamMetricsFromFilesystem();
+const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
+
+// --- PURE TRANSFORMATION ---
+const capabilities = enrichCapabilitiesWithMetrics(
+  capabilitiesWithAssessment,
+  capabilityMetrics,
+  teams
+);
+
 export async function handleTeamDetail(c: Context) {
-  const capabilitiesWithAssessment = await loadAndParseCapabilities();
-  const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
-
-  const rawTeams = await loadTeamsFromFilesystem();
-
-  const experiments = await loadExperimentsFromFilesystem();
-  const teamMetrics = await loadTeamMetricsFromFilesystem();
-  const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
-
-  // --- PURE TRANSFORMATION ---
-  const capabilities = enrichCapabilitiesWithMetrics(
-    capabilitiesWithAssessment,
-    capabilityMetrics,
-    teams
-  );
-
   const teamId = c.req.param('teamId');
   const data = await prepareTeamDetailData(
     teamId,
