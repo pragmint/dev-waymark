@@ -28,6 +28,7 @@ function makeMockChartInstance(): MockChartInstance {
     destroy() {
       this.destroyCalls++;
     },
+    resetZoom() {},
   };
 }
 
@@ -328,6 +329,21 @@ describe('ChartManager', () => {
               display: true,
               text: 'Test Title',
             },
+            zoom: {
+              limits: {
+                x: { min: 0, max: 2, minRange: 2 },
+                y: { min: 0.5, max: 3.5, minRange: 1 },
+              },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy',
+              },
+              pan: {
+                enabled: true,
+                mode: 'xy',
+              },
+            },
           },
           scales: {
             x: {
@@ -398,6 +414,102 @@ describe('ChartManager', () => {
 
       // Assert
       expect(manager.isRendered()).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // render() — axis limits derived from data
+  // -------------------------------------------------------------------------
+
+  describe('render() axis limits', () => {
+    function getLimits(data: ReturnType<typeof makeChartData>) {
+      const manager = new ChartManager(canvas);
+      manager.render(data, 'Title');
+      return instances[0].config.options.plugins.zoom?.limits;
+    }
+
+    it('sets x limits to the label index range', () => {
+      // Arrange — 3 labels → indices 0..2
+      const limits = getLimits(makeChartData());
+
+      // Assert
+      expect(limits?.x?.min).toBe(0);
+      expect(limits?.x?.max).toBe(2);
+    });
+
+    it('sets x minRange to min(2, label count - 1)', () => {
+      const limits = getLimits(makeChartData()); // 3 labels
+      expect(limits?.x?.minRange).toBe(2);
+    });
+
+    it('sets x minRange to 0 when only one label exists', () => {
+      const data = {
+        labels: ['Jan'],
+        datasets: [{ label: 'A', data: [5], borderColor: '#000', backgroundColor: '#fff' }],
+      };
+      const manager = new ChartManager(canvas);
+      manager.render(data, 'Title');
+      expect(instances[0].config.options.plugins.zoom?.limits?.x?.minRange).toBe(0);
+    });
+
+    it('derives y limits with 10% padding, floored at 0.5', () => {
+      // data [1,2,3]: range=2, 10%=0.2 → floor to 0.5 padding
+      const limits = getLimits(makeChartData());
+      expect(limits?.y?.min).toBeCloseTo(0.5);
+      expect(limits?.y?.max).toBeCloseTo(3.5);
+    });
+
+    it('uses 10% padding when range is large enough', () => {
+      // data [0, 100]: range=100, 10%=10 > 0.5
+      const data = {
+        labels: ['A', 'B'],
+        datasets: [{ label: 'X', data: [0, 100], borderColor: '#000', backgroundColor: '#fff' }],
+      };
+      const manager = new ChartManager(canvas);
+      manager.render(data, 'Title');
+      const limits = instances[0].config.options.plugins.zoom?.limits;
+      expect(limits?.y?.min).toBeCloseTo(-10);
+      expect(limits?.y?.max).toBeCloseTo(110);
+    });
+
+    it('ignores null values when computing y limits', () => {
+      // Only non-null values [2, 4] should be considered; range=2, 10%=0.2 → floor to 0.5
+      const data = {
+        labels: ['A', 'B', 'C'],
+        datasets: [
+          {
+            label: 'X',
+            data: [null, 2, 4] as (number | null)[],
+            borderColor: '#000',
+            backgroundColor: '#fff',
+          },
+        ],
+      };
+      const manager = new ChartManager(canvas);
+      manager.render(data, 'Title');
+      const limits = instances[0].config.options.plugins.zoom?.limits;
+      expect(limits?.y?.min).toBeCloseTo(1.5);
+      expect(limits?.y?.max).toBeCloseTo(4.5);
+    });
+
+    it('falls back to y range [0,1] when all values are null', () => {
+      const data = {
+        labels: ['A'],
+        datasets: [
+          {
+            label: 'X',
+            data: [null] as (number | null)[],
+            borderColor: '#000',
+            backgroundColor: '#fff',
+          },
+        ],
+      };
+      const manager = new ChartManager(canvas);
+      manager.render(data, 'Title');
+      const limits = instances[0].config.options.plugins.zoom?.limits;
+      // yMin=0, yMax=1, range=1, 10%=0.1 → floor to 0.5
+      expect(limits?.y?.min).toBeCloseTo(-0.5);
+      expect(limits?.y?.max).toBeCloseTo(1.5);
     });
   });
 });

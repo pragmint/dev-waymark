@@ -228,6 +228,7 @@ function initializeDateInputs(): void {
   const metricSelect = document.getElementById('metric-select') as HTMLSelectElement;
   const startDateInput = document.getElementById('start-date') as HTMLInputElement;
   const endDateInput = document.getElementById('end-date') as HTMLInputElement;
+  const resetZoomBtn = document.getElementById('reset-zoom') as HTMLButtonElement | null;
 
   if (!canvas || !metricSelect || !startDateInput || !endDateInput) {
     return;
@@ -243,6 +244,16 @@ function initializeDateInputs(): void {
   metricSelect.addEventListener('change', updateChart);
   startDateInput.addEventListener('change', updateChart);
   endDateInput.addEventListener('change', updateChart);
+
+  // Show reset zoom button once a chart is rendered; wire up click
+  if (resetZoomBtn) {
+    metricSelect.addEventListener('change', () => {
+      resetZoomBtn.style.display = chartManager.isRendered() ? 'block' : 'none';
+    });
+    resetZoomBtn.addEventListener('click', () => {
+      chartManager.resetZoom();
+    });
+  }
 
   // Clean up on page unload
   window.addEventListener('beforeunload', () => {

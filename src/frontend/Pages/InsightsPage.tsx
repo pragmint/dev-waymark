@@ -71,6 +71,9 @@ export const InsightsPage: FC<InsightsPageProps> = ({
 
         <div class="chart-container">
           <canvas id="metrics-chart"></canvas>
+          <button id="reset-zoom" class="reset-zoom-btn" style="display:none">
+            Reset Zoom
+          </button>
         </div>
 
         <div id="chart-message" class="chart-message">
@@ -78,8 +81,10 @@ export const InsightsPage: FC<InsightsPageProps> = ({
         </div>
       </div>
 
-      {/* Load Chart.js from CDN */}
+      {/* Load Chart.js and zoom plugin from CDN */}
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
       {/* Pass data to client-side script */}
       <script

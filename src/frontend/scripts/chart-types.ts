@@ -27,6 +27,33 @@ export interface ChartScales {
   y?: ChartAxis;
 }
 
+export interface ZoomAnimation {
+  duration: number;
+  easing: string;
+}
+
+export interface ZoomAxisLimits {
+  min?: number;
+  max?: number;
+  minRange?: number;
+}
+
+export interface ZoomPluginOptions {
+  limits?: {
+    x?: ZoomAxisLimits;
+    y?: ZoomAxisLimits;
+  };
+  zoom: {
+    wheel: { enabled: boolean };
+    pinch: { enabled: boolean };
+    mode: 'x' | 'y' | 'xy';
+  };
+  pan: {
+    enabled: boolean;
+    mode: 'x' | 'y' | 'xy';
+  };
+}
+
 export interface ChartPlugins {
   legend: {
     position: 'top' | 'bottom' | 'left' | 'right';
@@ -35,11 +62,19 @@ export interface ChartPlugins {
     display: boolean;
     text: string;
   };
+  zoom?: ZoomPluginOptions;
+}
+
+export interface ChartTransitions {
+  zoom?: {
+    animation?: ZoomAnimation;
+  };
 }
 
 export interface ChartOptions {
   responsive: boolean;
   maintainAspectRatio: boolean;
+  transitions?: ChartTransitions;
   plugins: ChartPlugins;
   scales: ChartScales;
 }
@@ -52,6 +87,7 @@ export interface ChartConfiguration {
 
 export interface ChartInstance {
   destroy(): void;
+  resetZoom(): void;
 }
 
 export interface ChartConstructor {

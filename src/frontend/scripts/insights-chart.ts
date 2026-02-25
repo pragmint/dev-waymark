@@ -1,6 +1,36 @@
 // Chart rendering and management
 
-import type { ChartData, ChartInstance, ChartConfiguration } from './chart-types';
+import type { ChartData, ChartInstance, ChartConfiguration, ZoomAxisLimits } from './chart-types';
+
+/**
+ * Derive zoom/pan limits from the rendered data so the user cannot pan or
+ * zoom beyond the actual data range on either axis.
+ *
+ * Y-axis: bounded by [min - padding, max + padding] with a minimum padding of
+ * 0.5 to avoid collapsing the range on flat data.
+ * X-axis: bounded by the label indices [0, length-1]; minRange prevents
+ * zooming in to fewer than 3 visible points (or all points if fewer than 3).
+ */
+function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits } {
+  const allValues = data.datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
+
+  const yMin = allValues.length > 0 ? Math.min(...allValues) : 0;
+  const yMax = allValues.length > 0 ? Math.max(...allValues) : 1;
+  const yPadding = Math.max((yMax - yMin) * 0.1, 0.5);
+
+  return {
+    x: {
+      min: 0,
+      max: data.labels.length - 1,
+      minRange: Math.min(2, data.labels.length - 1),
+    },
+    y: {
+      min: yMin - yPadding,
+      max: yMax + yPadding,
+      minRange: yPadding * 2,
+    },
+  };
+}
 
 /**
  * Chart manager - handles chart lifecycle
@@ -19,6 +49,8 @@ export class ChartManager {
   render(data: ChartData, title: string): void {
     this.destroy();
 
+    const limits = computeLimits(data);
+
     const config: ChartConfiguration = {
       type: 'line',
       data,
@@ -32,6 +64,18 @@ export class ChartManager {
           title: {
             display: true,
             text: title,
+          },
+          zoom: {
+            limits,
+            zoom: {
+              wheel: { enabled: true },
+              pinch: { enabled: true },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            },
           },
         },
         scales: {
@@ -49,6 +93,15 @@ export class ChartManager {
     };
 
     this.chart = new window.Chart(this.canvas, config);
+  }
+
+  /**
+   * Reset zoom to original view
+   */
+  resetZoom(): void {
+    if (this.chart) {
+      this.chart.resetZoom();
+    }
   }
 
   /**
