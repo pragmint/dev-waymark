@@ -16,6 +16,7 @@ export const MetricDataPointSchema = z
     value: z.union([z.number(), z.string(), DimensionScoreArraySchema, DimensionScoreSchema]),
     justification: z.string().optional(),
   })
+  .passthrough() // Allow additional fields like link, etc.
   .transform(data => {
     // Normalize dimension score arrays to single objects
     // YAML arrays like [{"new-code": 1, "justification": "..."}, {"old-code": 2}]
@@ -57,6 +58,7 @@ export interface MetricDataPoint {
   value: MetricValue;
   justification?: string;
   dimensionJustifications?: Record<string, string>;
+  [key: string]: unknown; // Allow arbitrary metadata fields
 }
 
 export type MetricFile = { data: MetricDataPoint[] };
@@ -67,11 +69,13 @@ export interface Metric {
 }
 
 // Zod schemas for team metric data validation
-export const TeamMetricDataPointSchema = z.object({
-  date: z.string(),
-  value: z.union([z.number(), z.string()]),
-  // No team field - team is derived from filename
-});
+export const TeamMetricDataPointSchema = z
+  .object({
+    date: z.string(),
+    value: z.union([z.number(), z.string()]),
+    // No team field - team is derived from filename
+  })
+  .passthrough(); // Allow additional metadata fields
 
 export const TeamMetricFileSchema = z.object({
   data: z.array(TeamMetricDataPointSchema),

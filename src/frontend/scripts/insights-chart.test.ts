@@ -378,7 +378,7 @@ describe('ChartManager', () => {
       expect(chartConstructor).toHaveBeenCalledTimes(1);
       const [actualCanvas, actualConfig] = chartConstructor.mock.calls[0];
       expect(actualCanvas).toBe(canvas);
-      expect(actualConfig).toEqual({
+      expect(actualConfig).toMatchObject({
         type: 'line',
         data,
         options: {
@@ -424,6 +424,8 @@ describe('ChartManager', () => {
           },
         },
       });
+      // Verify tooltip callbacks are present
+      expect(actualConfig.options.plugins.tooltip?.callbacks?.afterBody).toBeDefined();
     });
   });
 

@@ -1,16 +1,28 @@
 // Minimal Chart.js type definitions for global Chart object
 
+export interface DataPointMetadata {
+  [key: string]: string | number | boolean | undefined;
+}
+
 export interface ChartDataset {
   label: string;
   data: (number | null)[];
   borderColor: string;
   backgroundColor: string;
   yAxisID?: string;
+  metadata?: (DataPointMetadata | undefined)[];
+}
+
+export interface QualitativeDataPoint {
+  date: string;
+  value: string;
+  metadata?: DataPointMetadata;
 }
 
 export interface ChartData {
   labels: string[];
   datasets: ChartDataset[];
+  qualitativeData?: QualitativeDataPoint[];
 }
 
 export interface ChartAxisTicks {
@@ -62,6 +74,47 @@ export interface ZoomPluginOptions {
   };
 }
 
+export interface AnnotationBoxOptions {
+  type: 'box';
+  xMin: number;
+  xMax: number;
+  yMin?: number | string;
+  yMax?: number | string;
+  backgroundColor: string;
+  borderColor?: string;
+  borderWidth?: number;
+  label?: {
+    display: boolean;
+    content: string;
+    position?: string;
+  };
+  enter?: (context: { element: unknown }) => void;
+  leave?: (context: { element: unknown }) => void;
+}
+
+export interface AnnotationPluginOptions {
+  annotations: Record<string, AnnotationBoxOptions>;
+}
+
+export interface TooltipCallbacks {
+  afterBody?: (context: TooltipContext[]) => string | string[];
+}
+
+export interface TooltipOptions {
+  callbacks?: TooltipCallbacks;
+}
+
+export interface TooltipContext {
+  chart: unknown;
+  label: string;
+  parsed: { x: number; y: number };
+  formattedValue: string;
+  dataset: ChartDataset;
+  datasetIndex: number;
+  dataIndex: number;
+  raw: number | null;
+}
+
 export interface ChartPlugins {
   legend: {
     position: 'top' | 'bottom' | 'left' | 'right';
@@ -71,6 +124,8 @@ export interface ChartPlugins {
     text: string;
   };
   zoom?: ZoomPluginOptions;
+  annotation?: AnnotationPluginOptions;
+  tooltip?: TooltipOptions;
 }
 
 export interface ChartTransitions {

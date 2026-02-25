@@ -2,17 +2,26 @@
 
 import { filterByDateRange, sortByDate, getNumericValue } from './insights-utils';
 import { formatDataDateForDisplay, sortDisplayDates } from './insights-date-utils';
-import type { ChartData, ChartDataset } from './chart-types';
+import type {
+  ChartData,
+  ChartDataset,
+  DataPointMetadata,
+  QualitativeDataPoint,
+} from './chart-types';
 
 export interface MetricDataPoint {
   team?: string;
   date: string;
   value: number | string | Record<string, number>;
+  justification?: string;
+  dimensionJustifications?: Record<string, string>;
+  [key: string]: unknown; // Allow arbitrary metadata
 }
 
 export interface TeamMetricDataPoint {
   date: string;
   value: number | string;
+  [key: string]: unknown; // Allow arbitrary metadata
 }
 
 export interface CapabilityMetric {
@@ -31,7 +40,7 @@ export interface TeamInfo {
   name: string;
 }
 
-export type { ChartData, ChartDataset };
+export type { ChartData, ChartDataset, QualitativeDataPoint };
 
 /**
  * Convert team ID to display name using team lookup
@@ -50,6 +59,42 @@ const CHART_COLORS = [
 ];
 
 /**
+ * Extract metadata from a data point, excluding core fields
+ */
+function extractMetadata(
+  dataPoint: MetricDataPoint | TeamMetricDataPoint
+): DataPointMetadata | undefined {
+  const coreFields = ['date', 'value', 'team'];
+  const metadata: DataPointMetadata = {};
+  let hasMetadata = false;
+
+  for (const [key, value] of Object.entries(dataPoint)) {
+    if (!coreFields.includes(key)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        metadata[key] = value;
+        hasMetadata = true;
+      } else if (key === 'dimensionJustifications' && typeof value === 'object' && value !== null) {
+        // Flatten dimension justifications into metadata
+        const dimJust = value as Record<string, string>;
+        for (const [dimKey, dimValue] of Object.entries(dimJust)) {
+          metadata[`${dimKey}_justification`] = dimValue;
+          hasMetadata = true;
+        }
+      }
+    }
+  }
+
+  return hasMetadata ? metadata : undefined;
+}
+
+/**
+ * Check if data contains qualitative (string) values
+ */
+function hasQualitativeValues(data: TeamMetricDataPoint[]): boolean {
+  return data.some(d => typeof d.value === 'string');
+}
+
+/**
  * Transform team-specific metric data into chart format
  */
 export function transformTeamMetricData(
@@ -61,6 +106,21 @@ export function transformTeamMetricData(
   const filteredData = filterByDateRange(metric.data, startDate, endDate);
   const sortedData = sortByDate(filteredData);
 
+  // Check if this is a qualitative metric
+  if (hasQualitativeValues(sortedData)) {
+    // For qualitative metrics, return empty datasets
+    // Annotations will be added by the chart manager
+    return {
+      labels: sortedData.map(d => formatDataDateForDisplay(d.date)),
+      datasets: [],
+      qualitativeData: sortedData.map(d => ({
+        date: d.date,
+        value: String(d.value),
+        metadata: extractMetadata(d),
+      })),
+    };
+  }
+
   return {
     labels: sortedData.map(d => formatDataDateForDisplay(d.date)),
     datasets: [
@@ -69,6 +129,7 @@ export function transformTeamMetricData(
         data: sortedData.map(d => getNumericValue(d.value)),
         borderColor: CHART_COLORS[0].border,
         backgroundColor: CHART_COLORS[0].bg,
+        metadata: sortedData.map(d => extractMetadata(d)),
       },
     ],
   };
@@ -79,8 +140,14 @@ export function transformTeamMetricData(
  */
 function groupByTeam(
   data: MetricDataPoint[]
-): Map<string, Array<{ date: string; value: number | null }>> {
-  const teamDataMap = new Map<string, Array<{ date: string; value: number | null }>>();
+): Map<
+  string,
+  Array<{ date: string; value: number | null; metadata: DataPointMetadata | undefined }>
+> {
+  const teamDataMap = new Map<
+    string,
+    Array<{ date: string; value: number | null; metadata: DataPointMetadata | undefined }>
+  >();
 
   data.forEach(point => {
     const team = point.team || 'unknown';
@@ -90,6 +157,7 @@ function groupByTeam(
     teamDataMap.get(team)!.push({
       date: point.date,
       value: getNumericValue(point.value),
+      metadata: extractMetadata(point),
     });
   });
 
@@ -100,7 +168,10 @@ function groupByTeam(
  * Create datasets for each team with proper color coding
  */
 function createTeamDatasets(
-  teamDataMap: Map<string, Array<{ date: string; value: number | null }>>,
+  teamDataMap: Map<
+    string,
+    Array<{ date: string; value: number | null; metadata: DataPointMetadata | undefined }>
+  >,
   allDates: string[],
   teams: TeamInfo[]
 ): ChartDataset[] {
@@ -111,9 +182,13 @@ function createTeamDatasets(
     const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
     colorIndex++;
 
-    const dataArray = allDates.map(date => {
+    const dataArray: (number | null)[] = [];
+    const metadataArray: (DataPointMetadata | undefined)[] = [];
+
+    allDates.forEach(date => {
       const point = teamData.find(d => d.date === date);
-      return point ? point.value : null;
+      dataArray.push(point ? point.value : null);
+      metadataArray.push(point?.metadata);
     });
 
     datasets.push({
@@ -121,6 +196,7 @@ function createTeamDatasets(
       data: dataArray,
       borderColor: color.border,
       backgroundColor: color.bg,
+      metadata: metadataArray,
     });
   });
 
@@ -163,6 +239,11 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
     return null;
   }
 
+  // Don't allow comparison with qualitative metrics
+  if (data1.qualitativeData || data2.qualitativeData) {
+    return null;
+  }
+
   // Get all unique dates from both datasets (labels are already formatted for display)
   const allLabels = sortDisplayDates(Array.from(new Set([...data1.labels, ...data2.labels])));
 
@@ -179,6 +260,12 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
       const originalIndex = labelIndexMap1.get(label);
       return originalIndex !== undefined ? ds.data[originalIndex] : null;
     }),
+    metadata: ds.metadata
+      ? allLabels.map(label => {
+          const originalIndex = labelIndexMap1.get(label);
+          return originalIndex !== undefined ? ds.metadata![originalIndex] : undefined;
+        })
+      : undefined,
   }));
 
   // Count how many datasets are in the first metric to offset colors for second metric
@@ -198,6 +285,12 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
         const originalIndex = labelIndexMap2.get(label);
         return originalIndex !== undefined ? ds.data[originalIndex] : null;
       }),
+      metadata: ds.metadata
+        ? allLabels.map(label => {
+            const originalIndex = labelIndexMap2.get(label);
+            return originalIndex !== undefined ? ds.metadata![originalIndex] : undefined;
+          })
+        : undefined,
     };
   });
 

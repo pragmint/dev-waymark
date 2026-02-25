@@ -104,10 +104,11 @@ export const InsightsPage: FC<InsightsPageProps> = ({
         </div>
       </div>
 
-      {/* Load Chart.js and zoom plugin from CDN */}
+      {/* Load Chart.js and plugins from CDN */}
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 
       {/* Pass data to client-side script */}
       <script
