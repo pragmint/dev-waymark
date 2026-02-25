@@ -25,8 +25,9 @@ hypothesis:
     - Run parallel tests alongside sequential for 2 weeks to identify flaky tests.
     - Time-box the initial implementation to 3 weeks; if not showing 40% improvement, reassess approach.
 intervention:
-  practice_under_test: continuous-integration
+  practice_under_test: treat-broken-builds-like-outages
   related_capabilities:
+    - continuous-integration
     - test-automation
     - deployment-automation
   description: >

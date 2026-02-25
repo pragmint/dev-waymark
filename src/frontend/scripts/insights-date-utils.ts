@@ -40,3 +40,17 @@ export function formatDataDateForDisplay(dateStr: string): string {
   };
   return date.toLocaleDateString('en-US', options);
 }
+
+/**
+ * Parse display format date (January 27, 2026) back to Date object
+ */
+export function parseDisplayDate(displayStr: string): Date {
+  return new Date(displayStr);
+}
+
+/**
+ * Sort display format dates chronologically
+ */
+export function sortDisplayDates(dates: string[]): string[] {
+  return [...dates].sort((a, b) => parseDisplayDate(a).getTime() - parseDisplayDate(b).getTime());
+}

@@ -1,7 +1,7 @@
 // Data transformation for chart rendering
 
 import { filterByDateRange, sortByDate, getNumericValue } from './insights-utils';
-import { formatDataDateForDisplay } from './insights-date-utils';
+import { formatDataDateForDisplay, sortDisplayDates } from './insights-date-utils';
 import type { ChartData, ChartDataset } from './chart-types';
 
 export interface MetricDataPoint {
@@ -164,7 +164,7 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
   }
 
   // Get all unique dates from both datasets (labels are already formatted for display)
-  const allLabels = Array.from(new Set([...data1.labels, ...data2.labels])).sort();
+  const allLabels = sortDisplayDates(Array.from(new Set([...data1.labels, ...data2.labels])));
 
   // Map display labels back to a common ordering
   // Since we need to align data points, we'll use the combined label set
