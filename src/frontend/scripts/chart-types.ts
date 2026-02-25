@@ -20,6 +20,7 @@ export interface ChartAxisTicks {
 export interface ChartAxis {
   beginAtZero?: boolean;
   ticks?: ChartAxisTicks;
+  grace?: string;
 }
 
 export interface ChartScales {

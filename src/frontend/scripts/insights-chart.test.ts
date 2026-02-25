@@ -327,7 +327,7 @@ describe('ChartManager', () => {
       expect(instances[0].config.options.plugins.legend.position).toBe('top');
     });
 
-    it('configures the y-axis with beginAtZero false', () => {
+    it('configures the y-axis with beginAtZero false for line charts', () => {
       // Arrange
       const manager = new ChartManager(canvas);
 
@@ -336,6 +336,21 @@ describe('ChartManager', () => {
 
       // Assert
       expect(instances[0].config.options.scales.y?.beginAtZero).toBe(false);
+    });
+
+    it('configures the y-axis with beginAtZero true for bar charts', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const singlePointData = {
+        labels: ['Jan'],
+        datasets: [{ label: 'X', data: [5], borderColor: '#000', backgroundColor: '#fff' }],
+      };
+
+      // Act
+      manager.render(singlePointData, 'Any Title');
+
+      // Assert
+      expect(instances[0].config.options.scales.y?.beginAtZero).toBe(true);
     });
 
     it('configures x-axis tick rotation between 45 and 90 degrees', () => {
@@ -402,6 +417,7 @@ describe('ChartManager', () => {
             },
             y: {
               beginAtZero: false,
+              grace: '10%',
             },
           },
         },

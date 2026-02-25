@@ -59,9 +59,10 @@ export class ChartManager {
     this.destroy();
 
     const limits = computeLimits(data);
+    const chartType = resolveChartType(data);
 
     const config: ChartConfiguration = {
-      type: resolveChartType(data),
+      type: chartType,
       data,
       options: {
         responsive: true,
@@ -95,7 +96,8 @@ export class ChartManager {
             },
           },
           y: {
-            beginAtZero: false,
+            beginAtZero: chartType === 'bar',
+            grace: '10%',
           },
         },
       },
