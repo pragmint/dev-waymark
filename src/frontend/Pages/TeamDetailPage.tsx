@@ -36,6 +36,43 @@ export interface TeamDetailPageProps {
   teamMetrics: TeamMetric[];
 }
 
+const ExperimentFilter: FC<{
+  allCapabilities: Capability[];
+}> = ({ allCapabilities }) => {
+  if (allCapabilities.length === 0) return <></>;
+
+  const capabilities = allCapabilities
+    .map(c => ({ id: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div class="experiment-filter">
+      <label class="filter-label">Filter by capability:</label>
+      <div class="multiselect" id="capability-filter">
+        <button class="multiselect-toggle" type="button">
+          All capabilities &#x25BE;
+        </button>
+        <div class="multiselect-dropdown">
+          <div class="multiselect-actions">
+            <button type="button" class="multiselect-action" data-action="select-all">
+              Select all
+            </button>
+            <button type="button" class="multiselect-action" data-action="deselect-all">
+              Deselect all
+            </button>
+          </div>
+          {capabilities.map(cap => (
+            <label class="multiselect-option">
+              <input type="checkbox" value={cap.id} checked />
+              {cap.name}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   team,
   allCapabilities,
@@ -130,19 +167,24 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
             delivery performance.
           </p>
           {experiments && experiments.length > 0 ? (
-            <div class="experiment-cards">
-              {experiments.sort(compareExperimentsByStatus).map(exp => {
-                const practice = practiceMap.get(exp.intervention.practiceUnderTest);
-                const practiceName = practice ? practice.title : exp.intervention.practiceUnderTest;
-                return (
-                  <ExperimentCard
-                    experiment={exp}
-                    practiceName={practiceName}
-                    capabilityMap={capabilityMap}
-                  />
-                );
-              })}
-            </div>
+            <>
+              <ExperimentFilter allCapabilities={allCapabilities} />
+              <div class="experiment-cards">
+                {experiments.sort(compareExperimentsByStatus).map(exp => {
+                  const practice = practiceMap.get(exp.intervention.practiceUnderTest);
+                  const practiceName = practice
+                    ? practice.title
+                    : exp.intervention.practiceUnderTest;
+                  return (
+                    <ExperimentCard
+                      experiment={exp}
+                      practiceName={practiceName}
+                      capabilityMap={capabilityMap}
+                    />
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <p class="empty-state">No active experiments at this time.</p>
           )}
@@ -173,13 +215,13 @@ const ExperimentCard: FC<{
     : undefined;
 
   // Resolve capability IDs to names
-  const capabilityNames =
-    experiment.intervention.relatedCapabilities
-      ?.map(capId => capabilityMap.get(capId)?.name)
-      .filter((name): name is string => Boolean(name)) || [];
+  const capabilityIds = experiment.intervention.relatedCapabilities || [];
+  const capabilityNames = capabilityIds
+    .map(capId => capabilityMap.get(capId)?.name)
+    .filter((name): name is string => Boolean(name));
 
   return (
-    <div class="experiment-card">
+    <div class="experiment-card" data-capability-ids={JSON.stringify(capabilityIds)}>
       <div class="experiment-header">
         <h3>
           <a href={`/experiment/${experiment.id}/`}>{experiment.title}</a>
