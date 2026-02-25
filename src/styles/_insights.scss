@@ -123,8 +123,14 @@
   border: 0.1rem solid $border-color-light;
   padding: $spacing-xxxl;
   box-shadow: $shadow-sm;
-  height: 50rem;
+  height: 60rem;
   position: relative;
+}
+
+.reset-zoom-btn {
+  position: absolute;
+  top: $spacing-md;
+  right: $spacing-md;
 }
 
 .chart-message {

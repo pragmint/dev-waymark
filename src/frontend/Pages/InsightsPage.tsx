@@ -71,7 +71,7 @@ export const InsightsPage: FC<InsightsPageProps> = ({
 
         <div class="chart-container">
           <canvas id="metrics-chart"></canvas>
-          <button id="reset-zoom" class="reset-zoom-btn" style="display:none">
+          <button id="reset-zoom" class="reset-zoom-btn btn btn-secondary" style="display:none">
             Reset Zoom
           </button>
         </div>
