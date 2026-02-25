@@ -5,6 +5,7 @@ export interface ChartDataset {
   data: (number | null)[];
   borderColor: string;
   backgroundColor: string;
+  yAxisID?: string;
 }
 
 export interface ChartData {
@@ -21,11 +22,17 @@ export interface ChartAxis {
   beginAtZero?: boolean;
   ticks?: ChartAxisTicks;
   grace?: string;
+  position?: 'left' | 'right' | 'top' | 'bottom';
+  title?: {
+    display: boolean;
+    text: string;
+  };
 }
 
 export interface ChartScales {
   x?: ChartAxis;
   y?: ChartAxis;
+  y1?: ChartAxis;
 }
 
 export interface ZoomAnimation {

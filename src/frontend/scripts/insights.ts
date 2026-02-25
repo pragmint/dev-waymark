@@ -1,12 +1,14 @@
 // Main orchestration for insights page
 
-import { ChartManager } from './insights-chart';
+import { ChartManager, type ComparisonConfig } from './insights-chart';
 import {
   transformTeamMetricData,
   transformCapabilityMetricData,
+  mergeChartDataForComparison,
   type CapabilityMetric,
   type TeamMetric,
   type TeamInfo,
+  type ChartData,
 } from './insights-data';
 import { dataDateToInputDate, inputDateToDataDate } from './insights-date-utils';
 
@@ -19,6 +21,7 @@ interface MetricsData {
 
 interface FormInputs {
   metricSelect: HTMLSelectElement;
+  compareMetricSelect: HTMLSelectElement | null;
   startDate: HTMLInputElement;
   endDate: HTMLInputElement;
 }
@@ -28,6 +31,9 @@ interface FormInputs {
  */
 function getFormInputs(): FormInputs | null {
   const metricSelect = document.getElementById('metric-select') as HTMLSelectElement;
+  const compareMetricSelect = document.getElementById(
+    'compare-metric-select'
+  ) as HTMLSelectElement | null;
   const startDate = document.getElementById('start-date') as HTMLInputElement;
   const endDate = document.getElementById('end-date') as HTMLInputElement;
 
@@ -35,7 +41,7 @@ function getFormInputs(): FormInputs | null {
     return null;
   }
 
-  return { metricSelect, startDate, endDate };
+  return { metricSelect, compareMetricSelect, startDate, endDate };
 }
 
 /**
@@ -85,69 +91,72 @@ function hideMessage(): void {
 }
 
 /**
- * Handle team-specific metric chart update
+ * Get chart data for a single metric
  */
-function handleTeamMetric(
+function getMetricChartData(
   metricId: string,
+  capabilityMetrics: CapabilityMetric[],
   teamMetrics: TeamMetric[],
   teams: TeamInfo[],
-  inputs: FormInputs,
-  chartManager: ChartManager
-): void {
-  const [teamId, metricName] = metricId.split(':');
-  const metric = teamMetrics.find(m => m.teamId === teamId && m.metricName === metricName);
+  startDate: string,
+  endDate: string
+): ChartData | null {
+  const isTeamSpecific = metricId.includes(':');
 
-  if (!metric || metric.data.length === 0) {
-    showMessage('No data available for this metric');
-    chartManager.destroy();
-    return;
+  if (isTeamSpecific) {
+    const [teamId, metricName] = metricId.split(':');
+    const metric = teamMetrics.find(m => m.teamId === teamId && m.metricName === metricName);
+
+    if (!metric || metric.data.length === 0) {
+      return null;
+    }
+
+    return transformTeamMetricData(metric, startDate, endDate, teams);
+  } else {
+    const metric = capabilityMetrics.find(m => m.capabilityId === metricId);
+
+    if (!metric || metric.data.length === 0) {
+      return null;
+    }
+
+    return transformCapabilityMetricData(metric, startDate, endDate, teams);
   }
-
-  // Convert HTML5 date format to data format
-  const startDate = inputDateToDataDate(inputs.startDate.value);
-  const endDate = inputDateToDataDate(inputs.endDate.value);
-
-  const chartData = transformTeamMetricData(metric, startDate, endDate, teams);
-  const title = inputs.metricSelect.options[inputs.metricSelect.selectedIndex].text;
-
-  hideMessage();
-  chartManager.render(chartData, title);
 }
 
 /**
- * Handle capability metric chart update
+ * Get metric label from select element
  */
-function handleCapabilityMetric(
-  metricId: string,
-  capabilityMetrics: CapabilityMetric[],
-  teams: TeamInfo[],
-  inputs: FormInputs,
-  chartManager: ChartManager
+function getMetricLabel(selectElement: HTMLSelectElement): string {
+  return selectElement.options[selectElement.selectedIndex]?.text || '';
+}
+
+/**
+ * Check if chart data represents a line chart with multiple values
+ */
+function isLineChartWithMultipleValues(data: ChartData | null): boolean {
+  if (!data) return false;
+  return data.datasets.some(ds => ds.data.length > 1);
+}
+
+/**
+ * Update visibility of comparison dropdown
+ */
+function updateComparisonDropdownVisibility(
+  primaryMetricData: ChartData | null,
+  compareMetricGroup: HTMLElement | null
 ): void {
-  const metric = capabilityMetrics.find(m => m.capabilityId === metricId);
+  if (!compareMetricGroup) return;
 
-  if (!metric || metric.data.length === 0) {
-    showMessage('No data available for this capability');
-    chartManager.destroy();
-    return;
+  if (isLineChartWithMultipleValues(primaryMetricData)) {
+    compareMetricGroup.style.display = 'block';
+  } else {
+    compareMetricGroup.style.display = 'none';
+    // Reset comparison selection when hiding
+    const compareSelect = document.getElementById('compare-metric-select') as HTMLSelectElement;
+    if (compareSelect) {
+      compareSelect.value = '';
+    }
   }
-
-  // Convert HTML5 date format to data format
-  const startDate = inputDateToDataDate(inputs.startDate.value);
-  const endDate = inputDateToDataDate(inputs.endDate.value);
-
-  const chartData = transformCapabilityMetricData(metric, startDate, endDate, teams);
-
-  if (!chartData) {
-    showMessage('No data available for the selected filters');
-    chartManager.destroy();
-    return;
-  }
-
-  const title = inputs.metricSelect.options[inputs.metricSelect.selectedIndex].text;
-
-  hideMessage();
-  chartManager.render(chartData, title);
 }
 
 /**
@@ -165,6 +174,11 @@ function createUpdateHandler(chartManager: ChartManager) {
     if (!selectedMetric) {
       showMessage('Please select a metric');
       chartManager.destroy();
+      // Hide comparison dropdown when no metric is selected
+      const compareMetricGroup = document.getElementById('compare-metric-group');
+      if (compareMetricGroup) {
+        compareMetricGroup.style.display = 'none';
+      }
       return;
     }
 
@@ -174,25 +188,67 @@ function createUpdateHandler(chartManager: ChartManager) {
       return;
     }
 
-    const isTeamSpecific = selectedMetric.includes(':');
+    // Convert HTML5 date format to data format
+    const startDate = inputDateToDataDate(inputs.startDate.value);
+    const endDate = inputDateToDataDate(inputs.endDate.value);
 
-    if (isTeamSpecific) {
-      handleTeamMetric(
-        selectedMetric,
+    // Get primary metric data
+    const primaryData = getMetricChartData(
+      selectedMetric,
+      metricsData.capabilityMetrics,
+      metricsData.teamMetrics,
+      metricsData.teams,
+      startDate,
+      endDate
+    );
+
+    if (!primaryData) {
+      showMessage('No data available for this metric');
+      chartManager.destroy();
+      return;
+    }
+
+    // Update comparison dropdown visibility based on primary metric
+    const compareMetricGroup = document.getElementById('compare-metric-group');
+    updateComparisonDropdownVisibility(primaryData, compareMetricGroup);
+
+    // Check if comparison is enabled
+    const compareMetric = inputs.compareMetricSelect?.value;
+    if (compareMetric && isLineChartWithMultipleValues(primaryData)) {
+      // Get comparison metric data
+      const compareData = getMetricChartData(
+        compareMetric,
+        metricsData.capabilityMetrics,
         metricsData.teamMetrics,
         metricsData.teams,
-        inputs,
-        chartManager
+        startDate,
+        endDate
       );
-    } else {
-      handleCapabilityMetric(
-        selectedMetric,
-        metricsData.capabilityMetrics,
-        metricsData.teams,
-        inputs,
-        chartManager
-      );
+
+      // Only allow comparison if both are line charts
+      if (compareData && isLineChartWithMultipleValues(compareData)) {
+        const mergedData = mergeChartDataForComparison(primaryData, compareData);
+
+        if (mergedData) {
+          const primaryLabel = getMetricLabel(inputs.metricSelect);
+          const compareLabel = getMetricLabel(inputs.compareMetricSelect!);
+          const title = `${primaryLabel} vs ${compareLabel}`;
+          const comparisonConfig: ComparisonConfig = {
+            metric1Label: primaryLabel,
+            metric2Label: compareLabel,
+          };
+
+          hideMessage();
+          chartManager.render(mergedData, title, comparisonConfig);
+          return;
+        }
+      }
     }
+
+    // Render single metric
+    const title = getMetricLabel(inputs.metricSelect);
+    hideMessage();
+    chartManager.render(primaryData, title);
   };
 }
 
@@ -226,6 +282,9 @@ function initializeDateInputs(): void {
 (function initializeInsights() {
   const canvas = document.getElementById('metrics-chart') as HTMLCanvasElement;
   const metricSelect = document.getElementById('metric-select') as HTMLSelectElement;
+  const compareMetricSelect = document.getElementById(
+    'compare-metric-select'
+  ) as HTMLSelectElement | null;
   const startDateInput = document.getElementById('start-date') as HTMLInputElement;
   const endDateInput = document.getElementById('end-date') as HTMLInputElement;
   const resetZoomBtn = document.getElementById('reset-zoom') as HTMLButtonElement | null;
@@ -244,6 +303,11 @@ function initializeDateInputs(): void {
   metricSelect.addEventListener('change', updateChart);
   startDateInput.addEventListener('change', updateChart);
   endDateInput.addEventListener('change', updateChart);
+
+  // Add listener for comparison metric select if it exists
+  if (compareMetricSelect) {
+    compareMetricSelect.addEventListener('change', updateChart);
+  }
 
   // Show reset zoom button once a chart is rendered; wire up click
   if (resetZoomBtn) {

@@ -45,6 +45,29 @@ export const InsightsPage: FC<InsightsPageProps> = ({
             </select>
           </div>
 
+          <div class="control-group" id="compare-metric-group" style="display:none">
+            <label for="compare-metric-select">Compare with (optional):</label>
+            <select id="compare-metric-select" class="metric-select">
+              <option value="">-- No comparison --</option>
+              <optgroup label="Capability Scores">
+                {metricOptions
+                  .filter(opt => opt.type === 'capability')
+                  .map(opt => (
+                    <option value={opt.id}>{opt.label}</option>
+                  ))}
+              </optgroup>
+              {metricOptions.some(opt => opt.type === 'team-specific') && (
+                <optgroup label="Team-Specific Metrics">
+                  {metricOptions
+                    .filter(opt => opt.type === 'team-specific')
+                    .map(opt => (
+                      <option value={opt.id}>{opt.label}</option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
           <div class="control-group date-range">
             <div class="date-input-group">
               <label for="start-date">Start Date:</label>

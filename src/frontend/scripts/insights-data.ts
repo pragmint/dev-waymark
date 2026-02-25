@@ -152,3 +152,57 @@ export function transformCapabilityMetricData(
     datasets,
   };
 }
+
+/**
+ * Merge two chart data objects for comparison
+ * Aligns dates and assigns proper y-axis IDs
+ * Ensures second metric uses different colors from first metric
+ */
+export function mergeChartDataForComparison(data1: ChartData, data2: ChartData): ChartData | null {
+  if (!data1 || !data2) {
+    return null;
+  }
+
+  // Get all unique dates from both datasets (labels are already formatted for display)
+  const allLabels = Array.from(new Set([...data1.labels, ...data2.labels])).sort();
+
+  // Map display labels back to a common ordering
+  // Since we need to align data points, we'll use the combined label set
+  const labelIndexMap1 = new Map(data1.labels.map((label, idx) => [label, idx]));
+  const labelIndexMap2 = new Map(data2.labels.map((label, idx) => [label, idx]));
+
+  // Transform datasets from first metric - assign to left y-axis
+  const datasets1: ChartDataset[] = data1.datasets.map(ds => ({
+    ...ds,
+    yAxisID: 'y',
+    data: allLabels.map(label => {
+      const originalIndex = labelIndexMap1.get(label);
+      return originalIndex !== undefined ? ds.data[originalIndex] : null;
+    }),
+  }));
+
+  // Count how many datasets are in the first metric to offset colors for second metric
+  const colorOffset = datasets1.length;
+
+  // Transform datasets from second metric - assign to right y-axis with offset colors
+  const datasets2: ChartDataset[] = data2.datasets.map((ds, idx) => {
+    const colorIndex = (colorOffset + idx) % CHART_COLORS.length;
+    const color = CHART_COLORS[colorIndex];
+
+    return {
+      ...ds,
+      yAxisID: 'y1',
+      borderColor: color.border,
+      backgroundColor: color.bg,
+      data: allLabels.map(label => {
+        const originalIndex = labelIndexMap2.get(label);
+        return originalIndex !== undefined ? ds.data[originalIndex] : null;
+      }),
+    };
+  });
+
+  return {
+    labels: allLabels,
+    datasets: [...datasets1, ...datasets2],
+  };
+}

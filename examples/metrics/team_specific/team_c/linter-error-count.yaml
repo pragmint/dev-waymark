@@ -1,35 +1,35 @@
 data:
   - date: 9.1.2026
-    value: 2145
+    value: 892
   - date: 10.1.2026
-    value: 2089
+    value: 923
   - date: 13.1.2026
-    value: 1987
+    value: 887
   - date: 14.1.2026
-    value: 1923
-  - date: 15.1.2026
-    value: 1845
-  - date: 16.1.2026
-    value: 1756
-  - date: 17.1.2026
-    value: 1678
-  - date: 20.1.2026
-    value: 1589
-  - date: 21.1.2026
-    value: 1512
-  - date: 22.1.2026
-    value: 1451
-  - date: 23.1.2026
-    value: 1398
-  - date: 24.1.2026
-    value: 1287
-  - date: 27.1.2026
-    value: 1093
-  - date: 28.1.2026
-    value: 967
-  - date: 29.1.2026
     value: 845
-  - date: 30.1.2026
+  - date: 15.1.2026
+    value: 834
+  - date: 16.1.2026
+    value: 798
+  - date: 17.1.2026
+    value: 756
+  - date: 20.1.2026
     value: 723
-  - date: 31.1.2026
+  - date: 21.1.2026
+    value: 698
+  - date: 22.1.2026
+    value: 645
+  - date: 23.1.2026
     value: 612
+  - date: 24.1.2026
+    value: 578
+  - date: 27.1.2026
+    value: 534
+  - date: 28.1.2026
+    value: 489
+  - date: 29.1.2026
+    value: 445
+  - date: 30.1.2026
+    value: 398
+  - date: 31.1.2026
+    value: 356

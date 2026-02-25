@@ -1,19 +1,49 @@
 data:
   - team: team-a
-    date: 28.1.2026
-    value: 1.5
-    justification: |-
-      Multi-paragraph
-      justification over here.
+    date: 9.1.2026
+    value: 1
+    justification: Initial assessment - no AI accessibility yet.
   - team: team-a
-    date: 27.1.2026
+    date: 16.1.2026
+    value: 1.5
+    justification: Started documenting data schemas for AI access.
+  - team: team-a
+    date: 23.1.2026
     value: 2
-    justification: Sample justification.
+    justification: Basic API endpoints established for internal data access.
+  - team: team-a
+    date: 30.1.2026
+    value: 2.5
+    justification: AI can now access customer data with proper authentication.
   - team: team-b
-    date: 27.1.2026
+    date: 9.1.2026
     value: 2
-    justification: ya dig?
+    justification: Already have some data accessible via APIs.
+  - team: team-b
+    date: 16.1.2026
+    value: 2.5
+    justification: Improved documentation and added more endpoints.
+  - team: team-b
+    date: 23.1.2026
+    value: 3
+    justification: AI agents can access most operational data.
+  - team: team-b
+    date: 30.1.2026
+    value: 3.5
+    justification: Comprehensive AI access with proper governance.
   - team: team-c
-    date: 27.1.2026
+    date: 9.1.2026
+    value: 1.5
+    justification: Limited API access to internal systems.
+  - team: team-c
+    date: 16.1.2026
     value: 2
-    justification: Sample justification.
+    justification: Working on data catalog and access controls.
+  - team: team-c
+    date: 23.1.2026
+    value: 2.5
+    justification: Steady progress on AI accessibility infrastructure.
+  - team: team-c
+    date: 30.1.2026
+    value: 3
+    justification: Most critical data now accessible to AI systems.

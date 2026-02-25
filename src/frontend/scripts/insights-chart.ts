@@ -41,6 +41,11 @@ function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits 
   };
 }
 
+export interface ComparisonConfig {
+  metric1Label: string;
+  metric2Label: string;
+}
+
 /**
  * Chart manager - handles chart lifecycle
  */
@@ -55,7 +60,7 @@ export class ChartManager {
   /**
    * Render or update chart with new data
    */
-  render(data: ChartData, title: string): void {
+  render(data: ChartData, title: string, comparisonConfig?: ComparisonConfig): void {
     this.destroy();
 
     const limits = computeLimits(data);
@@ -98,10 +103,30 @@ export class ChartManager {
           y: {
             beginAtZero: chartType === 'bar',
             grace: '10%',
+            position: 'left',
+            title: comparisonConfig
+              ? {
+                  display: true,
+                  text: comparisonConfig.metric1Label,
+                }
+              : undefined,
           },
         },
       },
     };
+
+    // Add second y-axis if comparing metrics
+    if (comparisonConfig) {
+      config.options.scales.y1 = {
+        beginAtZero: chartType === 'bar',
+        grace: '10%',
+        position: 'right',
+        title: {
+          display: true,
+          text: comparisonConfig.metric2Label,
+        },
+      };
+    }
 
     this.chart = new window.Chart(this.canvas, config);
   }

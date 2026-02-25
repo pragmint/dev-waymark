@@ -418,6 +418,8 @@ describe('ChartManager', () => {
             y: {
               beginAtZero: false,
               grace: '10%',
+              position: 'left',
+              title: undefined,
             },
           },
         },
