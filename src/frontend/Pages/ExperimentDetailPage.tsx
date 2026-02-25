@@ -7,6 +7,7 @@ import type {
   ExperimentDecisionRolesItem,
   ExperimentSuccessCriteriaItem,
 } from '../../schemas/experimentSchemas';
+import { filenameToTitle } from '../../parsers/yaml/experimentParser';
 
 function parseFlexibleDate(dateString?: string | null): Date | null {
   if (!dateString) return null;
@@ -86,7 +87,7 @@ const SuccessCriteriaSection: FC<{ criteria?: ExperimentSuccessCriteriaItem[] }>
       {criteria.map(item => (
         <div class="criteria-item">
           <div class="criteria-header">
-            <strong>Metric:</strong> {item.metric}
+            <strong>Metric:</strong> {filenameToTitle(item.metric)}
           </div>
           <div class="criteria-details">
             <div class="criteria-detail">

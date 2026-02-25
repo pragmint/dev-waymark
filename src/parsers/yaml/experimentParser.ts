@@ -4,7 +4,7 @@ import type { Experiment } from '../../schemas/experimentSchemas';
 import { ExperimentFileSchema } from '../../schemas/experimentSchemas';
 import { ValidationError } from '../../domain/errors';
 
-function filenameToTitle(filename: string): string {
+export function filenameToTitle(filename: string): string {
   const lowercaseWords = new Set(['a', 'the', 'and', 'to', 'of', 'in']);
 
   return filename
