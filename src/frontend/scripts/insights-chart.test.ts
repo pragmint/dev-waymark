@@ -235,15 +235,63 @@ describe('ChartManager', () => {
       expect(config.options.plugins.title.display).toBe(true);
     });
 
-    it('sets type to "line"', () => {
+    it('sets type to "line" when any dataset has more than one data point', () => {
       // Arrange
       const manager = new ChartManager(canvas);
 
       // Act
-      manager.render(makeChartData(), 'Any Title');
+      manager.render(makeChartData(), 'Any Title'); // data: [1, 2, 3]
 
       // Assert
       expect(instances[0].config.type).toBe('line');
+    });
+
+    it('sets type to "bar" when every dataset has exactly one data point', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const singlePointData = {
+        labels: ['Jan'],
+        datasets: [{ label: 'X', data: [5], borderColor: '#000', backgroundColor: '#fff' }],
+      };
+
+      // Act
+      manager.render(singlePointData, 'Any Title');
+
+      // Assert
+      expect(instances[0].config.type).toBe('bar');
+    });
+
+    it('sets type to "line" when at least one dataset has multiple points', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const mixedData = {
+        labels: ['Jan', 'Feb'],
+        datasets: [
+          { label: 'Single', data: [1], borderColor: '#000', backgroundColor: '#fff' },
+          { label: 'Multi', data: [1, 2], borderColor: '#111', backgroundColor: '#eee' },
+        ],
+      };
+
+      // Act
+      manager.render(mixedData, 'Any Title');
+
+      // Assert
+      expect(instances[0].config.type).toBe('line');
+    });
+
+    it('sets type to "bar" when all datasets are empty', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const emptyData = {
+        labels: [],
+        datasets: [{ label: 'X', data: [], borderColor: '#000', backgroundColor: '#fff' }],
+      };
+
+      // Act
+      manager.render(emptyData, 'Any Title');
+
+      // Assert
+      expect(instances[0].config.type).toBe('bar');
     });
 
     it('sets maintainAspectRatio to false', () => {

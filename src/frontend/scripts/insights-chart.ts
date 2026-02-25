@@ -3,6 +3,15 @@
 import type { ChartData, ChartInstance, ChartConfiguration, ZoomAxisLimits } from './chart-types';
 
 /**
+ * Resolve chart type based on data density.
+ * Uses 'bar' when every dataset has a single data point (e.g. a snapshot in
+ * time), and 'line' as soon as any dataset has more than one point.
+ */
+function resolveChartType(data: ChartData): 'line' | 'bar' {
+  return data.datasets.some(ds => ds.data.length > 1) ? 'line' : 'bar';
+}
+
+/**
  * Derive zoom/pan limits from the rendered data so the user cannot pan or
  * zoom beyond the actual data range on either axis.
  *
@@ -52,7 +61,7 @@ export class ChartManager {
     const limits = computeLimits(data);
 
     const config: ChartConfiguration = {
-      type: 'line',
+      type: resolveChartType(data),
       data,
       options: {
         responsive: true,
