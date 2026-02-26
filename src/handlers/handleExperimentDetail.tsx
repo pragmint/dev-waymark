@@ -11,16 +11,28 @@ import { enrichTeamsWithMetrics } from '../domain/metricAggregations';
 import { loadCapabilityMetricsFromFilesystem } from '../loaders/loadCapabilityMetricsFromFilesystem';
 import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFilesystem';
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
+import { loadTeamMetricsFromFilesystem } from '../loaders/loadTeamMetricsFromFilesystem';
+import { resolveMetricChartData } from '../domain/experimentMetricsData';
+import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { TeamMetric } from '../schemas/metricSchemas';
+import type { MiniChartData } from '../frontend/components/MiniChart';
 
 const capabilityMetrics = await loadCapabilityMetricsFromFilesystem();
 const rawTeams = await loadTeamsFromFilesystem();
 const experiments = await loadExperimentsFromFilesystem();
 const teams = enrichTeamsWithMetrics(rawTeams, capabilityMetrics);
+const teamMetrics = await loadTeamMetricsFromFilesystem();
 
 export async function handleExperimentDetail(c: Context) {
   const experimentId = c.req.param('experimentId');
 
-  const data = await prepareExperimentDetailData(experimentId, teams, experiments);
+  const data = await prepareExperimentDetailData(
+    experimentId,
+    teams,
+    experiments,
+    capabilityMetrics,
+    teamMetrics
+  );
 
   return c.html(<ExperimentDetailPage {...data} />);
 }
@@ -33,7 +45,9 @@ export async function handleExperimentDetail(c: Context) {
 export async function prepareExperimentDetailData(
   experimentId: string,
   teams: Team[],
-  experiments: Experiment[]
+  experiments: Experiment[],
+  capMetrics: CapabilityMetric[],
+  tmMetrics: TeamMetric[]
 ): Promise<ExperimentDetailPageProps> {
   const experiment = experiments.find(exp => exp.id === experimentId);
   if (experiment === undefined) throw new NotFoundError('Experiment', experimentId);
@@ -44,9 +58,23 @@ export async function prepareExperimentDetailData(
   const practice = await loadPracticeFromFilesystem(experiment.intervention.practiceUnderTest);
   const practiceName = practice ? practice.title : experiment.intervention.practiceUnderTest;
 
+  const criteriaCharts: Record<string, MiniChartData | null> = {};
+  if (experiment.successCriteria) {
+    for (const criteria of experiment.successCriteria) {
+      criteriaCharts[criteria.metric] = resolveMetricChartData(
+        criteria.metric,
+        experiment.teamId,
+        team.name,
+        capMetrics,
+        tmMetrics
+      );
+    }
+  }
+
   return {
     team,
     experiment,
     practiceName,
+    criteriaChartsJson: JSON.stringify(criteriaCharts),
   };
 }

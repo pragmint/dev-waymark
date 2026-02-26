@@ -492,6 +492,20 @@
   margin: 0;
 }
 
+/* Mini Chart */
+.mini-chart-wrapper {
+  position: relative;
+  height: 20rem;
+  margin-top: $spacing-md;
+}
+
+.mini-chart-no-data {
+  margin-top: $spacing-md;
+  font-size: $font-sm;
+  color: $text-tertiary;
+  font-style: italic;
+}
+
 /* Empty State */
 .empty-state {
   padding: $spacing-xl;

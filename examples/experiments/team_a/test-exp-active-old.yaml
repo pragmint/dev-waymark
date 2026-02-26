@@ -48,6 +48,13 @@ intervention:
       notes: >
         Compare bug counts 8 weeks before experiment vs 8 weeks after. Focus on
         bugs that could have been caught by automated tests.
+    - metric: code-maintainability
+      target: Increase to 3 or higher
+      measurement_window: after_experiment
+      notes: >
+        Measure using our existing code maintainability metric which considers factors
+        like code complexity and readability. Improved test coverage should contribute
+        to better maintainability scores.
   status: active
   start-date: 5.11.2025
   expected-duration-in-weeks: 16

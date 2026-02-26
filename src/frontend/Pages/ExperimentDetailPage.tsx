@@ -1,5 +1,6 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
+import { MiniChart, type MiniChartData } from '../components/MiniChart';
 import type { Team } from '../../schemas/teamSchemas';
 import type {
   Experiment,
@@ -73,11 +74,13 @@ export interface ExperimentDetailPageProps {
   team: Team;
   experiment: Experiment;
   practiceName: string;
+  criteriaChartsJson: string;
 }
 
-const SuccessCriteriaSection: FC<{ criteria?: ExperimentSuccessCriteriaItem[] }> = ({
-  criteria,
-}) => {
+const SuccessCriteriaSection: FC<{
+  criteria?: ExperimentSuccessCriteriaItem[];
+  criteriaCharts: Record<string, MiniChartData | null>;
+}> = ({ criteria, criteriaCharts }) => {
   if (!criteria || criteria.length === 0) {
     return <p class="empty-state">No success criteria defined yet.</p>;
   }
@@ -102,6 +105,7 @@ const SuccessCriteriaSection: FC<{ criteria?: ExperimentSuccessCriteriaItem[] }>
               </div>
             )}
           </div>
+          <MiniChart chartData={criteriaCharts[item.metric] ?? null} metricId={item.metric} />
         </div>
       ))}
     </div>
@@ -220,6 +224,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
   team,
   experiment,
   practiceName,
+  criteriaChartsJson,
 }) => {
   const parsedStartDate = parseFlexibleDate(experiment.startDate);
   const startDate = parsedStartDate
@@ -235,6 +240,8 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
   const endDate = experiment.expectedDurationInWeeks
     ? calculateEndDate(experiment.startDate, duration)
     : 'Not specified';
+
+  const criteriaCharts: Record<string, MiniChartData | null> = JSON.parse(criteriaChartsJson);
 
   return (
     <Page
@@ -356,7 +363,10 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
 
             <div class="intervention-subsection">
               <h3>Success Criteria</h3>
-              <SuccessCriteriaSection criteria={experiment.successCriteria} />
+              <SuccessCriteriaSection
+                criteria={experiment.successCriteria}
+                criteriaCharts={criteriaCharts}
+              />
             </div>
 
             <div class="intervention-subsection">
@@ -383,6 +393,9 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
           </a>
         </div>
       </div>
+
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+      <script type="module" src="/public/mini-chart.js"></script>
     </Page>
   );
 };
