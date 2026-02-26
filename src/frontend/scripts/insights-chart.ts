@@ -12,13 +12,24 @@ import type {
 import { formatDataDateForDisplay } from './insights-date-utils';
 
 /**
+ * Check if data represents stacked qualitative data (anecdotes)
+ */
+function isStackedQualitativeData(data: ChartData): boolean {
+  return data.qualitativeData !== undefined && data.datasets.length > 0;
+}
+
+/**
  * Resolve chart type based on data density.
  * Uses 'bar' when every dataset has a single data point (e.g. a snapshot in
  * time), and 'line' as soon as any dataset has more than one point.
  */
 function resolveChartType(data: ChartData): 'line' | 'bar' {
-  // For qualitative metrics, use bar chart (empty datasets will just show annotations)
-  if (data.qualitativeData) {
+  // For qualitative metrics with datasets (stacked anecdotes), use bar chart
+  if (isStackedQualitativeData(data)) {
+    return 'bar';
+  }
+  // For qualitative metrics without datasets (old annotation style), use bar chart
+  if (data.qualitativeData && data.datasets.length === 0) {
     return 'bar';
   }
   return data.datasets.some(ds => ds.data.length > 1) ? 'line' : 'bar';
@@ -233,8 +244,21 @@ function createTooltipCallbacks() {
       const metadata = dataset.metadata[dataIndex];
       const lines: string[] = [];
 
-      // Format metadata for display
+      // For stacked qualitative data (anecdotes), show description prominently
+      if (metadata.description) {
+        const description = String(metadata.description);
+        // Wrap description text
+        const wrapped = description.match(/.{1,80}(\s|$)/g) || [description];
+        lines.push('\n');
+        wrapped.forEach(line => lines.push(line.trim()));
+        lines.push('');
+      }
+
+      // Format remaining metadata for display
       for (const [key, value] of Object.entries(metadata)) {
+        // Skip description as we've already shown it
+        if (key === 'description') continue;
+
         if (value !== undefined && value !== null && value !== '') {
           // Format key: convert snake_case to Title Case
           const formattedKey = key
@@ -255,7 +279,7 @@ function createTooltipCallbacks() {
         }
       }
 
-      return lines.length > 0 ? ['\n', ...lines] : '';
+      return lines.length > 0 ? lines : '';
     },
   };
 }
@@ -284,7 +308,8 @@ export class ChartManager {
 
     const limits = computeLimits(data);
     const chartType = resolveChartType(data);
-    const annotations = createAnnotationsForQualitativeData(data);
+    const isStacked = isStackedQualitativeData(data);
+    const annotations = isStacked ? undefined : createAnnotationsForQualitativeData(data);
     const axisRanges = computeAxisRanges(data);
 
     const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
@@ -324,12 +349,14 @@ export class ChartManager {
         },
         scales: {
           x: {
+            stacked: isStacked,
             ticks: {
               maxRotation: 90,
               minRotation: 45,
             },
           },
           y: {
+            stacked: isStacked,
             beginAtZero: chartType === 'bar',
             ...(yRange ? { min: yRange.min, max: yRange.max } : { grace: '10%' }),
             position: 'left',
@@ -344,7 +371,7 @@ export class ChartManager {
       },
     };
 
-    // Add annotations if we have qualitative data
+    // Add annotations if we have qualitative data without stacking
     if (annotations) {
       config.options.plugins.annotation = annotations;
     }

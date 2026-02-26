@@ -108,11 +108,41 @@ export function transformTeamMetricData(
 
   // Check if this is a qualitative metric
   if (hasQualitativeValues(sortedData)) {
-    // For qualitative metrics, return empty datasets
-    // Annotations will be added by the chart manager
+    // For qualitative metrics (anecdotes), create stacked bar chart
+    // Get all unique dates
+    const uniqueDates = Array.from(new Set(sortedData.map(d => formatDataDateForDisplay(d.date))));
+
+    // Create a dataset for each entry
+    const datasets: ChartDataset[] = sortedData.map((dataPoint, index) => {
+      const displayDate = formatDataDateForDisplay(dataPoint.date);
+      const color = CHART_COLORS[index % CHART_COLORS.length];
+
+      // Create data array with 1 at the appropriate date index, null elsewhere
+      const data = uniqueDates.map(date => (date === displayDate ? 1 : null));
+
+      // Store the full description in metadata
+      const metadata = uniqueDates.map(date =>
+        date === displayDate
+          ? {
+              description: String(dataPoint.value),
+              ...extractMetadata(dataPoint),
+            }
+          : undefined
+      );
+
+      return {
+        label: `Entry ${index + 1}`,
+        data,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        metadata,
+      };
+    });
+
     return {
-      labels: sortedData.map(d => formatDataDateForDisplay(d.date)),
-      datasets: [],
+      labels: uniqueDates,
+      datasets,
+      // Mark as stacked qualitative data
       qualitativeData: sortedData.map(d => ({
         date: d.date,
         value: String(d.value),

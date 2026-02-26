@@ -103,11 +103,24 @@ describe('transformTeamMetricData', () => {
     expect(result.datasets[0].data).toEqual([15]);
   });
 
-  it('handles qualitative metrics by returning qualitativeData instead of datasets', () => {
+  it('handles qualitative metrics by creating stacked bar chart datasets', () => {
     const metric = makeQualitativeTeamMetric();
     const result = transformTeamMetricData(metric, '1.1.2026', '31.12.2026', teams);
 
-    expect(result.datasets).toEqual([]);
+    // Should create a dataset for each entry
+    expect(result.datasets).toHaveLength(2);
+    expect(result.datasets[0].label).toBe('Entry 1');
+    expect(result.datasets[1].label).toBe('Entry 2');
+
+    // Each dataset should have value 1 at the appropriate date index
+    expect(result.datasets[0].data).toEqual([1, null]);
+    expect(result.datasets[1].data).toEqual([null, 1]);
+
+    // Metadata should contain the description
+    expect(result.datasets[0].metadata![0]!.description).toBe('Things are going well');
+    expect(result.datasets[1].metadata![1]!.description).toBe('Had some challenges today');
+
+    // Should also preserve qualitativeData for backward compatibility
     expect(result.qualitativeData).toBeDefined();
     expect(result.qualitativeData).toHaveLength(2);
     expect(result.qualitativeData![0].value).toBe('Things are going well');
@@ -143,6 +156,16 @@ describe('transformTeamMetricData', () => {
 
     const result = transformTeamMetricData(metricWithMetadata, '1.1.2026', '31.12.2026', teams);
 
+    // Check dataset metadata includes description and additional metadata
+    expect(result.datasets[0].metadata![0]).toEqual({
+      description: 'Good day',
+      link: 'https://example.com',
+    });
+    expect(result.datasets[1].metadata![1]).toEqual({
+      description: 'Bad day',
+    });
+
+    // Check qualitativeData also preserves metadata
     expect(result.qualitativeData![0].metadata).toEqual({ link: 'https://example.com' });
     expect(result.qualitativeData![1].metadata).toBeUndefined();
   });

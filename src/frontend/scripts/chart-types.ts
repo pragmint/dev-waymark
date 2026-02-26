@@ -32,6 +32,7 @@ export interface ChartAxisTicks {
 
 export interface ChartAxis {
   beginAtZero?: boolean;
+  stacked?: boolean;
   ticks?: ChartAxisTicks;
   grace?: string;
   min?: number;
