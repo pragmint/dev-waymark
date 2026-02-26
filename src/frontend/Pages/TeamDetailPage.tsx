@@ -228,12 +228,6 @@ const ExperimentCard: FC<{
         </h3>
         <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
       </div>
-      <div class="experiment-supporting-practice">
-        Supporting practice:{' '}
-        <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
-          {practiceName}
-        </a>
-      </div>
       {capabilityNames.length > 0 && (
         <div class="experiment-capabilities">
           {capabilityNames.map(name => (
@@ -241,6 +235,12 @@ const ExperimentCard: FC<{
           ))}
         </div>
       )}
+      <div class="experiment-supporting-practice">
+        Supporting practice:{' '}
+        <a href={`/catalog/practice/${experiment.intervention.practiceUnderTest}/`}>
+          {practiceName}
+        </a>
+      </div>
       <div class="experiment-meta">
         <span class="experiment-date">
           Started:{' '}
