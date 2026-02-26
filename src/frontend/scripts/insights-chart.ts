@@ -263,8 +263,8 @@ export class ChartManager {
           zoom: {
             limits,
             zoom: {
-              wheel: { enabled: true },
-              pinch: { enabled: true },
+              wheel: { enabled: false },
+              pinch: { enabled: false },
               mode: 'xy',
             },
             pan: {
@@ -317,6 +317,24 @@ export class ChartManager {
     }
 
     this.chart = new window.Chart(this.canvas, config);
+  }
+
+  /**
+   * Zoom in by 20%
+   */
+  zoomIn(): void {
+    if (this.chart) {
+      this.chart.zoom(1.2);
+    }
+  }
+
+  /**
+   * Zoom out by ~17% (inverse of zoom in)
+   */
+  zoomOut(): void {
+    if (this.chart) {
+      this.chart.zoom(1 / 1.2);
+    }
   }
 
   /**

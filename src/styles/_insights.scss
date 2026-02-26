@@ -127,10 +127,35 @@
   position: relative;
 }
 
-.reset-zoom-btn {
+#metrics-chart {
+  cursor: grab;
+}
+
+#metrics-chart:active {
+  cursor: grabbing;
+}
+
+.chart-zoom-controls {
   position: absolute;
   top: $spacing-md;
   right: $spacing-md;
+  display: flex;
+
+  .btn-left {
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    margin-right: -0.1rem;
+  }
+
+  .btn-middle {
+    border-radius: 0px;
+    margin-right: -0.1rem;
+  }
+
+  .btn-right {
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+  }
 }
 
 .chart-message {

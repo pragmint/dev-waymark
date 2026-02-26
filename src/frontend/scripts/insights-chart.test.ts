@@ -29,6 +29,7 @@ function makeMockChartInstance(): MockChartInstance {
       this.destroyCalls++;
     },
     resetZoom() {},
+    zoom(_factor: number) {},
   };
 }
 
@@ -187,6 +188,52 @@ describe('ChartManager', () => {
 
       // Assert — destroy() on the instance must not be called again
       expect(chartInstance.destroyCalls).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // zoomIn() / zoomOut() / resetZoom()
+  // -------------------------------------------------------------------------
+
+  describe('zoomIn()', () => {
+    it('calls chart.zoom(1.2) on the underlying chart instance', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      manager.render(makeChartData(), 'My Chart');
+      const zoomMock = mock((_factor: number) => {});
+      instances[0].instance.zoom = zoomMock;
+
+      // Act
+      manager.zoomIn();
+
+      // Assert
+      expect(zoomMock).toHaveBeenCalledWith(1.2);
+    });
+
+    it('is a no-op when no chart is rendered', () => {
+      const manager = new ChartManager(canvas);
+      expect(() => manager.zoomIn()).not.toThrow();
+    });
+  });
+
+  describe('zoomOut()', () => {
+    it('calls chart.zoom(1/1.2) on the underlying chart instance', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      manager.render(makeChartData(), 'My Chart');
+      const zoomMock = mock((_factor: number) => {});
+      instances[0].instance.zoom = zoomMock;
+
+      // Act
+      manager.zoomOut();
+
+      // Assert
+      expect(zoomMock).toHaveBeenCalledWith(1 / 1.2);
+    });
+
+    it('is a no-op when no chart is rendered', () => {
+      const manager = new ChartManager(canvas);
+      expect(() => manager.zoomOut()).not.toThrow();
     });
   });
 
@@ -398,8 +445,8 @@ describe('ChartManager', () => {
                 y: { min: 0.5, max: 3.5, minRange: 1 },
               },
               zoom: {
-                wheel: { enabled: true },
-                pinch: { enabled: true },
+                wheel: { enabled: false },
+                pinch: { enabled: false },
                 mode: 'xy',
               },
               pan: {

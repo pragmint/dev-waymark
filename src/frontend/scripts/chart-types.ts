@@ -151,6 +151,7 @@ export interface ChartConfiguration {
 export interface ChartInstance {
   destroy(): void;
   resetZoom(): void;
+  zoom(scaleFactor: number): void;
 }
 
 export interface ChartConstructor {

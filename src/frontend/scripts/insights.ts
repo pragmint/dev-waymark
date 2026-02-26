@@ -287,6 +287,9 @@ function initializeDateInputs(): void {
   ) as HTMLSelectElement | null;
   const startDateInput = document.getElementById('start-date') as HTMLInputElement;
   const endDateInput = document.getElementById('end-date') as HTMLInputElement;
+  const zoomControls = document.getElementById('chart-zoom-controls') as HTMLElement | null;
+  const zoomInBtn = document.getElementById('zoom-in') as HTMLButtonElement | null;
+  const zoomOutBtn = document.getElementById('zoom-out') as HTMLButtonElement | null;
   const resetZoomBtn = document.getElementById('reset-zoom') as HTMLButtonElement | null;
 
   if (!canvas || !metricSelect || !startDateInput || !endDateInput) {
@@ -309,14 +312,20 @@ function initializeDateInputs(): void {
     compareMetricSelect.addEventListener('change', updateChart);
   }
 
-  // Show reset zoom button once a chart is rendered; wire up click
-  if (resetZoomBtn) {
+  // Show zoom controls once a chart is rendered; wire up buttons
+  if (zoomControls) {
     metricSelect.addEventListener('change', () => {
-      resetZoomBtn.style.display = chartManager.isRendered() ? 'block' : 'none';
+      zoomControls.style.display = chartManager.isRendered() ? 'flex' : 'none';
     });
-    resetZoomBtn.addEventListener('click', () => {
-      chartManager.resetZoom();
-    });
+  }
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', () => chartManager.zoomIn());
+  }
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', () => chartManager.zoomOut());
+  }
+  if (resetZoomBtn) {
+    resetZoomBtn.addEventListener('click', () => chartManager.resetZoom());
   }
 
   // Clean up on page unload

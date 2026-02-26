@@ -94,9 +94,17 @@ export const InsightsPage: FC<InsightsPageProps> = ({
 
         <div class="chart-container">
           <canvas id="metrics-chart"></canvas>
-          <button id="reset-zoom" class="reset-zoom-btn btn btn-secondary" style="display:none">
-            Reset Zoom
-          </button>
+          <div id="chart-zoom-controls" class="chart-zoom-controls" style="display:none">
+            <button id="zoom-out" class="btn btn-outline btn-left">
+              <i class="fa-solid fa-magnifying-glass-minus"></i>
+            </button>
+            <button id="zoom-in" class="btn btn-outline btn-middle">
+              <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </button>
+            <button id="reset-zoom" class="btn btn-outline btn-right">
+              <i class="fa-solid fa-arrow-rotate-left"></i>
+            </button>
+          </div>
         </div>
 
         <div id="chart-message" class="chart-message">

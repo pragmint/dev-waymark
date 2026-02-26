@@ -243,7 +243,6 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
   if (data1.qualitativeData || data2.qualitativeData) {
     return null;
   }
-
   // Get all unique dates from both datasets (labels are already formatted for display)
   const allLabels = sortDisplayDates(Array.from(new Set([...data1.labels, ...data2.labels])));
 
