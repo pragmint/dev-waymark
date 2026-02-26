@@ -236,6 +236,8 @@ function createUpdateHandler(chartManager: ChartManager) {
           const comparisonConfig: ComparisonConfig = {
             metric1Label: primaryLabel,
             metric2Label: compareLabel,
+            metric1IsCapability: !selectedMetric.includes(':'),
+            metric2IsCapability: !compareMetric.includes(':'),
           };
 
           hideMessage();
@@ -248,7 +250,7 @@ function createUpdateHandler(chartManager: ChartManager) {
     // Render single metric
     const title = getMetricLabel(inputs.metricSelect);
     hideMessage();
-    chartManager.render(primaryData, title);
+    chartManager.render(primaryData, title, undefined, !selectedMetric.includes(':'));
   };
 }
 

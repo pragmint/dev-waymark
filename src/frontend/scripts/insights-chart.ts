@@ -100,9 +100,13 @@ function computeAxisRanges(data: ChartData): {
   };
 }
 
+const CAPABILITY_Y_RANGE = { min: 0, max: 4.5 };
+
 export interface ComparisonConfig {
   metric1Label: string;
   metric2Label: string;
+  metric1IsCapability?: boolean;
+  metric2IsCapability?: boolean;
 }
 
 /**
@@ -270,13 +274,23 @@ export class ChartManager {
   /**
    * Render or update chart with new data
    */
-  render(data: ChartData, title: string, comparisonConfig?: ComparisonConfig): void {
+  render(
+    data: ChartData,
+    title: string,
+    comparisonConfig?: ComparisonConfig,
+    isCapabilityMetric?: boolean
+  ): void {
     this.destroy();
 
     const limits = computeLimits(data);
     const chartType = resolveChartType(data);
     const annotations = createAnnotationsForQualitativeData(data);
     const axisRanges = computeAxisRanges(data);
+
+    const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
+    const y1IsCapability = comparisonConfig?.metric2IsCapability ?? false;
+    const yRange = yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y;
+    const y1Range = y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1;
 
     const config: ChartConfiguration = {
       type: chartType,
@@ -317,7 +331,7 @@ export class ChartManager {
           },
           y: {
             beginAtZero: chartType === 'bar',
-            ...(axisRanges.y ? { min: axisRanges.y.min, max: axisRanges.y.max } : { grace: '10%' }),
+            ...(yRange ? { min: yRange.min, max: yRange.max } : { grace: '10%' }),
             position: 'left',
             title: comparisonConfig
               ? {
@@ -339,7 +353,7 @@ export class ChartManager {
     if (comparisonConfig) {
       config.options.scales.y1 = {
         beginAtZero: chartType === 'bar',
-        ...(axisRanges.y1 ? { min: axisRanges.y1.min, max: axisRanges.y1.max } : { grace: '10%' }),
+        ...(y1Range ? { min: y1Range.min, max: y1Range.max } : { grace: '10%' }),
         position: 'right',
         title: {
           display: true,
