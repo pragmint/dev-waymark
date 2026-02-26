@@ -2,6 +2,7 @@
 
 import type {
   ChartData,
+  ChartDataset,
   ChartInstance,
   ChartConfiguration,
   ZoomAxisLimits,
@@ -66,6 +67,36 @@ function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits 
       max: yMax + yPadding,
       minRange: yPadding * 2,
     },
+  };
+}
+
+/**
+ * Compute explicit min/max for each y-axis based on the full dataset values,
+ * so the axis range stays stable when a series is toggled off via the legend.
+ */
+function computeAxisRanges(data: ChartData): {
+  y: { min: number; max: number } | null;
+  y1: { min: number; max: number } | null;
+} {
+  if (data.qualitativeData) {
+    return { y: null, y1: null };
+  }
+
+  function rangeFor(datasets: ChartDataset[]): { min: number; max: number } | null {
+    const values = datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
+    if (values.length === 0) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = Math.max((max - min) * 0.1, 0.5);
+    return { min: min - padding, max: max + padding };
+  }
+
+  const yDatasets = data.datasets.filter(ds => !ds.yAxisID || ds.yAxisID === 'y');
+  const y1Datasets = data.datasets.filter(ds => ds.yAxisID === 'y1');
+
+  return {
+    y: rangeFor(yDatasets),
+    y1: rangeFor(y1Datasets),
   };
 }
 
@@ -245,6 +276,7 @@ export class ChartManager {
     const limits = computeLimits(data);
     const chartType = resolveChartType(data);
     const annotations = createAnnotationsForQualitativeData(data);
+    const axisRanges = computeAxisRanges(data);
 
     const config: ChartConfiguration = {
       type: chartType,
@@ -265,11 +297,11 @@ export class ChartManager {
             zoom: {
               wheel: { enabled: false },
               pinch: { enabled: false },
-              mode: 'xy',
+              mode: 'x',
             },
             pan: {
               enabled: true,
-              mode: 'xy',
+              mode: 'x',
             },
           },
           tooltip: {
@@ -285,7 +317,7 @@ export class ChartManager {
           },
           y: {
             beginAtZero: chartType === 'bar',
-            grace: '10%',
+            ...(axisRanges.y ? { min: axisRanges.y.min, max: axisRanges.y.max } : { grace: '10%' }),
             position: 'left',
             title: comparisonConfig
               ? {
@@ -307,7 +339,7 @@ export class ChartManager {
     if (comparisonConfig) {
       config.options.scales.y1 = {
         beginAtZero: chartType === 'bar',
-        grace: '10%',
+        ...(axisRanges.y1 ? { min: axisRanges.y1.min, max: axisRanges.y1.max } : { grace: '10%' }),
         position: 'right',
         title: {
           display: true,

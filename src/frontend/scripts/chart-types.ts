@@ -34,6 +34,8 @@ export interface ChartAxis {
   beginAtZero?: boolean;
   ticks?: ChartAxisTicks;
   grace?: string;
+  min?: number;
+  max?: number;
   position?: 'left' | 'right' | 'top' | 'bottom';
   title?: {
     display: boolean;

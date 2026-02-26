@@ -447,11 +447,11 @@ describe('ChartManager', () => {
               zoom: {
                 wheel: { enabled: false },
                 pinch: { enabled: false },
-                mode: 'xy',
+                mode: 'x',
               },
               pan: {
                 enabled: true,
-                mode: 'xy',
+                mode: 'x',
               },
             },
           },
@@ -464,7 +464,8 @@ describe('ChartManager', () => {
             },
             y: {
               beginAtZero: false,
-              grace: '10%',
+              min: 0.5,
+              max: 3.5,
               position: 'left',
               title: undefined,
             },
