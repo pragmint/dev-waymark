@@ -131,32 +131,11 @@ function getMetricLabel(selectElement: HTMLSelectElement): string {
 }
 
 /**
- * Check if chart data represents a line chart with multiple values
+ * Check if chart data represents a time-series (line) metric.
+ * Qualitative/anecdote metrics always render as bars even when they have multiple data points.
  */
-function isLineChartWithMultipleValues(data: ChartData | null): boolean {
-  if (!data) return false;
-  return data.datasets.some(ds => ds.data.length > 1);
-}
-
-/**
- * Update visibility of comparison dropdown
- */
-function updateComparisonDropdownVisibility(
-  primaryMetricData: ChartData | null,
-  compareMetricGroup: HTMLElement | null
-): void {
-  if (!compareMetricGroup) return;
-
-  if (isLineChartWithMultipleValues(primaryMetricData)) {
-    compareMetricGroup.style.display = 'block';
-  } else {
-    compareMetricGroup.style.display = 'none';
-    // Reset comparison selection when hiding
-    const compareSelect = document.getElementById('compare-metric-select') as HTMLSelectElement;
-    if (compareSelect) {
-      compareSelect.value = '';
-    }
-  }
+function isLineSeries(data: ChartData): boolean {
+  return !data.qualitativeData && data.datasets.some(ds => ds.data.length > 1);
 }
 
 /**
@@ -174,11 +153,6 @@ function createUpdateHandler(chartManager: ChartManager) {
     if (!selectedMetric) {
       showMessage('Please select a metric');
       chartManager.destroy();
-      // Hide comparison dropdown when no metric is selected
-      const compareMetricGroup = document.getElementById('compare-metric-group');
-      if (compareMetricGroup) {
-        compareMetricGroup.style.display = 'none';
-      }
       return;
     }
 
@@ -208,14 +182,9 @@ function createUpdateHandler(chartManager: ChartManager) {
       return;
     }
 
-    // Update comparison dropdown visibility based on primary metric
-    const compareMetricGroup = document.getElementById('compare-metric-group');
-    updateComparisonDropdownVisibility(primaryData, compareMetricGroup);
-
-    // Check if comparison is enabled
+    // Check if a comparison metric is selected
     const compareMetric = inputs.compareMetricSelect?.value;
-    if (compareMetric && isLineChartWithMultipleValues(primaryData)) {
-      // Get comparison metric data
+    if (compareMetric) {
       const compareData = getMetricChartData(
         compareMetric,
         metricsData.capabilityMetrics,
@@ -225,11 +194,28 @@ function createUpdateHandler(chartManager: ChartManager) {
         endDate
       );
 
-      // Only allow comparison if both are line charts
-      if (compareData && isLineChartWithMultipleValues(compareData)) {
+      if (compareData) {
         const mergedData = mergeChartDataForComparison(primaryData, compareData);
 
         if (mergedData) {
+          const primaryIsLine = isLineSeries(primaryData);
+          const compareIsLine = isLineSeries(compareData);
+
+          // Combo (line + bar): tag the line datasets so Chart.js renders them as lines
+          // while using 'bar' as the base chart type.
+          if (primaryIsLine !== compareIsLine) {
+            const splitIndex = primaryData.datasets.length;
+            if (primaryIsLine) {
+              mergedData.datasets.slice(0, splitIndex).forEach(ds => {
+                ds.type = 'line';
+              });
+            } else {
+              mergedData.datasets.slice(splitIndex).forEach(ds => {
+                ds.type = 'line';
+              });
+            }
+          }
+
           const primaryLabel = getMetricLabel(inputs.metricSelect);
           const compareLabel = getMetricLabel(inputs.compareMetricSelect!);
           const title = `${primaryLabel} vs ${compareLabel}`;
@@ -240,8 +226,11 @@ function createUpdateHandler(chartManager: ChartManager) {
             metric2IsCapability: !compareMetric.includes(':'),
           };
 
+          // Line+line keeps 'line' as chart type; everything else uses 'bar' as the base.
+          const chartTypeOverride = !(primaryIsLine && compareIsLine) ? 'bar' : undefined;
+
           hideMessage();
-          chartManager.render(mergedData, title, comparisonConfig);
+          chartManager.render(mergedData, title, comparisonConfig, undefined, chartTypeOverride);
           return;
         }
       }

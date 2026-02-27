@@ -272,12 +272,13 @@ export class ChartManager {
     data: ChartData,
     title: string,
     comparisonConfig?: ComparisonConfig,
-    isCapabilityMetric?: boolean
+    isCapabilityMetric?: boolean,
+    chartTypeOverride?: 'line' | 'bar'
   ): void {
     this.destroy();
 
     const limits = computeLimits(data);
-    const chartType = resolveChartType(data);
+    const chartType = chartTypeOverride ?? resolveChartType(data);
     // Only use annotation boxes for old-style qualitative data that has no numeric datasets
     const annotations =
       data.qualitativeData && data.datasets.length === 0

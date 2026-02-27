@@ -391,28 +391,28 @@ describe('mergeChartDataForComparison', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when data1 has qualitative data', () => {
-    const data1 = {
-      ...makeSimpleChartData(),
-      qualitativeData: [{ date: '1.1.2026', value: 'test' }],
+  it('merges qualitative data with numeric data for combo charts', () => {
+    const qualitativeData = {
+      labels: ['January 1, 2026'],
+      datasets: [
+        {
+          label: 'anecdotes',
+          data: [2],
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          metadata: [{ anecdotes: 'Entry one\n\nEntry two' }],
+        },
+      ],
+      qualitativeData: [{ date: '1.1.2026', value: 'Entry one' }],
     };
-    const data2 = makeSimpleChartData();
+    const numericData = makeSimpleChartData();
 
-    const result = mergeChartDataForComparison(data1, data2);
+    const result = mergeChartDataForComparison(qualitativeData, numericData);
 
-    expect(result).toBeNull();
-  });
-
-  it('returns null when data2 has qualitative data', () => {
-    const data1 = makeSimpleChartData();
-    const data2 = {
-      ...makeSimpleChartData(),
-      qualitativeData: [{ date: '1.1.2026', value: 'test' }],
-    };
-
-    const result = mergeChartDataForComparison(data1, data2);
-
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026']);
+    expect(result!.datasets[0].yAxisID).toBe('y');
+    expect(result!.datasets[1].yAxisID).toBe('y1');
   });
 
   it('aligns dates with nulls for missing data points', () => {

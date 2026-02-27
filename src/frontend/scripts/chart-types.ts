@@ -10,6 +10,7 @@ export interface ChartDataset {
   borderColor: string;
   backgroundColor: string;
   yAxisID?: string;
+  type?: string;
   metadata?: (DataPointMetadata | undefined)[];
 }
 

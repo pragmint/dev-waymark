@@ -254,19 +254,15 @@ export function transformCapabilityMetricData(
 }
 
 /**
- * Merge two chart data objects for comparison
- * Aligns dates and assigns proper y-axis IDs
- * Ensures second metric uses different colors from first metric
+ * Merge two chart data objects for comparison.
+ * Aligns dates, assigns proper y-axis IDs, and offsets colours for the second metric.
+ * Supports all combinations of time-series and bar/qualitative metrics.
  */
 export function mergeChartDataForComparison(data1: ChartData, data2: ChartData): ChartData | null {
   if (!data1 || !data2) {
     return null;
   }
 
-  // Don't allow comparison with qualitative metrics
-  if (data1.qualitativeData || data2.qualitativeData) {
-    return null;
-  }
   // Get all unique dates from both datasets (labels are already formatted for display)
   const allLabels = sortDisplayDates(Array.from(new Set([...data1.labels, ...data2.labels])));
 

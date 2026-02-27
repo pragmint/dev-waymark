@@ -45,7 +45,7 @@ export const InsightsPage: FC<InsightsPageProps> = ({
             </select>
           </div>
 
-          <div class="control-group" id="compare-metric-group" style="display:none">
+          <div class="control-group" id="compare-metric-group">
             <label for="compare-metric-select">Compare with (optional):</label>
             <select id="compare-metric-select" class="metric-select">
               <option value="">-- No comparison --</option>
