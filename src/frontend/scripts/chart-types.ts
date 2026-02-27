@@ -29,6 +29,7 @@ export interface ChartData {
 export interface ChartAxisTicks {
   maxRotation?: number;
   minRotation?: number;
+  count?: number;
 }
 
 export interface ChartAxis {

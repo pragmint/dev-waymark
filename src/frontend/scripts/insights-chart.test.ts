@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 // This must happen before the module is imported.
 (globalThis as unknown as Record<string, unknown>)['window'] = globalThis;
 
-import { ChartManager } from './insights-chart';
+import { ChartManager, calculateAlignedTickCount, type ComparisonConfig } from './insights-chart';
 import type { ChartConfiguration, ChartInstance } from './chart-types';
 
 // ---------------------------------------------------------------------------
@@ -627,5 +627,252 @@ describe('ChartManager', () => {
       expect(limits?.y?.min).toBeCloseTo(-0.5);
       expect(limits?.y?.max).toBeCloseTo(1.5);
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // render() with comparison config — dual y-axes
+  // -------------------------------------------------------------------------
+
+  describe('render() with comparison config', () => {
+    it('creates a second y-axis (y1) when comparisonConfig is provided', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const data = makeChartData();
+      const comparisonConfig: ComparisonConfig = {
+        metric1Label: 'Test Coverage',
+        metric2Label: 'Bug Count',
+        metric1IsCapability: false,
+        metric2IsCapability: false,
+      };
+
+      // Act
+      manager.render(data, 'Comparison Chart', comparisonConfig);
+
+      // Assert
+      const config = instances[0].config;
+      expect(config.options.scales.y1).toBeDefined();
+      expect(config.options.scales.y1?.position).toBe('right');
+      expect(config.options.scales.y1?.title?.text).toBe('Bug Count');
+    });
+
+    it('sets titles on both y-axes when comparing', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const data = makeChartData();
+      const comparisonConfig: ComparisonConfig = {
+        metric1Label: 'Deployment Frequency',
+        metric2Label: 'Lead Time',
+        metric1IsCapability: false,
+        metric2IsCapability: false,
+      };
+
+      // Act
+      manager.render(data, 'Comparison', comparisonConfig);
+
+      // Assert
+      const config = instances[0].config;
+      expect(config.options.scales.y?.title?.text).toBe('Deployment Frequency');
+      expect(config.options.scales.y?.title?.display).toBe(true);
+      expect(config.options.scales.y1?.title?.text).toBe('Lead Time');
+      expect(config.options.scales.y1?.title?.display).toBe(true);
+    });
+
+    it('aligns tick counts on both y-axes when both have explicit ranges', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      // Create data with two datasets on different y-axes
+      const data = {
+        labels: ['Jan', 'Feb', 'Mar'],
+        datasets: [
+          {
+            label: 'Metric 1',
+            data: [1, 2, 3],
+            borderColor: '#000',
+            backgroundColor: '#fff',
+            yAxisID: 'y',
+          },
+          {
+            label: 'Metric 2',
+            data: [10, 20, 30],
+            borderColor: '#111',
+            backgroundColor: '#eee',
+            yAxisID: 'y1',
+          },
+        ],
+      };
+      const comparisonConfig: ComparisonConfig = {
+        metric1Label: 'Small Range',
+        metric2Label: 'Large Range',
+        metric1IsCapability: false,
+        metric2IsCapability: false,
+      };
+
+      // Act
+      manager.render(data, 'Aligned Ticks', comparisonConfig);
+
+      // Assert
+      const config = instances[0].config;
+      const yTicks = config.options.scales.y?.ticks;
+      const y1Ticks = config.options.scales.y1?.ticks;
+
+      // Both should have the same tick count
+      expect(yTicks?.count).toBeDefined();
+      expect(y1Ticks?.count).toBeDefined();
+      expect(yTicks?.count).toBe(y1Ticks?.count);
+    });
+
+    it('does not set tick count when not comparing (single metric)', () => {
+      // Arrange
+      const manager = new ChartManager(canvas);
+      const data = makeChartData();
+
+      // Act — render without comparisonConfig
+      manager.render(data, 'Single Metric');
+
+      // Assert
+      const config = instances[0].config;
+      expect(config.options.scales.y?.ticks?.count).toBeUndefined();
+      expect(config.options.scales.y1).toBeUndefined();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calculateAlignedTickCount() — pure logic unit tests
+// ---------------------------------------------------------------------------
+
+describe('calculateAlignedTickCount', () => {
+  it('returns undefined when both ranges are null', () => {
+    // Act
+    const result = calculateAlignedTickCount(null, null);
+
+    // Assert
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined when yRange is null', () => {
+    // Arrange
+    const y1Range = { min: 0, max: 10 };
+
+    // Act
+    const result = calculateAlignedTickCount(null, y1Range);
+
+    // Assert
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined when y1Range is null', () => {
+    // Arrange
+    const yRange = { min: 0, max: 10 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, null);
+
+    // Assert
+    expect(result).toBeUndefined();
+  });
+
+  it('returns a number when both ranges are provided', () => {
+    // Arrange
+    const yRange = { min: 0, max: 10 };
+    const y1Range = { min: 0, max: 20 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert
+    expect(result).toBeTypeOf('number');
+    expect(result).toBeGreaterThanOrEqual(5);
+    expect(result).toBeLessThanOrEqual(10);
+  });
+
+  it('returns the maximum of the two estimated tick counts', () => {
+    // Arrange — same range for both, should return same estimate
+    const yRange = { min: 0, max: 10 };
+    const y1Range = { min: 0, max: 10 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert — both have same range, so max(count, count) = count
+    expect(result).toBeDefined();
+    expect(result).toBeGreaterThanOrEqual(5);
+  });
+
+  it('handles very small ranges', () => {
+    // Arrange
+    const yRange = { min: 0, max: 1 };
+    const y1Range = { min: 0, max: 1 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert — should not crash and should return a reasonable count
+    expect(result).toBeDefined();
+    expect(result).toBeGreaterThanOrEqual(5);
+  });
+
+  it('handles very large ranges', () => {
+    // Arrange
+    const yRange = { min: 0, max: 1000 };
+    const y1Range = { min: 0, max: 2000 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert
+    expect(result).toBeDefined();
+    expect(result).toBeLessThanOrEqual(10);
+  });
+
+  it('returns maximum when one range is larger than the other', () => {
+    // Arrange — y1 has larger range, should dominate
+    const yRange = { min: 0, max: 5 };
+    const y1Range = { min: 0, max: 100 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert — result should be based on the larger range
+    expect(result).toBeDefined();
+    expect(result).toBeGreaterThanOrEqual(5);
+  });
+
+  it('handles negative ranges', () => {
+    // Arrange
+    const yRange = { min: -10, max: 10 };
+    const y1Range = { min: -5, max: 5 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert
+    expect(result).toBeDefined();
+    expect(result).toBeGreaterThanOrEqual(5);
+    expect(result).toBeLessThanOrEqual(10);
+  });
+
+  it('enforces minimum tick count of 5', () => {
+    // Arrange — tiny ranges
+    const yRange = { min: 0, max: 0.1 };
+    const y1Range = { min: 0, max: 0.1 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert — should never return less than 5
+    expect(result).toBeGreaterThanOrEqual(5);
+  });
+
+  it('enforces maximum tick count of 10', () => {
+    // Arrange — huge ranges
+    const yRange = { min: 0, max: 10000 };
+    const y1Range = { min: 0, max: 10000 };
+
+    // Act
+    const result = calculateAlignedTickCount(yRange, y1Range);
+
+    // Assert — should never return more than 10
+    expect(result).toBeLessThanOrEqual(10);
   });
 });

@@ -255,6 +255,36 @@ function createTooltipCallbacks() {
 }
 
 /**
+ * Calculate the optimal tick count for aligning multiple y-axes.
+ * Estimates the number of ticks Chart.js would generate based on the range,
+ * then returns the maximum count so both axes can be aligned.
+ */
+export function calculateAlignedTickCount(
+  yRange: { min: number; max: number } | null,
+  y1Range: { min: number; max: number } | null
+): number | undefined {
+  if (!yRange || !y1Range) {
+    return undefined;
+  }
+
+  // Estimate number of ticks based on range
+  // Chart.js typically aims for 5-10 ticks depending on the range
+  const estimateTickCount = (range: { min: number; max: number }): number => {
+    const span = range.max - range.min;
+    // Use a heuristic: aim for ticks roughly every 10-20% of the range
+    // This gives us approximately 5-10 ticks
+    const idealTickCount = Math.max(5, Math.min(10, Math.ceil(span / (span * 0.15))));
+    return idealTickCount;
+  };
+
+  const yTickCount = estimateTickCount(yRange);
+  const y1TickCount = estimateTickCount(y1Range);
+
+  // Return the larger count so both axes align
+  return Math.max(yTickCount, y1TickCount);
+}
+
+/**
  * Chart manager - handles chart lifecycle
  */
 export class ChartManager {
@@ -290,6 +320,11 @@ export class ChartManager {
     const y1IsCapability = comparisonConfig?.metric2IsCapability ?? false;
     const yRange = yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y;
     const y1Range = y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1;
+
+    // Calculate aligned tick count when comparing metrics with two y-axes
+    const alignedTickCount = comparisonConfig
+      ? calculateAlignedTickCount(yRange, y1Range)
+      : undefined;
 
     const config: ChartConfiguration = {
       type: chartType,
@@ -339,6 +374,7 @@ export class ChartManager {
                   text: comparisonConfig.metric1Label,
                 }
               : undefined,
+            ticks: alignedTickCount ? { count: alignedTickCount } : undefined,
           },
         },
       },
@@ -359,6 +395,7 @@ export class ChartManager {
           display: true,
           text: comparisonConfig.metric2Label,
         },
+        ticks: alignedTickCount ? { count: alignedTickCount } : undefined,
       };
     }
 
