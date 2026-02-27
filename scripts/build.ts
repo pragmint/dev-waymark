@@ -5,12 +5,16 @@ import { cpSync, rmSync, mkdirSync } from 'node:fs';
 
 const isProd = process.argv.includes('--prod');
 
+// Clean public directory before building to avoid stale files
+rmSync('public', { recursive: true, force: true });
+mkdirSync('public', { recursive: true });
+
 // Always build frontend assets to public/
 const files = globSync('src/frontend/scripts/*.ts', { ignore: '**/*.test.ts' });
 await build({
   entrypoints: files,
   outdir: 'public',
-  naming: '[dir]/[name].js',
+  naming: '[name].js',
 });
 await $`sass src/styles/main.scss:public/style.css`;
 

@@ -126,6 +126,23 @@ test.describe('Capabilities Catalog', () => {
   });
 });
 
+test.describe('Static Assets', () => {
+  test('JavaScript files are accessible via server', async ({ page }) => {
+    // Test that built JS files can be requested through the server
+    const jsFiles = ['overview.js', 'team-detail.js', 'insights.js'];
+
+    for (const file of jsFiles) {
+      const response = await page.request.get(`${BASE_URL}/public/${file}`);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toContain('javascript');
+
+      // Verify content is not empty
+      const content = await response.text();
+      expect(content.length).toBeGreaterThan(0);
+    }
+  });
+});
+
 test.describe('Practices Catalog', () => {
   test('displays practice list', async ({ page }) => {
     await page.goto(`${BASE_URL}/catalog/practice`);
