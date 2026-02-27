@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 
+localhost:3000/
+
 # Build outputs
 dist/
 build/
