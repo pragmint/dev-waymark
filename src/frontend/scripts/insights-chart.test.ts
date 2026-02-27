@@ -464,8 +464,8 @@ describe('ChartManager', () => {
             },
             y: {
               beginAtZero: false,
-              min: 0.5,
-              max: 3.5,
+              min: 0,
+              max: 4,
               position: 'left',
               title: undefined,
             },

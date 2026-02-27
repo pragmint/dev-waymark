@@ -54,27 +54,51 @@ function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits 
   };
 }
 
-/**
- * Compute explicit min/max for each y-axis based on the full dataset values,
- * so the axis range stays stable when a series is toggled off via the legend.
- */
-function computeAxisRanges(data: ChartData): {
+type AxisRange = {
   y: { min: number; max: number } | null;
   y1: { min: number; max: number } | null;
-} {
-  if (data.qualitativeData) {
-    return { y: null, y1: null };
+};
+
+type Range = { min: number; max: number };
+
+function rangeFor(datasets: ChartDataset[]): Range | null {
+  const values = datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
+  if (values.length === 0) return null;
+
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const padding = Math.max((dataMax - dataMin) * 0.1, 0.5);
+
+  let min = dataMin - padding;
+  let max = dataMax + padding;
+
+  // Never let the lower bound go below 0
+  min = Math.max(0, min);
+
+  let currentRange = max - min;
+
+  // Determine target range: multiple of 8, or 1/2/4/8 if smaller
+  let targetRange: number;
+  if (currentRange < 8) {
+    // Find smallest value in [1, 2, 4, 8] that is >= currentRange
+    if (currentRange <= 1) targetRange = 1;
+    else if (currentRange <= 4) targetRange = 4;
+    else targetRange = 8;
+  } else {
+    // Round up to next multiple of 8
+    targetRange = Math.ceil(currentRange / 8) * 8;
   }
 
-  function rangeFor(datasets: ChartDataset[]): { min: number; max: number } | null {
-    const values = datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
-    if (values.length === 0) return null;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const padding = Math.max((max - min) * 0.1, 0.5);
-    return { min: min - padding, max: max + padding };
-  }
+  // Round min down to integer
+  min = Math.floor(min);
 
+  // Set max to maintain target range (ensures max is also an integer)
+  max = min + targetRange;
+
+  return { min, max };
+}
+
+function computeAxisRanges(data: ChartData): AxisRange {
   const yDatasets = data.datasets.filter(ds => !ds.yAxisID || ds.yAxisID === 'y');
   const y1Datasets = data.datasets.filter(ds => ds.yAxisID === 'y1');
 
@@ -84,13 +108,48 @@ function computeAxisRanges(data: ChartData): {
   };
 }
 
-const CAPABILITY_Y_RANGE = { min: 0, max: 4.5 };
+const CAPABILITY_Y_RANGE = { min: 0, max: 4 };
 
 export interface ComparisonConfig {
   metric1Label: string;
   metric2Label: string;
   metric1IsCapability?: boolean;
   metric2IsCapability?: boolean;
+}
+
+/**
+ * Calculate aligned tick count for dual y-axes to ensure grid lines align.
+ * Returns undefined if either range is null (no alignment needed).
+ * Returns a value between 5 and 10 based on the larger of the two ranges.
+ */
+export function calculateAlignedTickCount(
+  yRange: Range | null,
+  y1Range: Range | null
+): number | undefined {
+  if (!yRange || !y1Range) {
+    return undefined;
+  }
+
+  const yRangeSize = yRange.max - yRange.min;
+  const y1RangeSize = y1Range.max - y1Range.min;
+
+  // Estimate tick count based on range magnitude
+  const estimateTickCount = (rangeSize: number): number => {
+    // Use a logarithmic scale to determine tick density
+    // Small ranges get more ticks, large ranges get fewer
+    if (rangeSize <= 1) return 10;
+    if (rangeSize <= 10) return 9;
+    if (rangeSize <= 50) return 8;
+    if (rangeSize <= 100) return 7;
+    if (rangeSize <= 500) return 6;
+    return 5;
+  };
+
+  const yTickCount = estimateTickCount(yRangeSize);
+  const y1TickCount = estimateTickCount(y1RangeSize);
+
+  // Return the maximum of the two estimates
+  return Math.max(yTickCount, y1TickCount);
 }
 
 /**
@@ -255,36 +314,6 @@ function createTooltipCallbacks() {
 }
 
 /**
- * Calculate the optimal tick count for aligning multiple y-axes.
- * Estimates the number of ticks Chart.js would generate based on the range,
- * then returns the maximum count so both axes can be aligned.
- */
-export function calculateAlignedTickCount(
-  yRange: { min: number; max: number } | null,
-  y1Range: { min: number; max: number } | null
-): number | undefined {
-  if (!yRange || !y1Range) {
-    return undefined;
-  }
-
-  // Estimate number of ticks based on range
-  // Chart.js typically aims for 5-10 ticks depending on the range
-  const estimateTickCount = (range: { min: number; max: number }): number => {
-    const span = range.max - range.min;
-    // Use a heuristic: aim for ticks roughly every 10-20% of the range
-    // This gives us approximately 5-10 ticks
-    const idealTickCount = Math.max(5, Math.min(10, Math.ceil(span / (span * 0.15))));
-    return idealTickCount;
-  };
-
-  const yTickCount = estimateTickCount(yRange);
-  const y1TickCount = estimateTickCount(y1Range);
-
-  // Return the larger count so both axes align
-  return Math.max(yTickCount, y1TickCount);
-}
-
-/**
  * Chart manager - handles chart lifecycle
  */
 export class ChartManager {
@@ -321,7 +350,7 @@ export class ChartManager {
     const yRange = yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y;
     const y1Range = y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1;
 
-    // Calculate aligned tick count when comparing metrics with two y-axes
+    // Calculate aligned tick count when comparing metrics
     const alignedTickCount = comparisonConfig
       ? calculateAlignedTickCount(yRange, y1Range)
       : undefined;
@@ -374,7 +403,7 @@ export class ChartManager {
                   text: comparisonConfig.metric1Label,
                 }
               : undefined,
-            ticks: alignedTickCount ? { count: alignedTickCount } : undefined,
+            ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
           },
         },
       },
@@ -395,7 +424,7 @@ export class ChartManager {
           display: true,
           text: comparisonConfig.metric2Label,
         },
-        ticks: alignedTickCount ? { count: alignedTickCount } : undefined,
+        ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
       };
     }
 
