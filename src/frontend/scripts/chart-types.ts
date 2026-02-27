@@ -144,6 +144,7 @@ export interface ChartOptions {
   transitions?: ChartTransitions;
   plugins: ChartPlugins;
   scales: ChartScales;
+  spanGaps?: boolean;
 }
 
 export interface ChartConfiguration {

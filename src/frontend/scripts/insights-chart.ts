@@ -295,6 +295,7 @@ export class ChartManager {
       type: chartType,
       data,
       options: {
+        spanGaps: true,
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
