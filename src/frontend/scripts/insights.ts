@@ -99,13 +99,14 @@ function getMetricChartData(
   teamMetrics: TeamMetric[],
   teams: TeamInfo[],
   startDate: string,
-  endDate: string
+  endDate: string,
+  metricName?: string
 ): ChartData | null {
   const isTeamSpecific = metricId.includes(':');
 
   if (isTeamSpecific) {
-    const [teamId, metricName] = metricId.split(':');
-    const metric = teamMetrics.find(m => m.teamId === teamId && m.metricName === metricName);
+    const [teamId, teamMetricName] = metricId.split(':');
+    const metric = teamMetrics.find(m => m.teamId === teamId && m.metricName === teamMetricName);
 
     if (!metric || metric.data.length === 0) {
       return null;
@@ -119,7 +120,7 @@ function getMetricChartData(
       return null;
     }
 
-    return transformCapabilityMetricData(metric, startDate, endDate, teams);
+    return transformCapabilityMetricData(metric, startDate, endDate, teams, metricName);
   }
 }
 
@@ -167,13 +168,15 @@ function createUpdateHandler(chartManager: ChartManager) {
     const endDate = inputDateToDataDate(inputs.endDate.value);
 
     // Get primary metric data
+    const primaryLabel = getMetricLabel(inputs.metricSelect);
     const primaryData = getMetricChartData(
       selectedMetric,
       metricsData.capabilityMetrics,
       metricsData.teamMetrics,
       metricsData.teams,
       startDate,
-      endDate
+      endDate,
+      primaryLabel
     );
 
     if (!primaryData) {
@@ -185,13 +188,15 @@ function createUpdateHandler(chartManager: ChartManager) {
     // Check if a comparison metric is selected
     const compareMetric = inputs.compareMetricSelect?.value;
     if (compareMetric) {
+      const compareLabel = getMetricLabel(inputs.compareMetricSelect!);
       const compareData = getMetricChartData(
         compareMetric,
         metricsData.capabilityMetrics,
         metricsData.teamMetrics,
         metricsData.teams,
         startDate,
-        endDate
+        endDate,
+        compareLabel
       );
 
       if (compareData) {
@@ -216,8 +221,6 @@ function createUpdateHandler(chartManager: ChartManager) {
             }
           }
 
-          const primaryLabel = getMetricLabel(inputs.metricSelect);
-          const compareLabel = getMetricLabel(inputs.compareMetricSelect!);
           const title = `${primaryLabel} vs ${compareLabel}`;
           const comparisonConfig: ComparisonConfig = {
             metric1Label: primaryLabel,
@@ -237,9 +240,8 @@ function createUpdateHandler(chartManager: ChartManager) {
     }
 
     // Render single metric
-    const title = getMetricLabel(inputs.metricSelect);
     hideMessage();
-    chartManager.render(primaryData, title, undefined, !selectedMetric.includes(':'));
+    chartManager.render(primaryData, primaryLabel, undefined, !selectedMetric.includes(':'));
   };
 }
 

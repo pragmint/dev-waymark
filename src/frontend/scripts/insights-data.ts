@@ -130,7 +130,7 @@ export function transformTeamMetricData(
       labels: uniqueDates,
       datasets: [
         {
-          label: metric.metricName,
+          label: `${teamIdToName(metric.teamId, teams)} - ${metric.metricName}`,
           data: uniqueDates.map(date => entryMap.get(date)!.length),
           borderColor: CHART_COLORS[0].border,
           backgroundColor: CHART_COLORS[0].bg,
@@ -197,7 +197,8 @@ function createTeamDatasets(
     Array<{ date: string; value: number | null; metadata: DataPointMetadata | undefined }>
   >,
   allDates: string[],
-  teams: TeamInfo[]
+  teams: TeamInfo[],
+  metricName?: string
 ): ChartDataset[] {
   const datasets: ChartDataset[] = [];
   let colorIndex = 0;
@@ -215,8 +216,9 @@ function createTeamDatasets(
       metadataArray.push(point?.metadata);
     });
 
+    const teamName = teamIdToName(teamId, teams);
     datasets.push({
-      label: teamIdToName(teamId, teams),
+      label: metricName ? `${metricName} - ${teamName}` : teamName,
       data: dataArray,
       borderColor: color.border,
       backgroundColor: color.bg,
@@ -234,7 +236,8 @@ export function transformCapabilityMetricData(
   metric: CapabilityMetric,
   startDate: string,
   endDate: string,
-  teams: TeamInfo[]
+  teams: TeamInfo[],
+  metricName?: string
 ): ChartData | null {
   const filteredData = filterByDateRange(metric.data, startDate, endDate);
 
@@ -245,7 +248,7 @@ export function transformCapabilityMetricData(
   const teamDataMap = groupByTeam(filteredData);
   const allDates = Array.from(new Set(filteredData.map(d => d.date)));
   const sortedDates = sortByDate(allDates.map(date => ({ date }))).map(d => d.date);
-  const datasets = createTeamDatasets(teamDataMap, sortedDates, teams);
+  const datasets = createTeamDatasets(teamDataMap, sortedDates, teams, metricName);
 
   return {
     labels: sortedDates.map(date => formatDataDateForDisplay(date)),

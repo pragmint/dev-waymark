@@ -107,9 +107,9 @@ describe('transformTeamMetricData', () => {
     const metric = makeQualitativeTeamMetric();
     const result = transformTeamMetricData(metric, '1.1.2026', '31.12.2026', teams);
 
-    // Should create a single dataset with the metric name as label
+    // Should create a single dataset labelled as "team - metric"
     expect(result.datasets).toHaveLength(1);
-    expect(result.datasets[0].label).toBe('anecdotes');
+    expect(result.datasets[0].label).toBe('Team Alpha - anecdotes');
 
     // Each value is the count of entries on that date
     expect(result.datasets[0].data).toEqual([1, 1]);
@@ -223,6 +223,20 @@ describe('transformCapabilityMetricData', () => {
     expect(result!.datasets).toHaveLength(2);
     expect(result!.datasets[0].label).toBe('Team Alpha');
     expect(result!.datasets[1].label).toBe('Team Beta');
+  });
+
+  it('includes the metric name in each dataset label when provided', () => {
+    const metric = makeCapabilityMetric();
+    const result = transformCapabilityMetricData(
+      metric,
+      '1.1.2026',
+      '31.12.2026',
+      teams,
+      'Test Automation'
+    );
+
+    expect(result!.datasets[0].label).toBe('Test Automation - Team Alpha');
+    expect(result!.datasets[1].label).toBe('Test Automation - Team Beta');
   });
 
   it('aligns data points by date with null for missing values', () => {
