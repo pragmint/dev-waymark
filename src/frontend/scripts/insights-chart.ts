@@ -12,24 +12,13 @@ import type {
 import { formatDataDateForDisplay } from './insights-date-utils';
 
 /**
- * Check if data represents stacked qualitative data (anecdotes)
- */
-function isStackedQualitativeData(data: ChartData): boolean {
-  return data.qualitativeData !== undefined && data.datasets.length > 0;
-}
-
-/**
  * Resolve chart type based on data density.
  * Uses 'bar' when every dataset has a single data point (e.g. a snapshot in
  * time), and 'line' as soon as any dataset has more than one point.
+ * Qualitative (anecdote) metrics always use a bar chart.
  */
 function resolveChartType(data: ChartData): 'line' | 'bar' {
-  // For qualitative metrics with datasets (stacked anecdotes), use bar chart
-  if (isStackedQualitativeData(data)) {
-    return 'bar';
-  }
-  // For qualitative metrics without datasets (old annotation style), use bar chart
-  if (data.qualitativeData && data.datasets.length === 0) {
+  if (data.qualitativeData) {
     return 'bar';
   }
   return data.datasets.some(ds => ds.data.length > 1) ? 'line' : 'bar';
@@ -45,22 +34,6 @@ function resolveChartType(data: ChartData): 'line' | 'bar' {
  * zooming in to fewer than 3 visible points (or all points if fewer than 3).
  */
 function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits } {
-  // For qualitative data, use default y-axis limits
-  if (data.qualitativeData) {
-    return {
-      x: {
-        min: 0,
-        max: data.labels.length - 1,
-        minRange: Math.min(2, data.labels.length - 1),
-      },
-      y: {
-        min: 0,
-        max: 1,
-        minRange: 1,
-      },
-    };
-  }
-
   const allValues = data.datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
 
   const yMin = allValues.length > 0 ? Math.min(...allValues) : 0;
@@ -242,23 +215,20 @@ function createTooltipCallbacks() {
       }
 
       const metadata = dataset.metadata[dataIndex];
-      const lines: string[] = [];
+      const lines: string[] = [''];
 
-      // For stacked qualitative data (anecdotes), show description prominently
-      if (metadata.description) {
-        const description = String(metadata.description);
-        // Wrap description text
-        const wrapped = description.match(/.{1,80}(\s|$)/g) || [description];
-        lines.push('\n');
-        wrapped.forEach(line => lines.push(line.trim()));
-        lines.push('');
+      // For qualitative/anecdote data, show each entry separated by a blank line
+      if (metadata.anecdotes) {
+        const entries = String(metadata.anecdotes).split('\n\n');
+        for (let i = 0; i < entries.length; i++) {
+          if (i > 0) lines.push('');
+          lines.push(entries[i]);
+        }
+        return lines;
       }
 
-      // Format remaining metadata for display
+      // Format remaining metadata for display (numeric metrics with justifications etc.)
       for (const [key, value] of Object.entries(metadata)) {
-        // Skip description as we've already shown it
-        if (key === 'description') continue;
-
         if (value !== undefined && value !== null && value !== '') {
           // Format key: convert snake_case to Title Case
           const formattedKey = key
@@ -308,8 +278,11 @@ export class ChartManager {
 
     const limits = computeLimits(data);
     const chartType = resolveChartType(data);
-    const isStacked = isStackedQualitativeData(data);
-    const annotations = isStacked ? undefined : createAnnotationsForQualitativeData(data);
+    // Only use annotation boxes for old-style qualitative data that has no numeric datasets
+    const annotations =
+      data.qualitativeData && data.datasets.length === 0
+        ? createAnnotationsForQualitativeData(data)
+        : undefined;
     const axisRanges = computeAxisRanges(data);
 
     const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
@@ -349,14 +322,12 @@ export class ChartManager {
         },
         scales: {
           x: {
-            stacked: isStacked,
             ticks: {
               maxRotation: 90,
               minRotation: 45,
             },
           },
           y: {
-            stacked: isStacked,
             beginAtZero: chartType === 'bar',
             ...(yRange ? { min: yRange.min, max: yRange.max } : { grace: '10%' }),
             position: 'left',

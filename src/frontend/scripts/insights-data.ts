@@ -108,41 +108,35 @@ export function transformTeamMetricData(
 
   // Check if this is a qualitative metric
   if (hasQualitativeValues(sortedData)) {
-    // For qualitative metrics (anecdotes), create stacked bar chart
-    // Get all unique dates
-    const uniqueDates = Array.from(new Set(sortedData.map(d => formatDataDateForDisplay(d.date))));
+    // For qualitative metrics (anecdotes), create a count bar chart with one dataset.
+    // Each bar's height is the number of entries on that date; all entry texts are
+    // combined in the tooltip via the `anecdotes` metadata key.
+    const entryMap = new Map<string, string[]>();
+    for (const point of sortedData) {
+      const displayDate = formatDataDateForDisplay(point.date);
+      if (!entryMap.has(displayDate)) entryMap.set(displayDate, []);
+      entryMap.get(displayDate)!.push(String(point.value));
+    }
 
-    // Create a dataset for each entry
-    const datasets: ChartDataset[] = sortedData.map((dataPoint, index) => {
-      const displayDate = formatDataDateForDisplay(dataPoint.date);
-      const color = CHART_COLORS[index % CHART_COLORS.length];
-
-      // Create data array with 1 at the appropriate date index, null elsewhere
-      const data = uniqueDates.map(date => (date === displayDate ? 1 : null));
-
-      // Store the full description in metadata
-      const metadata = uniqueDates.map(date =>
-        date === displayDate
-          ? {
-              description: String(dataPoint.value),
-              ...extractMetadata(dataPoint),
-            }
-          : undefined
-      );
-
-      return {
-        label: `Entry ${index + 1}`,
-        data,
-        borderColor: color.border,
-        backgroundColor: color.bg,
-        metadata,
-      };
-    });
+    const uniqueDates = Array.from(entryMap.keys());
+    const metadata = uniqueDates.map(date => ({
+      anecdotes: entryMap
+        .get(date)!
+        .map(anecdote => ' • ' + anecdote)
+        .join('\n\n'),
+    }));
 
     return {
       labels: uniqueDates,
-      datasets,
-      // Mark as stacked qualitative data
+      datasets: [
+        {
+          label: metric.metricName,
+          data: uniqueDates.map(date => entryMap.get(date)!.length),
+          borderColor: CHART_COLORS[0].border,
+          backgroundColor: CHART_COLORS[0].bg,
+          metadata,
+        },
+      ],
       qualitativeData: sortedData.map(d => ({
         date: d.date,
         value: String(d.value),

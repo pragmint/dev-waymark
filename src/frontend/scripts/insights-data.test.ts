@@ -103,24 +103,22 @@ describe('transformTeamMetricData', () => {
     expect(result.datasets[0].data).toEqual([15]);
   });
 
-  it('handles qualitative metrics by creating stacked bar chart datasets', () => {
+  it('handles qualitative metrics by creating a single count bar chart dataset', () => {
     const metric = makeQualitativeTeamMetric();
     const result = transformTeamMetricData(metric, '1.1.2026', '31.12.2026', teams);
 
-    // Should create a dataset for each entry
-    expect(result.datasets).toHaveLength(2);
-    expect(result.datasets[0].label).toBe('Entry 1');
-    expect(result.datasets[1].label).toBe('Entry 2');
+    // Should create a single dataset with the metric name as label
+    expect(result.datasets).toHaveLength(1);
+    expect(result.datasets[0].label).toBe('anecdotes');
 
-    // Each dataset should have value 1 at the appropriate date index
-    expect(result.datasets[0].data).toEqual([1, null]);
-    expect(result.datasets[1].data).toEqual([null, 1]);
+    // Each value is the count of entries on that date
+    expect(result.datasets[0].data).toEqual([1, 1]);
 
-    // Metadata should contain the description
-    expect(result.datasets[0].metadata![0]!.description).toBe('Things are going well');
-    expect(result.datasets[1].metadata![1]!.description).toBe('Had some challenges today');
+    // Metadata should contain the anecdote text per date
+    expect(result.datasets[0].metadata![0]!.anecdotes).toBe(' • Things are going well');
+    expect(result.datasets[0].metadata![1]!.anecdotes).toBe(' • Had some challenges today');
 
-    // Should also preserve qualitativeData for backward compatibility
+    // qualitativeData is preserved to mark the metric type
     expect(result.qualitativeData).toBeDefined();
     expect(result.qualitativeData).toHaveLength(2);
     expect(result.qualitativeData![0].value).toBe('Things are going well');
@@ -144,7 +142,7 @@ describe('transformTeamMetricData', () => {
     expect(result.datasets[0].metadata![1]).toBeUndefined();
   });
 
-  it('includes metadata in qualitative data when present', () => {
+  it('stores anecdote text and preserves qualitativeData metadata', () => {
     const metricWithMetadata: TeamMetric = {
       teamId: 'team-a',
       metricName: 'anecdotes',
@@ -156,18 +154,32 @@ describe('transformTeamMetricData', () => {
 
     const result = transformTeamMetricData(metricWithMetadata, '1.1.2026', '31.12.2026', teams);
 
-    // Check dataset metadata includes description and additional metadata
-    expect(result.datasets[0].metadata![0]).toEqual({
-      description: 'Good day',
-      link: 'https://example.com',
-    });
-    expect(result.datasets[1].metadata![1]).toEqual({
-      description: 'Bad day',
-    });
+    // Single dataset; metadata contains the entry text as `anecdotes`
+    expect(result.datasets).toHaveLength(1);
+    expect(result.datasets[0].metadata![0]).toEqual({ anecdotes: ' • Good day' });
+    expect(result.datasets[0].metadata![1]).toEqual({ anecdotes: ' • Bad day' });
 
-    // Check qualitativeData also preserves metadata
+    // qualitativeData preserves per-entry metadata (including extra fields like link)
     expect(result.qualitativeData![0].metadata).toEqual({ link: 'https://example.com' });
     expect(result.qualitativeData![1].metadata).toBeUndefined();
+  });
+
+  it('combines multiple anecdotes on the same date with a blank line separator', () => {
+    const metric: TeamMetric = {
+      teamId: 'team-a',
+      metricName: 'anecdotes',
+      data: [
+        { date: '1.1.2026', value: 'First entry' },
+        { date: '1.1.2026', value: 'Second entry' },
+        { date: '2.1.2026', value: 'Solo entry' },
+      ],
+    };
+
+    const result = transformTeamMetricData(metric, '1.1.2026', '31.12.2026', teams);
+
+    expect(result.datasets[0].data).toEqual([2, 1]);
+    expect(result.datasets[0].metadata![0]!.anecdotes).toBe(' • First entry\n\n • Second entry');
+    expect(result.datasets[0].metadata![1]!.anecdotes).toBe(' • Solo entry');
   });
 
   it('returns empty datasets when no data matches date range', () => {
