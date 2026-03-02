@@ -32,6 +32,8 @@ export async function handleInsight(c: Context) {
       teams={insightsData.teams}
       availableDates={insightsData.availableDates}
       metricOptions={insightsData.metricOptions}
+      capabilityMetrics={insightsData.capabilityMetrics}
+      teamMetrics={insightsData.teamMetrics}
     />
   );
 }

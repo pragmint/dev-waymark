@@ -3,14 +3,23 @@ import { Page } from '../components/Page';
 import { ChipSelector } from '../components/ChipSelector';
 import type { Team } from '../../schemas/teamSchemas';
 import type { MetricOption } from '../../domain/prepareInsightsData';
+import type { CapabilityMetric, TeamMetric } from '../scripts/insights-data';
 
 export interface InsightsPageProps {
   teams: Team[];
   availableDates: string[];
   metricOptions: MetricOption[];
+  capabilityMetrics: CapabilityMetric[];
+  teamMetrics: TeamMetric[];
 }
 
-export const InsightsPage: FC<InsightsPageProps> = ({ teams, availableDates, metricOptions }) => {
+export const InsightsPage: FC<InsightsPageProps> = ({
+  teams,
+  availableDates,
+  metricOptions,
+  capabilityMetrics,
+  teamMetrics,
+}) => {
   const chipOptions = metricOptions.map(m => ({
     value: m.id,
     label: m.label,
@@ -81,6 +90,9 @@ export const InsightsPage: FC<InsightsPageProps> = ({ teams, availableDates, met
           __html: JSON.stringify({
             availableDates,
             teams: teams.map(t => ({ id: t.id, name: t.name })),
+            metricOptions,
+            capabilityMetrics,
+            teamMetrics,
           }),
         }}
       />

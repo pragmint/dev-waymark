@@ -63,7 +63,7 @@ test.describe('Insights Page', () => {
 
     // Verify chart placeholder message is shown
     await expect(page.locator('#chart-message')).toContainText(
-      'Chart visualization will be implemented here'
+      'Select a metric to display the chart'
     );
   });
 });

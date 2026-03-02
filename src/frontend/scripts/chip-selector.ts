@@ -21,6 +21,9 @@ function updateUrl(params: URLSearchParams): void {
     : window.location.pathname;
 
   window.history.replaceState({}, '', newUrl);
+
+  // Dispatch custom event to notify other components
+  window.dispatchEvent(new CustomEvent('urlchange'));
 }
 
 /**
