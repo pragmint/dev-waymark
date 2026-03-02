@@ -10,6 +10,7 @@
     "watch:css": "sass --watch src/styles/main.scss:public/style.css",
     "check": "prettier --check . && eslint . && tsc",
     "fix": "prettier --write . && eslint . --fix",
+    "wget": "wget --mirror --convert-links --adjust-extension --page-requisites --no-parent http://localhost:3000/",
     "test:pw": "bun b && playwright test",
     "clean": "bun ./scripts/clean.ts"
   },
