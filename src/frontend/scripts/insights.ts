@@ -6,6 +6,7 @@ import {
   transformCapabilityMetricData,
   transformTeamMetricData,
   mergeChartDataForComparison,
+  mergeMultipleChartData,
   type ChartData,
 } from './insights-data';
 import {
@@ -23,12 +24,13 @@ function getUrlParams(): URLSearchParams {
 }
 
 /**
- * Get selected metric ID from query parameter
+ * Get selected metric IDs from query parameter (comma-separated)
  */
-function getSelectedMetric(queryKey: string): string | null {
+function getSelectedMetrics(queryKey: string): string[] {
   const params = getUrlParams();
   const value = params.get(queryKey);
-  return value && value.length > 0 ? value : null;
+  if (!value) return [];
+  return value.split(',').filter(v => v.length > 0);
 }
 
 /**
@@ -73,6 +75,23 @@ function initializeDateInputs(): void {
 }
 
 /**
+ * Transform a single metric by ID into ChartData
+ */
+function transformMetric(
+  metricId: string,
+  metricsData: MetricsData,
+  startDate: string,
+  endDate: string
+): ChartData | null {
+  const found = findMetric(metricId, metricsData);
+  if (!found) return null;
+  if (found.type === 'capability') {
+    return transformCapabilityMetricData(found.metric, startDate, endDate, metricsData.teams);
+  }
+  return transformTeamMetricData(found.metric, startDate, endDate, metricsData.teams);
+}
+
+/**
  * Update chart based on current selections
  */
 function updateChart(
@@ -82,8 +101,8 @@ function updateChart(
   endDateInput: HTMLInputElement,
   chartMessage: HTMLElement
 ): void {
-  const leftMetricId = getSelectedMetric('left');
-  const rightMetricId = getSelectedMetric('right');
+  const leftMetricIds = getSelectedMetrics('left');
+  const rightMetricId = getSelectedMetrics('right')[0] ?? null;
 
   // Get date range
   const startDate = startDateInput.value ? inputDateToDataDate(startDateInput.value) : null;
@@ -97,7 +116,7 @@ function updateChart(
   }
 
   // No metrics selected
-  if (!leftMetricId && !rightMetricId) {
+  if (leftMetricIds.length === 0 && !rightMetricId) {
     chartMessage.textContent = 'Select a metric to display the chart';
     chartMessage.style.display = 'block';
     chartManager.destroy();
@@ -109,48 +128,13 @@ function updateChart(
   let comparisonConfig: ComparisonConfig | undefined = undefined;
   let isCapability = false;
 
-  // Both metrics selected - comparison mode
-  if (leftMetricId && rightMetricId) {
-    const leftMetric = findMetric(leftMetricId, metricsData);
-    const rightMetric = findMetric(rightMetricId, metricsData);
+  const leftAxisLabels = leftMetricIds.map(id => getMetricLabel(id, metricsData.metricOptions));
+  const leftAxisTitle = leftAxisLabels.length > 0 ? leftAxisLabels.join(' ') : undefined;
 
-    if (!leftMetric || !rightMetric) {
-      chartMessage.textContent = 'Selected metric not found';
-      chartMessage.style.display = 'block';
-      chartManager.destroy();
-      return;
-    }
-
-    // Transform both metrics
-    let leftData: ChartData | null = null;
-    let rightData: ChartData | null = null;
-
-    if (leftMetric.type === 'capability') {
-      leftData = transformCapabilityMetricData(
-        leftMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    } else {
-      leftData = transformTeamMetricData(leftMetric.metric, startDate, endDate, metricsData.teams);
-    }
-
-    if (rightMetric.type === 'capability') {
-      rightData = transformCapabilityMetricData(
-        rightMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    } else {
-      rightData = transformTeamMetricData(
-        rightMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    }
+  if (leftMetricIds.length > 0 && rightMetricId) {
+    // Comparison mode: first left metric vs right metric
+    const leftData = transformMetric(leftMetricIds[0], metricsData, startDate, endDate);
+    const rightData = transformMetric(rightMetricId, metricsData, startDate, endDate);
 
     if (!leftData || !rightData) {
       chartMessage.textContent = 'No data available for the selected date range';
@@ -162,64 +146,30 @@ function updateChart(
     chartData = mergeChartDataForComparison(leftData, rightData);
     chartTitle = 'Metric Comparison';
     comparisonConfig = {
-      metric1Label: getMetricLabel(leftMetricId, metricsData.metricOptions),
+      metric1Label: leftAxisLabels.join(' '),
       metric2Label: getMetricLabel(rightMetricId, metricsData.metricOptions),
-      metric1IsCapability: isCapabilityMetric(leftMetricId),
+      metric1IsCapability: isCapabilityMetric(leftMetricIds[0]),
       metric2IsCapability: isCapabilityMetric(rightMetricId),
     };
-  }
-  // Only left metric selected
-  else if (leftMetricId) {
-    const leftMetric = findMetric(leftMetricId, metricsData);
+  } else if (leftMetricIds.length > 0) {
+    // Left only — possibly multiple metrics on the same axis
+    const allLeftData = leftMetricIds
+      .map(id => transformMetric(id, metricsData, startDate, endDate))
+      .filter((d): d is ChartData => d !== null);
 
-    if (!leftMetric) {
-      chartMessage.textContent = 'Selected metric not found';
+    if (allLeftData.length === 0) {
+      chartMessage.textContent = 'No data available for the selected date range';
       chartMessage.style.display = 'block';
       chartManager.destroy();
       return;
     }
 
-    if (leftMetric.type === 'capability') {
-      chartData = transformCapabilityMetricData(
-        leftMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    } else {
-      chartData = transformTeamMetricData(leftMetric.metric, startDate, endDate, metricsData.teams);
-    }
-
-    chartTitle = getMetricLabel(leftMetricId, metricsData.metricOptions);
-    isCapability = isCapabilityMetric(leftMetricId);
-  }
-  // Only right metric selected
-  else if (rightMetricId) {
-    const rightMetric = findMetric(rightMetricId, metricsData);
-
-    if (!rightMetric) {
-      chartMessage.textContent = 'Selected metric not found';
-      chartMessage.style.display = 'block';
-      chartManager.destroy();
-      return;
-    }
-
-    if (rightMetric.type === 'capability') {
-      chartData = transformCapabilityMetricData(
-        rightMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    } else {
-      chartData = transformTeamMetricData(
-        rightMetric.metric,
-        startDate,
-        endDate,
-        metricsData.teams
-      );
-    }
-
+    chartData = mergeMultipleChartData(allLeftData);
+    chartTitle = leftAxisLabels.join(' ');
+    isCapability = leftMetricIds.every(id => isCapabilityMetric(id));
+  } else if (rightMetricId) {
+    // Right only
+    chartData = transformMetric(rightMetricId, metricsData, startDate, endDate);
     chartTitle = getMetricLabel(rightMetricId, metricsData.metricOptions);
     isCapability = isCapabilityMetric(rightMetricId);
   }
@@ -233,7 +183,14 @@ function updateChart(
 
   // Hide message and render chart
   chartMessage.style.display = 'none';
-  chartManager.render(chartData, chartTitle, comparisonConfig, isCapability);
+  chartManager.render(
+    chartData,
+    chartTitle,
+    comparisonConfig,
+    isCapability,
+    undefined,
+    leftAxisTitle
+  );
 }
 
 /**

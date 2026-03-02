@@ -257,6 +257,47 @@ export function transformCapabilityMetricData(
 }
 
 /**
+ * Merge multiple chart data objects onto a single y-axis.
+ * Aligns dates across all datasets and re-assigns colours so each metric
+ * gets a distinct colour palette.
+ */
+export function mergeMultipleChartData(dataList: ChartData[]): ChartData | null {
+  if (dataList.length === 0) return null;
+  if (dataList.length === 1) return dataList[0];
+
+  const allLabels = sortDisplayDates(Array.from(new Set(dataList.flatMap(d => d.labels))));
+  const allDatasets: ChartDataset[] = [];
+  let colorOffset = 0;
+
+  for (const data of dataList) {
+    const labelIndexMap = new Map(data.labels.map((label, idx) => [label, idx]));
+
+    data.datasets.forEach((ds, idx) => {
+      const color = CHART_COLORS[(colorOffset + idx) % CHART_COLORS.length];
+      allDatasets.push({
+        ...ds,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        data: allLabels.map(label => {
+          const originalIndex = labelIndexMap.get(label);
+          return originalIndex !== undefined ? ds.data[originalIndex] : null;
+        }),
+        metadata: ds.metadata
+          ? allLabels.map(label => {
+              const originalIndex = labelIndexMap.get(label);
+              return originalIndex !== undefined ? ds.metadata![originalIndex] : undefined;
+            })
+          : undefined,
+      });
+    });
+
+    colorOffset += data.datasets.length;
+  }
+
+  return { labels: allLabels, datasets: allDatasets };
+}
+
+/**
  * Merge two chart data objects for comparison.
  * Aligns dates, assigns proper y-axis IDs, and offsets colours for the second metric.
  * Supports all combinations of time-series and bar/qualitative metrics.

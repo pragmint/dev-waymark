@@ -332,7 +332,8 @@ export class ChartManager {
     title: string,
     comparisonConfig?: ComparisonConfig,
     isCapabilityMetric?: boolean,
-    chartTypeOverride?: 'line' | 'bar'
+    chartTypeOverride?: 'line' | 'bar',
+    leftAxisTitle?: string
   ): void {
     this.destroy();
 
@@ -402,7 +403,9 @@ export class ChartManager {
                   display: true,
                   text: comparisonConfig.metric1Label,
                 }
-              : undefined,
+              : leftAxisTitle
+                ? { display: true, text: leftAxisTitle }
+                : undefined,
             ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
           },
         },

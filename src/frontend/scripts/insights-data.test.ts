@@ -3,6 +3,7 @@ import {
   transformTeamMetricData,
   transformCapabilityMetricData,
   mergeChartDataForComparison,
+  mergeMultipleChartData,
   teamIdToName,
   type TeamMetric,
   type CapabilityMetric,
@@ -583,7 +584,7 @@ describe('mergeChartDataForComparison', () => {
     expect(result!.datasets[2].backgroundColor).toBe('rgba(54, 162, 235, 0.2)');
   });
 
-  it('sorts merged labels chronologically', () => {
+  it('sorts merged labels chronologically via mergeChartDataForComparison', () => {
     const data1 = {
       labels: ['January 3, 2026', 'January 1, 2026'],
       datasets: [
@@ -611,5 +612,132 @@ describe('mergeChartDataForComparison', () => {
     const result = mergeChartDataForComparison(data1, data2);
 
     expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests for mergeMultipleChartData
+// ---------------------------------------------------------------------------
+
+describe('mergeMultipleChartData', () => {
+  function makeChartData(label: string, labels: string[], data: number[]) {
+    return {
+      labels,
+      datasets: [
+        {
+          label,
+          data,
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        },
+      ],
+    };
+  }
+
+  it('returns null for an empty list', () => {
+    expect(mergeMultipleChartData([])).toBeNull();
+  });
+
+  it('returns the single item unchanged when list has one element', () => {
+    const data = makeChartData('A', ['January 1, 2026'], [10]);
+    expect(mergeMultipleChartData([data])).toBe(data);
+  });
+
+  it('merges two datasets onto a single axis with aligned labels', () => {
+    const data1 = makeChartData('A', ['January 1, 2026', 'January 2, 2026'], [10, 20]);
+    const data2 = makeChartData('B', ['January 1, 2026', 'January 2, 2026'], [5, 15]);
+
+    const result = mergeMultipleChartData([data1, data2]);
+
+    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026']);
+    expect(result!.datasets).toHaveLength(2);
+    expect(result!.datasets[0].label).toBe('A');
+    expect(result!.datasets[1].label).toBe('B');
+  });
+
+  it('fills nulls for dates missing from a dataset', () => {
+    const data1 = makeChartData('A', ['January 1, 2026', 'January 3, 2026'], [10, 30]);
+    const data2 = makeChartData('B', ['January 2, 2026', 'January 3, 2026'], [20, 30]);
+
+    const result = mergeMultipleChartData([data1, data2]);
+
+    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+    expect(result!.datasets[0].data).toEqual([10, null, 30]);
+    expect(result!.datasets[1].data).toEqual([null, 20, 30]);
+  });
+
+  it('assigns distinct colours starting from offset for each subsequent metric', () => {
+    const data1 = makeChartData('A', ['January 1, 2026'], [1]);
+    const data2 = makeChartData('B', ['January 1, 2026'], [2]);
+    const data3 = makeChartData('C', ['January 1, 2026'], [3]);
+
+    const result = mergeMultipleChartData([data1, data2, data3]);
+
+    // Each single-dataset metric gets the colour at its offset index
+    expect(result!.datasets[0].borderColor).toBe('rgb(75, 192, 192)'); // index 0
+    expect(result!.datasets[1].borderColor).toBe('rgb(255, 99, 132)'); // index 1
+    expect(result!.datasets[2].borderColor).toBe('rgb(54, 162, 235)'); // index 2
+  });
+
+  it('sorts merged labels chronologically', () => {
+    const data1 = makeChartData('A', ['January 3, 2026', 'January 1, 2026'], [30, 10]);
+    const data2 = makeChartData('B', ['January 2, 2026'], [20]);
+
+    const result = mergeMultipleChartData([data1, data2]);
+
+    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+  });
+
+  it('preserves metadata aligned to merged labels', () => {
+    const data1 = {
+      labels: ['January 1, 2026', 'January 2, 2026'],
+      datasets: [
+        {
+          label: 'A',
+          data: [10, 20],
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          metadata: [{ note: 'first' }, { note: 'second' }],
+        },
+      ],
+    };
+    const data2 = makeChartData('B', ['January 2, 2026'], [5]);
+
+    const result = mergeMultipleChartData([data1, data2]);
+
+    expect(result!.datasets[0].metadata).toEqual([{ note: 'first' }, { note: 'second' }]);
+  });
+
+  it('assigns undefined metadata entries for dates not in original dataset', () => {
+    const data1 = {
+      labels: ['January 1, 2026'],
+      datasets: [
+        {
+          label: 'A',
+          data: [10],
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          metadata: [{ note: 'only' }],
+        },
+      ],
+    };
+    const data2 = makeChartData('B', ['January 1, 2026', 'January 2, 2026'], [5, 15]);
+
+    const result = mergeMultipleChartData([data1, data2]);
+
+    expect(result!.datasets[0].metadata).toEqual([{ note: 'only' }, undefined]);
+  });
+
+  it('merges three datasets with disjoint date sets', () => {
+    const data1 = makeChartData('A', ['January 1, 2026'], [1]);
+    const data2 = makeChartData('B', ['January 2, 2026'], [2]);
+    const data3 = makeChartData('C', ['January 3, 2026'], [3]);
+
+    const result = mergeMultipleChartData([data1, data2, data3]);
+
+    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+    expect(result!.datasets[0].data).toEqual([1, null, null]);
+    expect(result!.datasets[1].data).toEqual([null, 2, null]);
+    expect(result!.datasets[2].data).toEqual([null, null, 3]);
   });
 });
