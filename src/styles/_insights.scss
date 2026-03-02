@@ -40,6 +40,141 @@
   }
 }
 
+// Chip Selector
+.chip-selector {
+  margin-bottom: $spacing-xl;
+}
+
+.chip-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+}
+
+.chip-selector-label {
+  font-size: $font-sm;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.chip-clear-btn {
+  background: transparent;
+  border: none;
+  color: $primary-color;
+  font-size: $font-xs;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.3rem;
+  transition:
+    background-color $transition-fast,
+    color $transition-fast;
+
+  &:hover {
+    background-color: $bg-light;
+    color: #1d785d;
+  }
+}
+
+.chip-selector-wrapper {
+  position: relative;
+  max-height: 20rem; // Limit height to ~3-4 rows of chips
+
+  // Fade indicators for overflow
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0.6rem; // Account for scrollbar
+    height: 2rem;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity $transition-fast;
+  }
+
+  &::before {
+    top: 0;
+    background: linear-gradient(to bottom, $bg-white, transparent);
+  }
+
+  &::after {
+    bottom: 0;
+    background: linear-gradient(to top, $bg-white, transparent);
+  }
+}
+
+.chip-selector-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  max-height: 20rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.4rem 0.8rem 0.4rem 0; // Extra right padding for scrollbar
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba($primary-color, 0.3) transparent;
+
+  // Scrollbar styling for Webkit browsers
+  &::-webkit-scrollbar {
+    width: 0.6rem;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($primary-color, 0.3);
+    border-radius: 1rem;
+
+    &:hover {
+      background: rgba($primary-color, 0.5);
+    }
+  }
+}
+
+// Apply fade indicators via parent wrapper based on child class
+.chip-selector-wrapper:has(.has-scroll-top)::before {
+  opacity: 1;
+}
+
+.chip-selector-wrapper:has(.has-scroll-bottom)::after {
+  opacity: 1;
+}
+
+.chip {
+  background-color: $bg-light;
+  border: 0.2rem solid $border-color;
+  color: $text-secondary;
+  padding: 0.8rem 1.6rem;
+  border-radius: 2rem;
+  font-size: $font-sm;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: color.adjust($bg-light, $lightness: -3%);
+    border-color: color.adjust($border-color, $lightness: -10%);
+  }
+
+  &.chip-selected {
+    background-color: $primary-color;
+    border-color: $primary-color;
+    color: $bg-white;
+
+    &:hover {
+      background-color: #1d785d;
+      border-color: #1d785d;
+    }
+  }
+}
+
 .metric-select {
   width: 100%;
   padding: $spacing-md $spacing-lg;

@@ -1,17 +1,28 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
+import { ChipSelector } from '../components/ChipSelector';
 import type { Team } from '../../schemas/teamSchemas';
+import type { MetricOption } from '../../domain/prepareInsightsData';
 
 export interface InsightsPageProps {
   teams: Team[];
   availableDates: string[];
+  metricOptions: MetricOption[];
 }
 
-export const InsightsPage: FC<InsightsPageProps> = ({ teams, availableDates }) => {
+export const InsightsPage: FC<InsightsPageProps> = ({ teams, availableDates, metricOptions }) => {
+  const chipOptions = metricOptions.map(m => ({
+    value: m.id,
+    label: m.label,
+  }));
+
   return (
     <Page title="Insights" heading="Metrics Insights" activePage="insights">
       <div class="insights-container">
         <div class="insights-controls">
+          <ChipSelector queryKey="left" label="Left Axis Metric" options={chipOptions} />
+          <ChipSelector queryKey="right" label="Right Axis Metric" options={chipOptions} />
+
           <div class="control-group date-range">
             <div class="date-input-group">
               <label for="start-date">Start Date:</label>
@@ -73,6 +84,7 @@ export const InsightsPage: FC<InsightsPageProps> = ({ teams, availableDates }) =
           }),
         }}
       />
+      <script src="/public/chip-selector.js"></script>
       <script src="/public/insights.js"></script>
     </Page>
   );
