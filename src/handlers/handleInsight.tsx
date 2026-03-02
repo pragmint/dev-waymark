@@ -28,12 +28,6 @@ const insightsData = prepareInsightsData(teams, capabilities, capabilityMetrics,
 
 export async function handleInsight(c: Context) {
   return c.html(
-    <InsightsPage
-      teams={insightsData.teams}
-      metricOptions={insightsData.metricOptions}
-      capabilityMetricsJson={JSON.stringify(insightsData.capabilityMetrics)}
-      teamMetricsJson={JSON.stringify(insightsData.teamMetrics)}
-      availableDates={insightsData.availableDates}
-    />
+    <InsightsPage teams={insightsData.teams} availableDates={insightsData.availableDates} />
   );
 }

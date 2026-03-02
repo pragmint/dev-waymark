@@ -38,6 +38,6 @@ export default [
     },
   },
   {
-    ignores: ['node_modules', 'dist', 'build', 'public'],
+    ignores: ['node_modules', 'dist', 'build', 'public', 'localhost:3000'],
   },
 ];

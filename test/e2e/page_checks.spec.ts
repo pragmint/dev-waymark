@@ -57,16 +57,14 @@ test.describe('Insights Page', () => {
     await expect(page).toHaveTitle('Insights - Step Engine');
     await expect(page.locator('h1')).toHaveText('Metrics Insights');
 
-    // Verify the metric select dropdown exists
-    await expect(page.locator('#metric-select')).toBeVisible();
-    await expect(page.getByLabel('Select Metric:')).toBeVisible();
-
     // Verify date range inputs exist
     await expect(page.getByLabel('Start Date:')).toBeVisible();
     await expect(page.getByLabel('End Date:')).toBeVisible();
 
-    // Verify initial chart message is shown
-    await expect(page.locator('#chart-message')).toContainText('Select a metric');
+    // Verify chart placeholder message is shown
+    await expect(page.locator('#chart-message')).toContainText(
+      'Chart visualization will be implemented here'
+    );
   });
 });
 
