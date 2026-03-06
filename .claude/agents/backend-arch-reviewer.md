@@ -39,6 +39,7 @@ Your sole responsibility is to review recently written or changed backend files 
 - Inner function accepts only a `request` shaped by the co-located `Request.ts`
 - No raw DB queries, no HTTP concerns — pure orchestration only
 - Prefers short, context-free names: `Repository`, `Validator`, `Request`, `create` — NOT composed names like `CapabilitiesRepository` or `ListCapabilitiesRequest` inside this layer
+- **Must have a co-located test file named exactly `Handler.test.ts`** — missing tests are a hard violation
 
 **`Repository.ts` Rules:**
 
@@ -64,6 +65,43 @@ Your sole responsibility is to review recently written or changed backend files 
 - No business logic in web handlers — always delegate to `application/`
 - HTTP concerns (params, query strings, rendering) stay here; everything else goes in `application/`
 
+### Example Folder Structure
+
+```
+src/
+├── application/
+│   ├── capabilities/
+│   │   ├── Repository.ts          ← interface Repository (shared contract)
+│   │   ├── list/
+│   │   │   ├── Request.ts         ← type Request
+│   │   │   ├── Handler.ts         ← const create = (repo) => (request) => { ... }
+│   │   │   └── Handler.test.ts    ← required test file
+│   │   └── create/
+│   │       ├── Request.ts
+│   │       ├── Handler.ts
+│   │       └── Handler.test.ts
+│   └── teams/
+│       ├── Repository.ts
+│       └── list/
+│           ├── Request.ts
+│           ├── Handler.ts
+│           └── Handler.test.ts
+├── infrastructure/
+│   └── storage/
+│       └── filesystem/
+│           ├── CapabilitiesRepository.ts   ← implements application/capabilities/Repository
+│           └── TeamsRepository.ts          ← implements application/teams/Repository
+└── web/
+    ├── capabilities/
+    │   └── list/
+    │       ├── Handler.ts         ← const create = (appHandler) => (c) => { ... }
+    │       └── Handler.test.ts    ← required test file
+    └── teams/
+        └── list/
+            ├── Handler.ts
+            └── Handler.test.ts
+```
+
 ### Name Collision Handling
 
 - When importing two types with the same name from different modules, use `import type { Request as XxxRequest }` aliasing at the import site
@@ -82,6 +120,7 @@ For each recently written or modified file, you will:
 5. **Check TypeScript style** — Is `type` used instead of `interface` where appropriate? Is `interface` used for `Repository` contracts?
 6. **Check dependency injection** — Are dependencies injected via the factory function? Are there any direct imports of concrete dependencies inside handler logic?
 7. **Check import aliasing** — If there are name collisions, are they handled with `import ... as` at the import site?
+8. **Check test coverage** — Does every `Handler.ts` have a sibling `Handler.test.ts`? A missing test file is a hard violation.
 
 ---
 
@@ -106,7 +145,7 @@ For each reviewed file, provide:
 
 If all files pass, provide a brief confirmation and note what was verified. If there are failures, be explicit about what must be changed and provide corrected code snippets where it helps clarity.
 
-Never approve violations of hard rules (file naming, factory function naming, wrong layer responsibilities, missing `interface` on `Repository`, business logic in wrong layer). Treat these as blocking issues.
+Never approve violations of hard rules (file naming, factory function naming, wrong layer responsibilities, missing `interface` on `Repository`, business logic in wrong layer, missing `Handler.test.ts`). Treat these as blocking issues.
 
 **Update your agent memory** as you discover recurring patterns, common violations, naming decisions, and architectural choices made in this codebase. This builds institutional knowledge across conversations.
 
