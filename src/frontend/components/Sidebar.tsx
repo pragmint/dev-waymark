@@ -1,11 +1,11 @@
 import type { FC } from 'hono/jsx';
-import { loadTeamIdentitiesFromFilesystem } from '../../loaders/loadTeamIdentitiesFromFilesystem';
+import { FilesystemTeamsRepository } from '../../infrastructure/storage/filesystem/TeamsRepository';
 
 interface SidebarProps {
   activePage: string;
 }
 
-const teams = await loadTeamIdentitiesFromFilesystem();
+const teams = await new FilesystemTeamsRepository().listIdentities();
 
 export const Sidebar: FC<SidebarProps> = ({ activePage }) => {
   return (

@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
-import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
+import type { Practice } from '../../application/practices/Repository';
 
 export interface PracticeDetailPageProps {
   practice: Practice;

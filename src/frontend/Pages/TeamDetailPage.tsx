@@ -5,7 +5,7 @@ import { CapabilityBadge } from '../components/CapabilityBadge';
 import type { Team, TeamCapability } from '../../schemas/teamSchemas';
 import type { Experiment } from '../../schemas/experimentSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
-import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
+import type { Practice } from '../../application/practices/Repository';
 import type { TeamMetric } from '../../schemas/metricSchemas';
 import { parseDate } from '../../domain/parseDate';
 import { compareExperimentsByStatus } from '../../domain/experimentQueries';
