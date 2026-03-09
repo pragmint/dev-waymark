@@ -711,13 +711,16 @@ describe('adjacent capabilities parsing', () => {
     );
   });
 
-  test('throws when adjacent capabilities intro is wrong', () => {
+  test('throws when adjacent capabilities intro omits relationship types', () => {
     const markdown = VALID_MARKDOWN.replace(
-      'The following capabilities will be valuable for you and your team to explore, as they are either:',
-      'Wrong introduction text here:'
+      'The following capabilities will be valuable for you and your team to explore, as they are either:\n\n' +
+        '- Related (they cover similar territory to Job Satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job Satisfaction)\n' +
+        '- Downstream (Job Satisfaction is a pre-requisite for them)',
+      'These are some capabilities you may find useful.'
     );
     expect(() => parseCapabilityMarkdown(markdown)).toThrow(
-      '[Adjacent Capabilities] Introduction does not match expected format'
+      '[Adjacent Capabilities] Introduction must mention all three relationship types: Related, Upstream, Downstream'
     );
   });
 
@@ -732,6 +735,184 @@ describe('adjacent capabilities parsing', () => {
     );
     expect(() => parseCapabilityMarkdown(markdown)).toThrow(
       '[Adjacent Capabilities] Introduction uses "Job satisfaction" but the document title is "Job Satisfaction"'
+    );
+  });
+});
+
+describe('adjacent capabilities intro validation resilience', () => {
+  test('accepts alternate wording as long as all three relationship types and title are present', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      'The following capabilities will be valuable for you and your team to explore, as they are either:\n\n' +
+        '- Related (they cover similar territory to Job Satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job Satisfaction)\n' +
+        '- Downstream (Job Satisfaction is a pre-requisite for them)',
+      'These capabilities are related to Job Satisfaction:\n\n' +
+        '- Related: overlaps with this capability\n' +
+        '- Upstream: a pre-requisite\n' +
+        '- Downstream: depends on this capability'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).not.toThrow();
+  });
+
+  test('throws when intro omits one relationship type', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      'The following capabilities will be valuable for you and your team to explore, as they are either:\n\n' +
+        '- Related (they cover similar territory to Job Satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job Satisfaction)\n' +
+        '- Downstream (Job Satisfaction is a pre-requisite for them)',
+      'These capabilities are Related or Upstream to Job Satisfaction.'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      '[Adjacent Capabilities] Introduction must mention all three relationship types'
+    );
+  });
+
+  test('throws with title-mismatch error when structure is valid but title is wrong', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      '- Related (they cover similar territory to Job Satisfaction)\n' +
+        '- Upstream (they are a pre-requisite for Job Satisfaction)\n' +
+        '- Downstream (Job Satisfaction is a pre-requisite for them)',
+      '- Related (they cover similar territory to Wrong Title)\n' +
+        '- Upstream (they are a pre-requisite for Wrong Title)\n' +
+        '- Downstream (Wrong Title is a pre-requisite for them)'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      '[Adjacent Capabilities] Introduction uses "Wrong Title" but the document title is "Job Satisfaction"'
+    );
+  });
+});
+
+describe('rating line parsing', () => {
+  test('parses ratings with bold title markers', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      '1. Unfulfilling Work: Employees often feel undervalued and disconnected.\n' +
+        '2. Limited Engagement: Employees are somewhat satisfied but lack autonomy.\n' +
+        '3. Satisfactory Engagement: Employees are generally content with some room for growth.\n' +
+        '4. Exceptional Engagement: Employees are highly motivated and empowered.',
+      '1. **Unfulfilling Work:** Employees often feel undervalued and disconnected.\n' +
+        '2. **Limited Engagement:** Employees are somewhat satisfied but lack autonomy.\n' +
+        '3. **Satisfactory Engagement:** Employees are generally content with some room for growth.\n' +
+        '4. **Exceptional Engagement:** Employees are highly motivated and empowered.'
+    );
+    const result = parseCapabilityMarkdown(markdown);
+    expect(result.assessment.ratings[0]).toEqual({
+      rating: 1,
+      title: 'Unfulfilling Work',
+      description: 'Employees often feel undervalued and disconnected.',
+    });
+  });
+
+  test('throws on invalid rating line format with clear message', () => {
+    const markdown = VALID_MARKDOWN.replace(
+      '1. Unfulfilling Work: Employees often feel undervalued and disconnected.',
+      '1. Unfulfilling Work — Employees often feel undervalued and disconnected.'
+    );
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow('[Assessment] Invalid rating format');
+  });
+
+  test('multi-dimensional assessment uses same rating line parsing', () => {
+    const markdown = `# [Title](https://dora.dev/capabilities/title/)
+
+Intro.
+
+## Nuances
+
+Nuance intro.
+
+### A Nuance
+
+Content.
+
+## Assessment
+
+Intro text.
+
+### Dimension One
+
+1. **Low:** Description one.
+2. **Medium:** Description two.
+3. **High:** Description three.
+4. **Expert:** Description four.
+
+Outro text.
+
+## Supporting Practices
+
+Practice intro.
+
+### A Practice
+
+Description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Title)
+- Upstream (they are a pre-requisite for Title)
+- Downstream (Title is a pre-requisite for them)
+
+### [Cap](/capabilities/cap.md) - Related
+
+Description.
+`;
+    const result = parseCapabilityMarkdown(markdown);
+    expect(result.assessment.ratings[0]).toEqual({
+      rating: 1,
+      title: 'Low',
+      description: 'Description one.',
+      dimension: 'Dimension One',
+    });
+  });
+
+  test('multi-dimensional invalid rating line includes dimension name in error', () => {
+    const markdown = `# [Title](https://dora.dev/capabilities/title/)
+
+Intro.
+
+## Nuances
+
+Nuance intro.
+
+### A Nuance
+
+Content.
+
+## Assessment
+
+Intro text.
+
+### My Dimension
+
+1. Low — bad format here.
+2. Medium: Description two.
+3. High: Description three.
+4. Expert: Description four.
+
+Outro text.
+
+## Supporting Practices
+
+Practice intro.
+
+### A Practice
+
+Description.
+
+## Adjacent Capabilities
+
+The following capabilities will be valuable for you and your team to explore, as they are either:
+
+- Related (they cover similar territory to Title)
+- Upstream (they are a pre-requisite for Title)
+- Downstream (Title is a pre-requisite for them)
+
+### [Cap](/capabilities/cap.md) - Related
+
+Description.
+`;
+    expect(() => parseCapabilityMarkdown(markdown)).toThrow(
+      '[Assessment] Invalid rating format in dimension "My Dimension"'
     );
   });
 });

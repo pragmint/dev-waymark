@@ -63,6 +63,24 @@ function splitIntoH3Sections(content: string): { intro: string; items: H3Section
   return { intro, items };
 }
 
+// --- Rating Line Parser ---
+
+function parseRatingLine(
+  line: string,
+  dimension?: string
+): { rating: number; title: string; description: string } {
+  const match = line.match(/^(\d+)\.\s+\*{0,2}(.+?):\*{0,2}\s+(.+)$/);
+  if (!match) {
+    const ctx = dimension ? ` in dimension "${dimension}"` : '';
+    throw new CapabilityParseError(`Invalid rating format${ctx}: "${line}"`, 'Assessment');
+  }
+  return {
+    rating: parseInt(match[1], 10),
+    title: match[2].trim(),
+    description: match[3].trim(),
+  };
+}
+
 // --- Section Parsers ---
 
 function parseNuances(content: string) {
@@ -116,21 +134,10 @@ function parseMultiDimensionalAssessment(intro: string, items: H3Section[]) {
       .map(l => l.trim())
       .filter(Boolean);
 
-    const dimensionRatings = ratingLines.map(line => {
-      const match = line.match(/^(\d+)\.\s+\*{0,2}(.+?):\*{0,2}\s+(.+)$/);
-      if (!match) {
-        throw new CapabilityParseError(
-          `Invalid rating format in dimension "${dimensionName}": "${line}"`,
-          'Assessment'
-        );
-      }
-      return {
-        rating: parseInt(match[1], 10),
-        title: match[2].trim(),
-        description: match[3].trim(),
-        dimension: dimensionName,
-      };
-    });
+    const dimensionRatings = ratingLines.map(line => ({
+      ...parseRatingLine(line, dimensionName),
+      dimension: dimensionName,
+    }));
 
     for (let j = 0; j < dimensionRatings.length; j++) {
       if (dimensionRatings[j].rating !== j + 1) {
@@ -189,17 +196,7 @@ function parseSimpleAssessment(content: string) {
     .map(l => l.trim())
     .filter(Boolean);
 
-  const ratings = ratingLines.map(line => {
-    const match = line.match(/^(\d+)\.\s+\*{0,2}(.+?):\*{0,2}\s+(.+)$/);
-    if (!match) {
-      throw new CapabilityParseError(`Invalid rating format: "${line}"`, 'Assessment');
-    }
-    return {
-      rating: parseInt(match[1], 10),
-      title: match[2].trim(),
-      description: match[3].trim(),
-    };
-  });
+  const ratings = ratingLines.map(line => parseRatingLine(line));
 
   for (let i = 0; i < ratings.length; i++) {
     if (ratings[i].rating !== i + 1) {
@@ -314,34 +311,24 @@ function parseAdjacentCapabilities(content: string, capabilityTitle: string) {
 }
 
 function validateAdjacentIntro(intro: string, capabilityTitle: string): void {
-  const expectedLines = [
-    'The following capabilities will be valuable for you and your team to explore, as they are either:',
-    '',
-    `- Related (they cover similar territory to ${capabilityTitle})`,
-    `- Upstream (they are a pre-requisite for ${capabilityTitle})`,
-    `- Downstream (${capabilityTitle} is a pre-requisite for them)`,
-  ];
-  const expected = expectedLines.join('\n');
+  const hasAllRelationshipTypes =
+    intro.includes('Related') && intro.includes('Upstream') && intro.includes('Downstream');
 
-  if (intro === expected) return;
+  if (!hasAllRelationshipTypes) {
+    throw new CapabilityParseError(
+      'Introduction must mention all three relationship types: Related, Upstream, Downstream',
+      'Adjacent Capabilities'
+    );
+  }
 
-  // Check if the structure matches but the title is wrong
-  const titlePattern =
-    /^The following capabilities will be valuable for you and your team to explore, as they are either:\n\n- Related \(they cover similar territory to (.+?)\)\n- Upstream \(they are a pre-requisite for (.+?)\)\n- Downstream \((.+?) is a pre-requisite for them\)$/;
-  const match = intro.match(titlePattern);
-
-  if (match) {
-    const usedTitle = match[1];
+  if (!intro.includes(capabilityTitle)) {
+    const usedTitleMatch = intro.match(/Related \(they cover similar territory to (.+?)\)/);
+    const usedTitle = usedTitleMatch ? usedTitleMatch[1] : '(unknown)';
     throw new CapabilityParseError(
       `Introduction uses "${usedTitle}" but the document title is "${capabilityTitle}"`,
       'Adjacent Capabilities'
     );
   }
-
-  throw new CapabilityParseError(
-    `Introduction does not match expected format.\nExpected:\n${expected}\n\nGot:\n${intro}`,
-    'Adjacent Capabilities'
-  );
 }
 
 // --- Main Parser ---
