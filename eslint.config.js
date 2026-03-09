@@ -3,6 +3,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
+import cyclomaticPlugin from 'eslint-plugin-cyclomatic-complexity';
 
 export default [
   js.configs.recommended,
@@ -27,6 +28,7 @@ export default [
     plugins: {
       '@typescript-eslint': tseslint,
       prettier: prettierPlugin,
+      'cyclomatic-complexity': cyclomaticPlugin,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
@@ -35,6 +37,7 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'error',
       'no-undef': 'off',
+      'cyclomatic-complexity/zee-codeBlockComplexity': 'error',
     },
   },
   {
