@@ -1,13 +1,6 @@
 ---
 Codebase Audit Report
 
-2. Cross-Layer Imports (Architecture Violation)
-
-src/domain/experimentMetricsData.ts:3 and src/domain/prepareInsightsData.ts:4
-both import CapabilityMetric from ../frontend/scripts/insights-data. Domain
-importing from frontend is backwards. The type should live in domain/schemas.
----
-
 3. Debug Artifacts
 
 - src/frontend/components/MiniChart.tsx:23 — console.log(...) left in
