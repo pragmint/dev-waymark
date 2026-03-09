@@ -4,6 +4,7 @@ import type { TeamIdentity } from '../schemas/teamSchemas';
 import { TeamIdentitySchema } from '../schemas/teamSchemas';
 import { parse } from 'yaml';
 import { getUserDataPath } from './userDataPaths';
+import { isEnoentError } from './isEnoentError';
 
 /**
  * Loads only team identities (id + name) from filesystem.
@@ -32,7 +33,7 @@ export async function loadTeamIdentitiesFromFilesystem(): Promise<TeamIdentity[]
     console.log('Loaded Team Identities');
     return teams;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Teams directory not found, returning empty array');
       return [];
     }

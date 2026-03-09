@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { CapabilityMetric } from '../frontend/scripts/insights-data';
 import { parseCapabilityMetricYaml } from '../parsers/yaml/metricParser';
 import { getUserDataPath } from './userDataPaths';
+import { isEnoentError } from './isEnoentError';
 
 /**
  * Loads capability metrics from filesystem
@@ -34,7 +35,7 @@ export async function loadCapabilityMetricsFromFilesystem(): Promise<CapabilityM
 
     return metrics;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Capability metrics directory not found, returning empty array');
       return [];
     }

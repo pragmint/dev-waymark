@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Team } from '../schemas/teamSchemas';
 import { parseTeamYaml } from '../parsers/yaml/teamParser';
 import { getUserDataPath } from './userDataPaths';
+import { isEnoentError } from './isEnoentError';
 
 /**
  * Loads teams from filesystem
@@ -30,7 +31,7 @@ export async function loadTeamsFromFilesystem(): Promise<Team[]> {
 
     return teams;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Teams directory not found, returning empty array');
       return [];
     }

@@ -5,6 +5,7 @@ import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
 import cyclomaticPlugin from 'eslint-plugin-cyclomatic-complexity';
 import noNestedTry from './eslint-rules/no-nested-try.js';
+import noInlineEnoentCheck from './eslint-rules/no-inline-enoent-check.js';
 
 export default [
   js.configs.recommended,
@@ -30,7 +31,9 @@ export default [
       '@typescript-eslint': tseslint,
       prettier: prettierPlugin,
       'cyclomatic-complexity': cyclomaticPlugin,
-      local: { rules: { 'no-nested-try': noNestedTry } },
+      local: {
+        rules: { 'no-nested-try': noNestedTry, 'no-inline-enoent-check': noInlineEnoentCheck },
+      },
     },
     rules: {
       ...tseslint.configs.recommended.rules,
@@ -41,6 +44,7 @@ export default [
       'no-undef': 'off',
       'cyclomatic-complexity/zee-codeBlockComplexity': 'error',
       'local/no-nested-try': 'error',
+      'local/no-inline-enoent-check': 'error',
     },
   },
   {

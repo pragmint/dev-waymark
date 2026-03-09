@@ -55,3 +55,8 @@ A hook runs `bun check` after every Edit/Write. Edits are blocked if linting, fo
 - Prettier: single quotes, trailing commas (es5), no semicolons omission, 100 char width
 - ESLint: `no-explicit-any` is an error; unused vars must be prefixed with `_`
 - Zod 4 for all runtime schema validation
+
+## Shared utilities
+
+- **ENOENT checks in loaders**: Use `isEnoentError(error)` from `src/loaders/isEnoentError.ts` — never write the inline `error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'` pattern.
+- **Date parsing**: Server-side code uses `parseDate()` from `src/domain/parseDate.ts`. Frontend scripts (`src/frontend/scripts/`) use `parseDataDate()` from `insights-date-utils.ts`. Do not duplicate this logic inline.

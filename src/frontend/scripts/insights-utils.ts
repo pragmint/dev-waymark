@@ -1,12 +1,5 @@
 // Utility functions for insights page - pure, testable functions
-
-/**
- * Parse date in format dd.m.yyyy
- */
-export function parseDate(dateStr: string): Date {
-  const [day, month, year] = dateStr.split('.');
-  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-}
+import { parseDataDate } from './insights-date-utils';
 
 /**
  * Convert metric value to number, handling dimension scores and strings
@@ -40,11 +33,11 @@ export function filterByDateRange<T extends { date: string }>(
 ): T[] {
   if (!startDate || !endDate) return data;
 
-  const start = parseDate(startDate);
-  const end = parseDate(endDate);
+  const start = parseDataDate(startDate);
+  const end = parseDataDate(endDate);
 
   return data.filter(point => {
-    const pointDate = parseDate(point.date);
+    const pointDate = parseDataDate(point.date);
     return pointDate >= start && pointDate <= end;
   });
 }
@@ -53,5 +46,7 @@ export function filterByDateRange<T extends { date: string }>(
  * Sort data by date ascending
  */
 export function sortByDate<T extends { date: string }>(data: T[]): T[] {
-  return [...data].sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
+  return [...data].sort(
+    (a, b) => parseDataDate(a.date).getTime() - parseDataDate(b.date).getTime()
+  );
 }

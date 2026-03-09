@@ -2,6 +2,7 @@ import type { Team } from '../schemas/teamSchemas';
 import type { Capability } from '../schemas/capabilitySchemas';
 import type { TeamMetric } from '../schemas/metricSchemas';
 import { CapabilityMetric } from '../frontend/scripts/insights-data';
+import { parseDate } from './parseDate';
 
 export interface MetricOption {
   id: string;
@@ -65,14 +66,9 @@ export function prepareInsightsData(
     });
   });
 
-  const availableDates = Array.from(dateSet).sort((a, b) => {
-    // Parse dates in format dd.m.yyyy
-    const parseDate = (dateStr: string) => {
-      const [day, month, year] = dateStr.split('.');
-      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    };
-    return parseDate(a).getTime() - parseDate(b).getTime();
-  });
+  const availableDates = Array.from(dateSet).sort(
+    (a, b) => parseDate(a).getTime() - parseDate(b).getTime()
+  );
 
   return {
     teams,

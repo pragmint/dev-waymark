@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { loadPracticeFromFilesystem, type Practice } from './loadPracticeFromFilesystem';
+import { isEnoentError } from './isEnoentError';
 
 /**
  * Loads all practices from filesystem
@@ -28,7 +29,7 @@ export async function loadPracticesFromFilesystem(): Promise<Practice[]> {
 
     return result;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Practices directory not found, returning empty array');
       return [];
     }

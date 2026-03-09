@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { TeamMetric } from '../schemas/metricSchemas';
 import { parseTeamMetricYaml } from '../parsers/yaml/metricParser';
 import { getUserDataPath } from './userDataPaths';
+import { isEnoentError } from './isEnoentError';
 
 async function loadMetricsForTeam(teamDirPath: string, teamDir: string): Promise<TeamMetric[]> {
   try {
@@ -46,7 +47,7 @@ export async function loadTeamMetricsFromFilesystem(): Promise<TeamMetric[]> {
 
     return teamMetrics;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Team metrics directory not found, returning empty array');
       return [];
     }

@@ -5,6 +5,7 @@ import {
   CapabilityParseError,
 } from '../parsers/markdown/capabilityParser';
 import type { Capability } from '../schemas/capabilitySchemas';
+import { isEnoentError } from './isEnoentError';
 
 const CAPABILITIES_DIR = 'resources/capabilities';
 
@@ -55,8 +56,7 @@ export async function loadAndParseCapabilities(): Promise<Capability[]> {
 
     return capabilities;
   } catch (error) {
-    // Directory doesn't exist or can't be read
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (isEnoentError(error)) {
       return [];
     }
     throw error;

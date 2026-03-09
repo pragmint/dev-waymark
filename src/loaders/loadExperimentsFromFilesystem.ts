@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Experiment } from '../schemas/experimentSchemas';
 import { parseExperimentYaml } from '../parsers/yaml/experimentParser';
 import { getUserDataPath } from './userDataPaths';
+import { isEnoentError } from './isEnoentError';
 
 async function isDirectory(path: string): Promise<boolean> {
   try {
@@ -46,7 +47,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
 
     return experiments;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isEnoentError(error)) {
       console.log('Experiments directory not found, returning empty array');
       return [];
     }
