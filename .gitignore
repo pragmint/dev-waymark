@@ -44,6 +44,9 @@ tmp/
 temp/
 *.tmp
 
+# Claude hooks sentinel (touch to disable Stop hooks during planning/analysis)
+.no-hooks
+
 # OS files
 Thumbs.db
 
