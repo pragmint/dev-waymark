@@ -1,14 +1,5 @@
 Codebase Audit Report
 
-5. Magic Strings Without Central Constants
-
-- src/domain/experimentQueries.ts:5 — hardcoded status order array ['active',
-  'blocked', 'backlog', 'polish', 'pitch']
-- src/frontend/Pages/TeamDetailPage.tsx:14-21 — hardcoded status→color mapping
-- Status constants used across multiple files with no single source of truth
-
----
-
 6. Module-Level Data Loading in Handlers
 
 Several handlers (e.g. src/handlers/handleOverview.tsx) load data via top-level
