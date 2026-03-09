@@ -52,21 +52,24 @@ export const MetricFileSchema = z.object({
 
 export type MetricValue = number | string | Record<string, number>;
 
-export interface MetricDataPoint {
+// MetricDataPointSchema uses .passthrough() + .transform(). z.infer<> would expose the
+// pre-transform union (including array values); this manual type reflects the post-transform
+// shape and the passthrough index signature. Intentional exception to z.infer convention.
+export type MetricDataPoint = {
   team?: string;
   date: string;
   value: MetricValue;
   justification?: string;
   dimensionJustifications?: Record<string, string>;
-  [key: string]: unknown; // Allow arbitrary metadata fields
-}
+  [key: string]: unknown;
+};
 
 export type MetricFile = { data: MetricDataPoint[] };
 
-export interface Metric {
+export type Metric = {
   capabilityId: string;
   data: MetricDataPoint[];
-}
+};
 
 export type CapabilityMetric = Metric;
 
@@ -86,8 +89,8 @@ export const TeamMetricFileSchema = z.object({
 export type TeamMetricDataPoint = z.infer<typeof TeamMetricDataPointSchema>;
 export type TeamMetricFile = z.infer<typeof TeamMetricFileSchema>;
 
-export interface TeamMetric {
+export type TeamMetric = {
   teamId: string;
   metricName: string;
   data: TeamMetricDataPoint[];
-}
+};

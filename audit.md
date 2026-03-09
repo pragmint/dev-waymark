@@ -1,14 +1,4 @@
----
 Codebase Audit Report
-
-4. Schema/Type Inconsistency
-
-src/schemas/experimentSchemas.ts:64-89 — Experiment is defined as a manual
-TypeScript interface instead of being inferred with z.infer<typeof             
-  ExperimentSchema>. All other schemas use inference. Risk of schema/type
-divergence.
-
----
 
 5. Magic Strings Without Central Constants
 

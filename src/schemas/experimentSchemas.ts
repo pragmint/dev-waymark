@@ -60,36 +60,38 @@ export const ExperimentFileSchema = z.object({
   'decision-roles': ExperimentDecisionRolesSchema.optional(),
 });
 
-// Runtime type for experiments with context
-export interface Experiment {
-  id: string; // Derived from filename
-  teamId: string; // Derived from directory
-  title: string;
-  context: {
-    problemStatement: string;
-    desiredOutcome: string;
-  };
-  hypothesis: {
-    statement: string;
-    assumptions?: string[];
-    risks?: string[];
-    riskMitigations?: string[];
-  };
-  intervention: {
-    practiceUnderTest: string;
-    relatedCapabilities?: string[];
-    description: string;
-  };
-  successCriteria?: ExperimentSuccessCriteriaItem[];
-  status: 'active' | 'backlog' | 'blocked' | 'pitch' | 'polish';
-  actionPlan?: ExperimentActionItem[];
-  startDate?: string | null;
-  expectedDurationInWeeks?: number;
-  decisionRoles?: ExperimentDecisionRolesItem[];
-}
-
 // Derive TypeScript types from schemas
 export type ExperimentActionItem = z.infer<typeof ExperimentActionItemSchema>;
 export type ExperimentDecisionRolesItem = z.infer<typeof ExperimentDecisionRolesItemSchema>;
 export type ExperimentSuccessCriteriaItem = z.infer<typeof ExperimentSuccessCriteriaItemSchema>;
 export type ExperimentFile = z.infer<typeof ExperimentFileSchema>;
+
+// Runtime schema for experiments with derived/camelCased fields (post-parse shape)
+export const ExperimentSchema = z.object({
+  id: z.string(),
+  teamId: z.string(),
+  title: z.string(),
+  context: z.object({
+    problemStatement: z.string(),
+    desiredOutcome: z.string(),
+  }),
+  hypothesis: z.object({
+    statement: z.string(),
+    assumptions: z.array(z.string()).optional(),
+    risks: z.array(z.string()).optional(),
+    riskMitigations: z.array(z.string()).optional(),
+  }),
+  intervention: z.object({
+    practiceUnderTest: z.string(),
+    relatedCapabilities: z.array(z.string()).optional(),
+    description: z.string(),
+  }),
+  successCriteria: z.array(ExperimentSuccessCriteriaItemSchema).optional(),
+  status: z.enum(['active', 'backlog', 'blocked', 'pitch', 'polish']),
+  actionPlan: z.array(ExperimentActionItemSchema).optional(),
+  startDate: z.string().nullable().optional(),
+  expectedDurationInWeeks: z.number().optional(),
+  decisionRoles: ExperimentDecisionRolesSchema.optional(),
+});
+
+export type Experiment = z.infer<typeof ExperimentSchema>;

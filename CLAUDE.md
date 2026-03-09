@@ -52,11 +52,16 @@ Content lives in the filesystem, not a database:
 
 A hook runs `bun check` after every Edit/Write. Edits are blocked if linting, formatting, or type-checking fails. Run `bun fix` to auto-resolve formatting and lint issues.
 
+### Pre-commit hook (fitness functions)
+
+A git pre-commit hook runs `bun check:commit` before every commit. If a commit is blocked by fitness function failures, diagnose and fix them by running `bun check:commit` directly — **never use git commands to investigate or work around this**.
+
 ## Code style
 
 - Prettier: single quotes, trailing commas (es5), no semicolons omission, 100 char width
 - ESLint: `no-explicit-any` is an error; unused vars must be prefixed with `_`
 - Zod 4 for all runtime schema validation
+- **No manual `interface` declarations in `src/schemas/`**: all exported types must use `export type Foo = z.infer<typeof FooSchema>`. Exception: types derived from schemas with `.passthrough()` + `.transform()` may use a manual `type` (not `interface`) with a comment explaining why `z.infer<>` is insufficient.
 
 ## Shared utilities
 
