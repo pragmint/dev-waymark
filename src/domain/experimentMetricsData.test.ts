@@ -4,7 +4,7 @@ import {
   buildTeamMetricChartData,
   resolveMetricChartData,
 } from './experimentMetricsData';
-import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { CapabilityMetric } from '../schemas/metricSchemas';
 import type { TeamMetric } from '../schemas/metricSchemas';
 
 // ---------------------------------------------------------------------------

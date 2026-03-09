@@ -1,35 +1,11 @@
 ---
-
 Codebase Audit Report
-
-1. Duplicate Patterns (DRY Violations)  
-
-
-ENOENT error handling — duplicated across 7 loader files with verbose, unsafe  
- pattern:  
- if (error && typeof error === 'object' && 'code' in error && error.code ===  
- 'ENOENT')  
- → All 7 loaders in src/loaders/. Extract to isEnoentError() utility.
-
-Date parsing — exists in 4 places with inconsistent names:
-
-- src/domain/parseDate.ts — parseDate()
-- src/frontend/scripts/insights-utils.ts — parseDate() (duplicate)
-- src/frontend/scripts/insights-date-utils.ts — parseDataDate() (different  
-  name)
-- src/domain/prepareInsightsData.ts:70-73 — inline duplicate
-
-Numeric metric conversion — getNumericScore() in src/domain/metricHelpers.ts vs
-getNumericValue() in src/frontend/scripts/insights-utils.ts.
-
----
 
 2. Cross-Layer Imports (Architecture Violation)
 
 src/domain/experimentMetricsData.ts:3 and src/domain/prepareInsightsData.ts:4
-both import CapabilityMetric from ../frontend/scripts/insights-data. Domain  
- importing from frontend is backwards. The type should live in domain/schemas.
-
+both import CapabilityMetric from ../frontend/scripts/insights-data. Domain
+importing from frontend is backwards. The type should live in domain/schemas.
 ---
 
 3. Debug Artifacts

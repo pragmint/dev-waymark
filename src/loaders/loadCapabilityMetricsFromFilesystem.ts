@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { CapabilityMetric } from '../schemas/metricSchemas';
 import { parseCapabilityMetricYaml } from '../parsers/yaml/metricParser';
 import { getUserDataPath } from './userDataPaths';
 import { isEnoentError } from './isEnoentError';

@@ -68,6 +68,8 @@ export interface Metric {
   data: MetricDataPoint[];
 }
 
+export type CapabilityMetric = Metric;
+
 // Zod schemas for team metric data validation
 export const TeamMetricDataPointSchema = z
   .object({

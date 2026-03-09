@@ -48,6 +48,24 @@ export default [
     },
   },
   {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['src/frontend/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['*/frontend/scripts/*'],
+              message:
+                'Domain/loader/handler code must not import from frontend scripts. Move shared types to src/schemas/ instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: ['node_modules', 'dist', 'build', 'public', 'eslint-rules'],
   },
 ];

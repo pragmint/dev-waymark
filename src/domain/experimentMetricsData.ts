@@ -1,13 +1,13 @@
-import { getNumericValue } from '../frontend/scripts/insights-utils';
-import { parseDataDate } from '../frontend/scripts/insights-date-utils';
-import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import { getNumericValue } from './metricHelpers';
+import { parseDate } from './parseDate';
+import type { CapabilityMetric } from '../schemas/metricSchemas';
 import type { TeamMetric } from '../schemas/metricSchemas';
 import type { MiniChartData } from '../frontend/components/MiniChart';
 
 const CHART_COLOR = { border: 'rgb(75, 192, 192)', bg: 'rgba(75, 192, 192, 0.2)' };
 
 export function formatMetricDate(dateStr: string): string {
-  return parseDataDate(dateStr).toLocaleDateString('en-US', {
+  return parseDate(dateStr).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -23,7 +23,7 @@ export function buildCapabilityChartData(
   if (teamData.length === 0) return null;
 
   const sorted = [...teamData].sort(
-    (a, b) => parseDataDate(a.date).getTime() - parseDataDate(b.date).getTime()
+    (a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime()
   );
 
   return {
@@ -46,7 +46,7 @@ export function buildTeamMetricChartData(
   if (metric.data.length === 0) return null;
 
   const sorted = [...metric.data].sort(
-    (a, b) => parseDataDate(a.date).getTime() - parseDataDate(b.date).getTime()
+    (a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime()
   );
 
   return {

@@ -13,7 +13,7 @@ import { loadExperimentsFromFilesystem } from '../loaders/loadExperimentsFromFil
 import { loadTeamsFromFilesystem } from '../loaders/loadTeamsFromFilesystem';
 import { loadTeamMetricsFromFilesystem } from '../loaders/loadTeamMetricsFromFilesystem';
 import { resolveMetricChartData } from '../domain/experimentMetricsData';
-import type { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { CapabilityMetric } from '../schemas/metricSchemas';
 import type { TeamMetric } from '../schemas/metricSchemas';
 import type { MiniChartData } from '../frontend/components/MiniChart';
 

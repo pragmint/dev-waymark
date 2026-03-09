@@ -1,7 +1,7 @@
 import type { Team } from '../schemas/teamSchemas';
 import type { Capability } from '../schemas/capabilitySchemas';
 import type { TeamMetric } from '../schemas/metricSchemas';
-import { CapabilityMetric } from '../frontend/scripts/insights-data';
+import type { CapabilityMetric } from '../schemas/metricSchemas';
 import { parseDate } from './parseDate';
 
 export interface MetricOption {

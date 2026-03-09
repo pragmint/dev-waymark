@@ -35,6 +35,8 @@ Filesystem (YAML/Markdown) → Loaders → Parsers (Zod validation) → Aggregat
 - **`src/frontend/components/`** — Reusable view components (`Layout`, `Page`, `Sidebar`, tiles).
 - **`src/frontend/scripts/`** — Client-side vanilla JS (compiled to `public/`). Handles minimal interactivity like toggles and Chart.js visualizations.
 
+**Layer dependency rule**: Domain, loaders, and handlers must never import from `src/frontend/`. Shared types belong in `src/schemas/`; shared utilities belong in `src/domain/`. Frontend scripts may import from schemas and domain.
+
 ### Data sources
 
 Content lives in the filesystem, not a database:

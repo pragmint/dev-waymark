@@ -5,6 +5,7 @@
 **PostToolUse** (after every Edit/Write): `check.sh` — runs `bun check` (prettier + eslint + tsc)
 
 **Stop** (after every response):
+
 1. `check.sh` — same as above
 2. `test.sh` — runs `bun test`; Playwright only if `src/frontend/` changed
 3. Agent: **bun-tester** — verifies test coverage

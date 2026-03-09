@@ -2,6 +2,26 @@ import type { MetricValue } from '../schemas/metricSchemas';
 import type { TrendDirection } from '../schemas/capabilitySchemas';
 
 /**
+ * Convert metric value to number, handling dimension scores and string values.
+ * Returns null for non-numeric strings or empty objects.
+ */
+export function getNumericValue(value: number | string | Record<string, number>): number | null {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const values = Object.values(value);
+    if (values.length === 0) return null;
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  }
+  return null;
+}
+
+/**
  * Helper function to check if a value is a dimension score object
  */
 export function isDimensionScore(value: MetricValue): value is Record<string, number> {

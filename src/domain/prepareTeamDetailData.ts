@@ -2,7 +2,7 @@ import { Capability } from '../schemas/capabilitySchemas';
 import { Experiment } from '../schemas/experimentSchemas';
 import { Team, TeamCapability } from '../schemas/teamSchemas';
 import { loadPracticeFromFilesystem, Practice } from '../loaders/loadPracticeFromFilesystem';
-import { TeamMetric } from '../frontend/scripts/insights-data';
+import type { TeamMetric } from '../schemas/metricSchemas';
 import type { Metric } from '../schemas/metricSchemas';
 import { NotFoundError } from './errors';
 import { TeamDetailPageProps } from '../frontend/Pages/TeamDetailPage';
