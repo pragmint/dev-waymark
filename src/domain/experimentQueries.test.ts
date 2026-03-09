@@ -1,14 +1,27 @@
 import { describe, test, expect } from 'bun:test';
-import { compareExperimentsByStatus } from './experimentQueries';
+import {
+  compareExperimentsByStatus,
+  EXPERIMENT_STATUS_SORT_ORDER,
+  CHRONOLOGICAL_STATUSES,
+} from './experimentQueries';
+import { ExperimentSchema } from '../schemas/experimentSchemas';
 import type { Experiment } from '../schemas/experimentSchemas';
 
 function exp(status: Experiment['status'], startDate?: string | null): Experiment {
   return { status, startDate } as Partial<Experiment> as Experiment;
 }
 
+describe('EXPERIMENT_STATUS_SORT_ORDER', () => {
+  test('covers exactly the set of statuses defined in ExperimentSchema', () => {
+    const schemaStatuses = new Set(ExperimentSchema.shape.status.options);
+    const orderStatuses = new Set(EXPERIMENT_STATUS_SORT_ORDER);
+    expect(orderStatuses).toEqual(schemaStatuses);
+  });
+});
+
 describe('compareExperimentsByStatus', () => {
   describe('different statuses', () => {
-    const statusOrder: Experiment['status'][] = ['active', 'blocked', 'backlog', 'polish', 'pitch'];
+    const statusOrder = EXPERIMENT_STATUS_SORT_ORDER;
 
     for (let i = 0; i < statusOrder.length - 1; i++) {
       const earlier = statusOrder[i];
@@ -41,7 +54,7 @@ describe('compareExperimentsByStatus', () => {
   });
 
   describe('same status, chronological group (active / blocked / backlog) — older date first', () => {
-    const chronologicalStatuses: Experiment['status'][] = ['active', 'blocked', 'backlog'];
+    const chronologicalStatuses = CHRONOLOGICAL_STATUSES;
 
     for (const status of chronologicalStatuses) {
       test(`${status}: older startDate sorts before newer startDate`, () => {
@@ -101,7 +114,7 @@ describe('compareExperimentsByStatus', () => {
   });
 
   describe('null startDate treated as epoch (timestamp 0)', () => {
-    const chronologicalStatuses: Experiment['status'][] = ['active', 'blocked', 'backlog'];
+    const chronologicalStatuses = CHRONOLOGICAL_STATUSES;
 
     for (const status of chronologicalStatuses) {
       test(`${status}: null startDate sorts before a real date (chronological group)`, () => {
@@ -131,7 +144,7 @@ describe('compareExperimentsByStatus', () => {
   });
 
   describe('equal status and equal dates — returns 0', () => {
-    const allStatuses: Experiment['status'][] = ['active', 'blocked', 'backlog', 'polish', 'pitch'];
+    const allStatuses = EXPERIMENT_STATUS_SORT_ORDER;
 
     for (const status of allStatuses) {
       test(`${status}: identical startDate returns 0`, () => {

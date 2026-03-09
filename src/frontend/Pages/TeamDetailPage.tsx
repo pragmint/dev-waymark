@@ -10,17 +10,16 @@ import type { TeamMetric } from '../../schemas/metricSchemas';
 import { parseDate } from '../../domain/parseDate';
 import { compareExperimentsByStatus } from '../../domain/experimentQueries';
 
-function getStatusBadge(status: string): string {
-  const statusColors: Record<string, { bg: string; text: string }> = {
+function getStatusBadge(status: Experiment['status']): string {
+  const statusColors: Record<Experiment['status'], { bg: string; text: string }> = {
     active: { bg: '#e8f5f0', text: '#228b6b' },
-    'in-progress': { bg: '#e8f5f0', text: '#228b6b' },
     backlog: { bg: '#e0ecf8', text: '#2a6cb8' },
     blocked: { bg: '#f8d7da', text: '#721c24' },
     polish: { bg: '#fff3e0', text: '#ef8e59' },
-    paused: { bg: '#fff3cd', text: '#856404' },
+    pitch: { bg: '#ede8f8', text: '#5b3ea8' },
   };
 
-  const colors = statusColors[status] || { bg: '#e0e0e0', text: '#666' };
+  const colors = statusColors[status];
   const label = status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
 
   return `<span class="status-badge" style="background-color: ${colors.bg}; color: ${colors.text};">${label}</span>`;
