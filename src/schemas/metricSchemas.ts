@@ -9,6 +9,32 @@ import { z } from 'zod';
 const DimensionScoreSchema = z.record(z.string(), z.number());
 const DimensionScoreArraySchema = z.array(z.record(z.string(), z.union([z.number(), z.string()])));
 
+// Converts YAML dimension score arrays to a flat object.
+// Input: [{"new-code": 1, "justification": "..."}, {"old-code": 2}]
+// Output: { value: {"new-code": 1, "old-code": 2}, dimensionJustifications: {"new-code": "..."} }
+export function normalizeDimensionScores(items: Array<Record<string, number | string>>): {
+  value: Record<string, number>;
+  dimensionJustifications?: Record<string, string>;
+} {
+  const normalized: Record<string, number> = {};
+  const justifications: Record<string, string> = {};
+
+  for (const item of items) {
+    const dimensionKey = Object.keys(item).find(k => k !== 'justification');
+    if (dimensionKey && typeof item[dimensionKey] === 'number') {
+      normalized[dimensionKey] = item[dimensionKey] as number;
+      if (item.justification && typeof item.justification === 'string') {
+        justifications[dimensionKey] = item.justification;
+      }
+    }
+  }
+
+  return {
+    value: normalized,
+    dimensionJustifications: Object.keys(justifications).length > 0 ? justifications : undefined,
+  };
+}
+
 export const MetricDataPointSchema = z
   .object({
     team: z.string().optional(),
@@ -18,30 +44,9 @@ export const MetricDataPointSchema = z
   })
   .passthrough() // Allow additional fields like link, etc.
   .transform(data => {
-    // Normalize dimension score arrays to single objects
-    // YAML arrays like [{"new-code": 1, "justification": "..."}, {"old-code": 2}]
-    // -> {scores: {"new-code": 1, "old-code": 2}, justifications: {"new-code": "..."}}
     if (Array.isArray(data.value)) {
-      const normalized: Record<string, number> = {};
-      const justifications: Record<string, string> = {};
-
-      for (const item of data.value) {
-        // Extract dimension name (the key that's not 'justification')
-        const dimensionKey = Object.keys(item).find(k => k !== 'justification');
-        if (dimensionKey && typeof item[dimensionKey] === 'number') {
-          normalized[dimensionKey] = item[dimensionKey];
-          if (item.justification && typeof item.justification === 'string') {
-            justifications[dimensionKey] = item.justification;
-          }
-        }
-      }
-
-      return {
-        ...data,
-        value: normalized,
-        dimensionJustifications:
-          Object.keys(justifications).length > 0 ? justifications : undefined,
-      };
+      const { value, dimensionJustifications } = normalizeDimensionScores(data.value);
+      return { ...data, value, dimensionJustifications };
     }
     return data;
   });
