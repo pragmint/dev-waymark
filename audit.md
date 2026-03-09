@@ -1,14 +1,5 @@
 Codebase Audit Report
 
-6. Module-Level Data Loading in Handlers
-
-Several handlers (e.g. src/handlers/handleOverview.tsx) load data via top-level
-await at import time, not inside the handler function. This obscures whether  
- data is cached or fresh, makes the execution model confusing, and complicates
-testing.
-
----
-
 7. Naming Confusion
 
 - enrich\* functions in src/domain/metricAggregations.ts — vague. They compute
@@ -41,33 +32,3 @@ src/schemas/metricSchemas.ts:20-47 — Zod .transform() does significant data
 reshaping (array→object conversion, field extraction). This logic should be a  
  pure function tested separately, not embedded in a schema validator.
 
----
-
-Priority Summary
-
-┌──────────┬────────────────────────────────────────────────────────────────┐
-│ Priority │ Issue │  
- ├──────────┼────────────────────────────────────────────────────────────────┤  
- │ High │ Cross-layer import (CapabilityMetric in frontend) │  
- ├──────────┼────────────────────────────────────────────────────────────────┤  
- │ High │ Remove console.log and resolve TODO in MiniChart.tsx │  
- ├──────────┼────────────────────────────────────────────────────────────────┤  
- │ High │ Extract isEnoentError() to eliminate 7 copies of ENOENT │  
- │ │ pattern │  
- ├──────────┼────────────────────────────────────────────────────────────────┤
-│ High │ Consolidate date parsing to single utility │  
- ├──────────┼────────────────────────────────────────────────────────────────┤
-│ Medium │ Fix Experiment type to use z.infer │
-├──────────┼────────────────────────────────────────────────────────────────┤  
- │ Medium │ Centralize status order/color constants │
-├──────────┼────────────────────────────────────────────────────────────────┤  
- │ Medium │ Clarify handler data loading model (module-level vs │
-│ │ per-request) │  
- ├──────────┼────────────────────────────────────────────────────────────────┤
-│ Low │ Rename enrich\* functions │  
- ├──────────┼────────────────────────────────────────────────────────────────┤  
- │ Low │ Extract metric value conversion to shared utility │
-├──────────┼────────────────────────────────────────────────────────────────┤  
- │ Low │ Refactor parseMultiDimensionalAssessment into smaller │
-│ │ functions │  
- └──────────┴────────────────────────────────────────────────────────────────┘
