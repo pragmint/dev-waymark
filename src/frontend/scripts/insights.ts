@@ -140,6 +140,73 @@ function isLineSeries(data: ChartData): boolean {
 }
 
 /**
+ * Try to render a comparison chart. Returns true if comparison was rendered.
+ */
+function tryRenderComparisonChart(
+  chartManager: ChartManager,
+  compareMetricSelect: HTMLSelectElement | null,
+  primaryData: ChartData,
+  primaryLabel: string,
+  selectedMetric: string,
+  capabilityMetrics: CapabilityMetric[],
+  teamMetrics: TeamMetric[],
+  teams: TeamInfo[],
+  startDate: string,
+  endDate: string
+): boolean {
+  const compareMetric = compareMetricSelect?.value;
+  if (!compareMetric) return false;
+
+  const compareLabel = getMetricLabel(compareMetricSelect!);
+  const compareData = getMetricChartData(
+    compareMetric,
+    capabilityMetrics,
+    teamMetrics,
+    teams,
+    startDate,
+    endDate,
+    compareLabel
+  );
+  if (!compareData) return false;
+
+  const mergedData = mergeChartDataForComparison(primaryData, compareData);
+  if (!mergedData) return false;
+
+  const primaryIsLine = isLineSeries(primaryData);
+  const compareIsLine = isLineSeries(compareData);
+
+  // Combo (line + bar): tag the line datasets so Chart.js renders them as lines
+  // while using 'bar' as the base chart type.
+  if (primaryIsLine !== compareIsLine) {
+    const splitIndex = primaryData.datasets.length;
+    if (primaryIsLine) {
+      mergedData.datasets.slice(0, splitIndex).forEach(ds => {
+        ds.type = 'line';
+      });
+    } else {
+      mergedData.datasets.slice(splitIndex).forEach(ds => {
+        ds.type = 'line';
+      });
+    }
+  }
+
+  const title = `${primaryLabel} vs ${compareLabel}`;
+  const comparisonConfig: ComparisonConfig = {
+    metric1Label: primaryLabel,
+    metric2Label: compareLabel,
+    metric1IsCapability: !selectedMetric.includes(':'),
+    metric2IsCapability: !compareMetric.includes(':'),
+  };
+
+  // Line+line keeps 'line' as chart type; everything else uses 'bar' as the base.
+  const chartTypeOverride = !(primaryIsLine && compareIsLine) ? 'bar' : undefined;
+
+  hideMessage();
+  chartManager.render(mergedData, title, comparisonConfig, undefined, chartTypeOverride);
+  return true;
+}
+
+/**
  * Main update chart handler
  */
 function createUpdateHandler(chartManager: ChartManager) {
@@ -185,58 +252,21 @@ function createUpdateHandler(chartManager: ChartManager) {
       return;
     }
 
-    // Check if a comparison metric is selected
-    const compareMetric = inputs.compareMetricSelect?.value;
-    if (compareMetric) {
-      const compareLabel = getMetricLabel(inputs.compareMetricSelect!);
-      const compareData = getMetricChartData(
-        compareMetric,
+    if (
+      tryRenderComparisonChart(
+        chartManager,
+        inputs.compareMetricSelect,
+        primaryData,
+        primaryLabel,
+        selectedMetric,
         metricsData.capabilityMetrics,
         metricsData.teamMetrics,
         metricsData.teams,
         startDate,
-        endDate,
-        compareLabel
-      );
-
-      if (compareData) {
-        const mergedData = mergeChartDataForComparison(primaryData, compareData);
-
-        if (mergedData) {
-          const primaryIsLine = isLineSeries(primaryData);
-          const compareIsLine = isLineSeries(compareData);
-
-          // Combo (line + bar): tag the line datasets so Chart.js renders them as lines
-          // while using 'bar' as the base chart type.
-          if (primaryIsLine !== compareIsLine) {
-            const splitIndex = primaryData.datasets.length;
-            if (primaryIsLine) {
-              mergedData.datasets.slice(0, splitIndex).forEach(ds => {
-                ds.type = 'line';
-              });
-            } else {
-              mergedData.datasets.slice(splitIndex).forEach(ds => {
-                ds.type = 'line';
-              });
-            }
-          }
-
-          const title = `${primaryLabel} vs ${compareLabel}`;
-          const comparisonConfig: ComparisonConfig = {
-            metric1Label: primaryLabel,
-            metric2Label: compareLabel,
-            metric1IsCapability: !selectedMetric.includes(':'),
-            metric2IsCapability: !compareMetric.includes(':'),
-          };
-
-          // Line+line keeps 'line' as chart type; everything else uses 'bar' as the base.
-          const chartTypeOverride = !(primaryIsLine && compareIsLine) ? 'bar' : undefined;
-
-          hideMessage();
-          chartManager.render(mergedData, title, comparisonConfig, undefined, chartTypeOverride);
-          return;
-        }
-      }
+        endDate
+      )
+    ) {
+      return;
     }
 
     // Render single metric

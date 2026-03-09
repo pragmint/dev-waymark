@@ -1,4 +1,4 @@
 {
   "skipOperators": ["||", "&&"],
-  "allowedComplexity": 15
+  "allowedComplexity": 10
 }

@@ -314,6 +314,19 @@ function createTooltipCallbacks() {
   };
 }
 
+function resolveAxisRanges(
+  axisRanges: AxisRange,
+  comparisonConfig: ComparisonConfig | undefined,
+  isCapabilityMetric: boolean | undefined
+): { yRange: Range | null; y1Range: Range | null } {
+  const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
+  const y1IsCapability = comparisonConfig?.metric2IsCapability ?? false;
+  return {
+    yRange: yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y,
+    y1Range: y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1,
+  };
+}
+
 function buildScaleConfig(
   chartType: 'line' | 'bar',
   range: Range | null,
@@ -362,10 +375,7 @@ export class ChartManager {
         : undefined;
     const axisRanges = computeAxisRanges(data);
 
-    const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
-    const y1IsCapability = comparisonConfig?.metric2IsCapability ?? false;
-    const yRange = yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y;
-    const y1Range = y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1;
+    const { yRange, y1Range } = resolveAxisRanges(axisRanges, comparisonConfig, isCapabilityMetric);
 
     // Calculate aligned tick count when comparing metrics
     const alignedTickCount = comparisonConfig
