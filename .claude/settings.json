@@ -17,6 +17,17 @@
     "deny": ["Read(dist)"]
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/claude_hooks/check.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
