@@ -4,6 +4,13 @@ import type { Experiment } from '../schemas/experimentSchemas';
 import { parseExperimentYaml } from '../parsers/yaml/experimentParser';
 import { getUserDataPath } from './userDataPaths';
 
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
 /**
  * Loads experiments from filesystem
  * Directory structure: {userData}/experiments/{team_id}/{experiment-name}.yaml
@@ -18,12 +25,7 @@ export async function loadExperimentsFromFilesystem(): Promise<Experiment[]> {
     for (const teamDir of teamDirs) {
       const teamDirPath = join(dir, teamDir);
 
-      try {
-        const stats = await stat(teamDirPath);
-        if (!stats.isDirectory()) continue;
-      } catch {
-        continue;
-      }
+      if (!(await isDirectory(teamDirPath))) continue;
 
       const teamId = teamDir.replace(/_/g, '-');
       const files = await readdir(teamDirPath);
