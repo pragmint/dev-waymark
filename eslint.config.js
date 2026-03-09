@@ -48,6 +48,12 @@ export default [
     },
   },
   {
+    files: ['src/frontend/**/*.ts', 'src/frontend/**/*.tsx'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+  {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     ignores: ['src/frontend/**'],
     rules: {

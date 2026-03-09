@@ -7,7 +7,6 @@ export interface MiniChartDataset {
   backgroundColor: string;
 }
 
-// TODO: Rename to experiment metrics chart
 export interface MiniChartData {
   labels: string[];
   datasets: MiniChartDataset[];
@@ -20,7 +19,6 @@ export const MiniChart: FC<{ chartData: MiniChartData | null; metricId: string }
   if (!chartData) {
     return <p class="mini-chart-no-data">No data available for this metric</p>;
   }
-  console.log(`Rendering mini chart for metric ${metricId} with data:`, chartData);
   return (
     <div class="mini-chart-wrapper">
       <canvas

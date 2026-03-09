@@ -1,15 +1,6 @@
 ---
 Codebase Audit Report
 
-3. Debug Artifacts
-
-- src/frontend/components/MiniChart.tsx:23 — console.log(...) left in
-  production code
-- src/frontend/components/MiniChart.tsx:10 — // TODO: Rename to experiment
-  metrics chart unresolved
-
----
-
 4. Schema/Type Inconsistency
 
 src/schemas/experimentSchemas.ts:64-89 — Experiment is defined as a manual
