@@ -4,21 +4,44 @@ You are helping the developer resolve a specific code audit finding. Follow this
 
 ## Input
 
-The audit finding to fix is:
+Optional hint from the user (may be empty):
 
 $ARGUMENTS
 
 ---
 
-## Step 1: Understand the Finding
+## Step 1: Select a Finding
 
-Read the finding carefully.
+**Find all audit files** in the project root — files matching `audit-*.md`.
+
+Read each one and collect every finding that is still present.
+
+Present a numbered list to the user in this format:
+
+> **Open audit findings:**
+>
+> | #   | Severity | Title | File | Audit |
+> | --- | -------- | ----- | ---- | ----- |
+> | 1   | HIGH     | Short title | `path/to/file.ts` | `audit-foo-2026-03-09.md` |
+> | 2   | MEDIUM   | ...   | ...  | ...   |
+>
+> Which finding should I fix? Reply with a number.
+
+If `$ARGUMENTS` contains a clear reference to a finding (a number, a title, a file name), pre-select it and confirm with the user instead of listing all options.
+
+**Fix only one finding.** Wait for the user to confirm or select before continuing.
+
+---
+
+## Step 2: Understand the Finding
+
+Read the selected finding carefully.
 
 Locate every file involved. Read each one before planning any changes.
 
 ---
 
-## Step 2: Ask About Guardrails
+## Step 3: Ask About Guardrails
 
 Before writing any code, briefly describe the issue and proposed fix, then ask which guardrails to add. Present the full menu and recommend the ones that fit — the user can pick any combination or none.
 
@@ -43,7 +66,15 @@ Wait for the user's answer before proceeding.
 
 ---
 
-## Step 3: Implement the Fix
+## Step 4: Compact Context
+
+Before writing any code, run `/compact` to clear accumulated context from the investigation steps. This keeps the fix focused and avoids context pressure mid-edit.
+
+After compacting, confirm to the user: "Context compacted — starting the fix now."
+
+---
+
+## Step 5: Implement the Fix
 
 Make the minimum changes necessary to resolve the finding:
 
@@ -56,7 +87,7 @@ After each file edit, `bun check` runs automatically. If it fails, fix the issue
 
 ---
 
-## Step 4: Add Guardrails (per user's answer)
+## Step 6: Add Guardrails (per user's answer)
 
 Implement each requested guardrail. Details for each:
 
@@ -112,10 +143,25 @@ Add a concise rule to the relevant section of `CLAUDE.md` — one or two sentenc
 
 ---
 
-## Step 5: Summarize
+## Step 7: Remove the Finding from the Audit File
+
+Now that the fix is complete, delete the resolved finding from the audit file it came from.
+
+Remove the entire finding block — from its `### [SEVERITY] <title>` heading down to (and including) the `---` separator that follows it.
+
+Also update the **Summary** table in that audit file to decrement the count for the resolved finding's severity. If all findings are now resolved, add a note at the top of the Summary:
+
+> ✓ All findings resolved.
+
+Do not remove the audit file itself — it serves as a historical record.
+
+---
+
+## Step 8: Summarize
 
 Report back with:
 
 - What files were changed and why
 - Which guardrails were added and what each one catches or enforces
+- Confirmation that the finding was removed from the audit file
 - Any follow-on findings that became visible during the fix (note them, don't fix them)
