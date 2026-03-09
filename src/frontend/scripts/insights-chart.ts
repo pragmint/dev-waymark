@@ -1,6 +1,7 @@
 // Chart rendering and management
 
 import type {
+  ChartAxis,
   ChartData,
   ChartDataset,
   ChartInstance,
@@ -313,6 +314,22 @@ function createTooltipCallbacks() {
   };
 }
 
+function buildScaleConfig(
+  chartType: 'line' | 'bar',
+  range: Range | null,
+  position: 'left' | 'right',
+  title: string | undefined,
+  alignedTickCount: number | undefined
+): ChartAxis {
+  return {
+    beginAtZero: chartType === 'bar',
+    ...(range ? { min: range.min, max: range.max } : { grace: '10%' }),
+    position,
+    title: title ? { display: true, text: title } : undefined,
+    ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
+  };
+}
+
 /**
  * Chart manager - handles chart lifecycle
  */
@@ -393,18 +410,13 @@ export class ChartManager {
               minRotation: 45,
             },
           },
-          y: {
-            beginAtZero: chartType === 'bar',
-            ...(yRange ? { min: yRange.min, max: yRange.max } : { grace: '10%' }),
-            position: 'left',
-            title: comparisonConfig
-              ? {
-                  display: true,
-                  text: comparisonConfig.metric1Label,
-                }
-              : undefined,
-            ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
-          },
+          y: buildScaleConfig(
+            chartType,
+            yRange,
+            'left',
+            comparisonConfig?.metric1Label,
+            alignedTickCount
+          ),
         },
       },
     };
@@ -416,16 +428,13 @@ export class ChartManager {
 
     // Add second y-axis if comparing metrics
     if (comparisonConfig) {
-      config.options.scales.y1 = {
-        beginAtZero: chartType === 'bar',
-        ...(y1Range ? { min: y1Range.min, max: y1Range.max } : { grace: '10%' }),
-        position: 'right',
-        title: {
-          display: true,
-          text: comparisonConfig.metric2Label,
-        },
-        ...(alignedTickCount ? { ticks: { count: alignedTickCount } } : {}),
-      };
+      config.options.scales.y1 = buildScaleConfig(
+        chartType,
+        y1Range,
+        'right',
+        comparisonConfig.metric2Label,
+        alignedTickCount
+      );
     }
 
     this.chart = new window.Chart(this.canvas, config);
