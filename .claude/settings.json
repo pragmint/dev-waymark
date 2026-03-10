@@ -40,6 +40,10 @@
             "command": "scripts/claude_hooks/test.sh"
           },
           {
+            "type": "command",
+            "command": "scripts/claude_hooks/coverage.sh"
+          },
+          {
             "type": "agent",
             "prompt": "You are running a completion gate.\n\nBefore doing anything, run two quick checks:\n1. Run `git status --short` and look for any .ts or .tsx files in the output. If none appear, return {\"ok\": true} immediately — no TypeScript files changed.\n2. Run `ls .no-hooks 2>/dev/null` — if the file exists, return {\"ok\": true} immediately.\n\nOtherwise, as bun-tester: ensure meaningful unit tests exist for changed pure logic; run bun test.\n\nBlock completion if anything fails. Return JSON only: {\"ok\": true} or {\"ok\": false, \"reason\": \"...\"}.\n\nContext: $ARGUMENTS",
             "timeout": 120

@@ -57,6 +57,8 @@ Before writing any code, briefly describe the issue and proposed fix, then ask w
 > | 4   | **TypeScript type enforcement**                      | Cross-layer data, naming/type mismatches — caught by `tsc` |
 > | 5   | **Fitness function script**                          | Naming conventions, file placement, structural invariants  |
 > | 6   | **CLAUDE.md update**                                 | Intentional conventions for AI-assisted edits to follow    |
+> | 7   | **Claude Command Hook**                              | Add a new Claude Command Hook to veryify this              |
+> | 8   | **Claude Agent Hook**                                | Add a new Claude Agent Hook to veryify this                |
 >
 > My recommendation: [list numbers, e.g. "1 and 3"] — [one sentence why].
 >
