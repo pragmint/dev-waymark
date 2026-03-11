@@ -43,7 +43,7 @@ Locate every file involved. Read each one before planning any changes.
 
 ## Step 3: Ask About Guardrails
 
-Before writing any code, briefly describe the issue and proposed fix, then ask which guardrails to add. Present the full menu and recommend the ones that fit — the user can pick any combination or none.
+Before writing any code, briefly describe the issue and proposed fix, then ask which guardrails to add. Present the full menu (and add any additional guardrails that are applicable) and recommend the ones that fit — the user can pick any combination or none.
 
 > I've identified this as: **[category]** — [one sentence: problem + proposed fix].
 >
@@ -57,8 +57,9 @@ Before writing any code, briefly describe the issue and proposed fix, then ask w
 > | 4   | **TypeScript type enforcement**                      | Cross-layer data, naming/type mismatches — caught by `tsc` |
 > | 5   | **Fitness function script**                          | Naming conventions, file placement, structural invariants  |
 > | 6   | **CLAUDE.md update**                                 | Intentional conventions for AI-assisted edits to follow    |
-> | 7   | **Claude Command Hook**                              | Add a new Claude Command Hook to veryify this              |
-> | 8   | **Claude Agent Hook**                                | Add a new Claude Agent Hook to veryify this                |
+> | 7   | **Claude Command Hook**                              | Add a new Claude Command Hook to verify this               |
+> | 8   | **Claude Agent Hook**                                | Add a new Claude Agent Hook to verify this                 |
+> | 9   | **Static Code Analysis**                             | Use a static code analysis tool to prevent future issues   |
 >
 > My recommendation: [list numbers, e.g. "1 and 3"] — [one sentence why].
 >
