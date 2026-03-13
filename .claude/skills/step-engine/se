@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# se — Step Engine CLI
+#
+# Dispatcher for Step Engine data management scripts.
+# Install: ln -sf "$(pwd)/.claude/skills/step-engine/se" ~/.local/bin/se
+#
+# Usage: se <subcommand> [args...]
+set -euo pipefail
+
+# Resolve real path of this script (follow symlinks)
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SELF_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+SCRIPTS_DIR="$SELF_DIR/scripts"
+
+usage() {
+  cat <<EOF
+Usage: se <subcommand> [args...]
+
+Subcommands:
+  switch            Switch active data source (fzf picker, or: list / set-projects-dir / show)
+  teams             Manage teams
+  experiments       Manage experiments
+  caps              Manage capability scores
+  team-metrics      Manage team-specific metrics
+  summaries         Read and write weekly summaries
+  gather-week       Aggregate all data for a given week
+
+  install           Symlink se into ~/.local/bin (run once after cloning)
+  which             Print the resolved scripts directory
+
+Run 'se <subcommand> help' for per-subcommand usage.
+EOF
+}
+
+cmd_install() {
+  local bin_dir="${1:-$HOME/.local/bin}"
+  mkdir -p "$bin_dir"
+  local target="$bin_dir/se"
+  ln -sf "$SELF_DIR/se" "$target"
+  echo "Installed: $target -> $SELF_DIR/se"
+  if ! command -v se &>/dev/null 2>&1; then
+    echo "Note: $bin_dir is not in your PATH. Add this to your shell profile:"
+    echo "  export PATH=\"$bin_dir:\$PATH\""
+  fi
+}
+
+subcommand="${1:-}"
+shift || true
+
+case "$subcommand" in
+  switch)         bash "$SCRIPTS_DIR/switch.sh"           "$@" ;;
+  teams)          bash "$SCRIPTS_DIR/teams.sh"            "$@" ;;
+  experiments)    bash "$SCRIPTS_DIR/experiments.sh"      "$@" ;;
+  caps)           bash "$SCRIPTS_DIR/capability-scores.sh" "$@" ;;
+  team-metrics)   bash "$SCRIPTS_DIR/team-metrics.sh"     "$@" ;;
+  summaries)      bash "$SCRIPTS_DIR/summaries.sh"        "$@" ;;
+  gather-week)    bash "$SCRIPTS_DIR/gather-week.sh"      "$@" ;;
+  install)        cmd_install "$@" ;;
+  which)          echo "$SCRIPTS_DIR" ;;
+  help|--help|-h) usage ;;
+  "")             usage; exit 1 ;;
+  *)              echo "Unknown subcommand: $subcommand" >&2; usage >&2; exit 1 ;;
+esac
