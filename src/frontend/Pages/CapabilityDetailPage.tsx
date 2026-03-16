@@ -2,7 +2,6 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import type { Team } from '../../schemas/teamSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
-import { CapabilityOverview } from '../components/capabilities/CapabilityOverview';
 import { CapabilityHeader } from '../components/capabilities/CapabilityHeader';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { CapabilitySection } from '../components/capabilities/CapabilitySection';
@@ -58,7 +57,6 @@ export const CapabilityDetailPage: FC<CapabilityDetailPageProps> = ({
         <CapabilityHeader capability={capability} />
 
         <div class="capability-content">
-          <CapabilityOverview capability={capability} />
           <CapabilitySection capability={capability} />
           <MarkdownRenderer content={markdownContent} />
         </div>

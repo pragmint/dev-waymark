@@ -83,7 +83,7 @@ export const Sidebar: FC<SidebarProps> = ({ activePage }) => {
 
       <div class="data-updated">
         <div class="data-updated-label">Data last updated on:</div>
-        <div class="data-updated-date">January 30, 2026</div>
+        <div class="data-updated-date">March 16, 2026</div>
       </div>
     </nav>
   );
