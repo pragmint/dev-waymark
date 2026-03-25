@@ -11,7 +11,7 @@
     "check": "prettier --check . && eslint . && tsc",
     "check:commit": "bun scripts/check-no-manual-interfaces-in-schemas.ts",
     "fix": "prettier --write . && eslint . --fix",
-    "wget": "wget --mirror --convert-links --adjust-extension --page-requisites --no-parent http://localhost:3000/",
+    "mirror": "bun mirror.ts http://localhost:3000/ mirror",
     "test:pw": "bun b && playwright test",
     "clean": "bun ./scripts/clean.ts"
   },

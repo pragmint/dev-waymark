@@ -25,6 +25,9 @@ bun b:prod
 
 # Start app from dist
 bun start
+
+# Download a mirror of the site (requires server on :3000)
+bun mirror
 ```
 
 While developing you may find some structures or patterns around. Here are some patterns you'll find and want to keep so things stay organized:

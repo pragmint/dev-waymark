@@ -72,6 +72,6 @@ export default [
     },
   },
   {
-    ignores: ['node_modules', 'dist', 'build', 'public', 'eslint-rules'],
+    ignores: ['node_modules', 'dist', 'build', 'public', 'eslint-rules', 'mirror'],
   },
 ];

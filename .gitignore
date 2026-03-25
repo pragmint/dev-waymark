@@ -2,6 +2,7 @@
 node_modules/
 
 localhost:3000/
+mirror/
 
 # Build outputs
 dist/
