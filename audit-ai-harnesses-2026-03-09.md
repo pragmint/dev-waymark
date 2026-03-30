@@ -28,6 +28,7 @@ This codebase already implements a sophisticated multi-layer harness with post-e
 **Location**: Project root — no `.github/workflows/` directory exists
 
 All harness enforcement is local-only: the post-edit hook, pre-commit fitness function, and completion-gate agents all run on the developer's machine. There is no server-side enforcement layer. This means that:
+
 - A developer can bypass the pre-commit hook with `--no-verify`
 - Pull requests from forks or alternative tools skip all checks
 - No record exists of which checks passed/failed on any given commit
@@ -44,6 +45,7 @@ Without server-side enforcement, the entire harness relies on developer discipli
 **Location**: `eslint.config.js:~60` (the `no-restricted-imports` rule)
 
 The layer dependency rule ("Domain, loaders, and handlers must never import from `src/frontend/`") is enforced only for `src/frontend/scripts/*`. It does not cover:
+
 - `src/frontend/Pages/**` imports from domain/loaders/handlers (only the reverse is blocked)
 - Cross-handler imports (handlers importing other handlers)
 - Loaders importing parsers from the wrong direction

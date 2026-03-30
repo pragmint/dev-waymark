@@ -20,11 +20,11 @@ targetedCapabilities:
 
 ## Valid fields for `set-field`
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | string | Should match the filename |
-| `name` | string | Display name |
-| `description` | string | Free text |
+| Field         | Type   | Notes                     |
+| ------------- | ------ | ------------------------- |
+| `id`          | string | Should match the filename |
+| `name`        | string | Display name              |
+| `description` | string | Free text                 |
 
 Use `add-capability` / `remove-capability` for `targetedCapabilities` — do not use `set-field` for arrays.
 

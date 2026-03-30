@@ -36,20 +36,24 @@ Explore the codebase relevant to the audit topic. Exactly what to examine depend
 topic, but as a guide:
 
 **For pattern / convention audits** (naming, file placement, import rules, etc.)
+
 - Find all files in the relevant directory or layer
 - Read a representative sample to understand the expected pattern
 - Search for deviations using Grep or Glob
 
 **For layer / architecture audits** (coupling, dependency direction, data flow)
-- Trace imports across layers 
+
+- Trace imports across layers
 - Look for imports that cross layer boundaries in the wrong direction
 - Check the entry point files
 
 **For duplication audits** (copy-pasted logic, re-implemented utilities)
+
 - Identify clusters of similar code
 - Check whether a shared utility already exists but is being bypassed
 
 **For security audits** (injection, unsafe operations, secrets in source)
+
 - Review route handlers for unvalidated user input
 - Check file operations for path traversal risks
 - Look for hardcoded credentials, tokens, or env var misuse

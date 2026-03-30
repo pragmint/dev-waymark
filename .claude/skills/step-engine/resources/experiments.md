@@ -23,10 +23,10 @@ intervention:
   description: >
   success_criteria: []
   status: backlog
-  start-date: 10.1.2026       # D.M.YYYY format
+  start-date: 10.1.2026 # D.M.YYYY format
   expected-duration-in-weeks: 8
   action-plan:
-    - title: "Do something"
+    - title: 'Do something'
       assigned-to: []
       link:
       status: backlog
@@ -43,15 +43,15 @@ decision-roles:
 
 ## Common `set-field` yq paths
 
-| Path | Example value |
-|---|---|
-| `intervention.status` | `active` |
-| `intervention.start-date` | `1.2.2026` |
-| `intervention.expected-duration-in-weeks` | `6` |
-| `intervention.practice_under_test` | `trunk-based-development` |
-| `context.problem_statement` | `"Build times are too slow"` |
-| `context.desired_outcome` | `"Under 10 min builds"` |
-| `hypothesis.statement` | `"If we cache builds..."` |
+| Path                                      | Example value                |
+| ----------------------------------------- | ---------------------------- |
+| `intervention.status`                     | `active`                     |
+| `intervention.start-date`                 | `1.2.2026`                   |
+| `intervention.expected-duration-in-weeks` | `6`                          |
+| `intervention.practice_under_test`        | `trunk-based-development`    |
+| `context.problem_statement`               | `"Build times are too slow"` |
+| `context.desired_outcome`                 | `"Under 10 min builds"`      |
+| `hypothesis.statement`                    | `"If we cache builds..."`    |
 
 ## Commands
 

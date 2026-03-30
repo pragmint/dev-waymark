@@ -20,10 +20,10 @@ Present a numbered list to the user in this format:
 
 > **Open audit findings:**
 >
-> | #   | Severity | Title | File | Audit |
-> | --- | -------- | ----- | ---- | ----- |
+> | #   | Severity | Title       | File              | Audit                     |
+> | --- | -------- | ----------- | ----------------- | ------------------------- |
 > | 1   | HIGH     | Short title | `path/to/file.ts` | `audit-foo-2026-03-09.md` |
-> | 2   | MEDIUM   | ...   | ...  | ...   |
+> | 2   | MEDIUM   | ...         | ...               | ...                       |
 >
 > Which finding should I fix? Reply with a number.
 

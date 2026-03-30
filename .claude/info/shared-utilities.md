@@ -21,9 +21,9 @@ Never write the inline check (`error && typeof error === 'object' && 'code' in e
 
 Two separate utilities exist — use the correct one for the execution context:
 
-| Context | Function | File |
-|---|---|---|
-| Server-side (Hono handlers, domain, loaders) | `parseDate()` | `src/domain/parseDate.ts` |
-| Frontend scripts (`src/frontend/scripts/`) | `parseDataDate()` | `src/frontend/scripts/insights-date-utils.ts` |
+| Context                                      | Function          | File                                          |
+| -------------------------------------------- | ----------------- | --------------------------------------------- |
+| Server-side (Hono handlers, domain, loaders) | `parseDate()`     | `src/domain/parseDate.ts`                     |
+| Frontend scripts (`src/frontend/scripts/`)   | `parseDataDate()` | `src/frontend/scripts/insights-date-utils.ts` |
 
 Do not duplicate date parsing logic inline in either context.

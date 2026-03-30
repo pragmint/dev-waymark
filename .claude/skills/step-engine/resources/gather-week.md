@@ -8,11 +8,11 @@ Aggregate all data for a given week into a single structured output — the prim
 
 ## What it collects
 
-| Section | Content |
-|---|---|
-| `EXPERIMENTS` | Active/blocked/polish experiments, or experiments started this week. Includes practice, week-of-experiment, and full action plan with statuses. |
-| `CAPABILITY SCORES` | All capability score entries recorded during the week, grouped by capability. |
-| `TEAM METRICS` | All team-specific metric entries recorded during the week, grouped by team/metric. |
+| Section             | Content                                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EXPERIMENTS`       | Active/blocked/polish experiments, or experiments started this week. Includes practice, week-of-experiment, and full action plan with statuses. |
+| `CAPABILITY SCORES` | All capability score entries recorded during the week, grouped by capability.                                                                   |
+| `TEAM METRICS`      | All team-specific metric entries recorded during the week, grouped by team/metric.                                                              |
 
 ## Command
 
