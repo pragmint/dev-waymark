@@ -13,7 +13,8 @@
     "fix": "prettier --write . && eslint . --fix",
     "mirror": "bun mirror.ts http://localhost:3000/ mirror",
     "test:pw": "bun b && playwright test",
-    "clean": "bun ./scripts/clean.ts"
+    "clean": "bun ./scripts/clean.ts",
+    "install-hooks": "bun scripts/install-hooks.ts"
   },
   "dependencies": {
     "@types/bun": "^1.3.9",
