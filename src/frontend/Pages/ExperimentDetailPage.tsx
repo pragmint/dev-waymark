@@ -245,8 +245,8 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
 
   return (
     <Page
-      title={`${practiceName} - ${team.name}`}
-      heading={`Experiment: ${practiceName}`}
+      title={`${experiment.title} - ${team.name}`}
+      heading={`Experiment: ${experiment.title}`}
       activePage={team.id}
     >
       <div class="experiment-detail-container">
@@ -254,7 +254,7 @@ export const ExperimentDetailPage: FC<ExperimentDetailPageProps> = ({
           <div class="breadcrumbs">
             <a href="/">Home</a> /<a href={`/team/${team.id}/`}>{team.name}</a> / Experiment
           </div>
-          <h1>{practiceName}</h1>
+          <h1>{experiment.title}</h1>
           <span dangerouslySetInnerHTML={{ __html: getStatusBadge(experiment.status) }} />
         </div>
 
