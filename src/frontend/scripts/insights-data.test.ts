@@ -88,7 +88,7 @@ describe('transformTeamMetricData', () => {
     const metric = makeNumericTeamMetric();
     const result = transformTeamMetricData(metric, '1.1.2026', '31.12.2026', teams);
 
-    expect(result.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+    expect(result.labels).toEqual(['2026-01-01', '2026-01-02', '2026-01-03']);
     expect(result.datasets).toHaveLength(1);
     expect(result.datasets[0].label).toBe('Team Alpha - velocity');
     expect(result.datasets[0].data).toEqual([10, 15, 20]);
@@ -99,7 +99,7 @@ describe('transformTeamMetricData', () => {
     const metric = makeNumericTeamMetric();
     const result = transformTeamMetricData(metric, '2.1.2026', '2.1.2026', teams);
 
-    expect(result.labels).toEqual(['January 2, 2026']);
+    expect(result.labels).toEqual(['2026-01-02']);
     expect(result.datasets[0].data).toEqual([15]);
   });
 
@@ -219,7 +219,7 @@ describe('transformCapabilityMetricData', () => {
     const result = transformCapabilityMetricData(metric, '1.1.2026', '31.12.2026', teams);
 
     expect(result).not.toBeNull();
-    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026']);
+    expect(result!.labels).toEqual(['2026-01-01', '2026-01-02']);
     expect(result!.datasets).toHaveLength(2);
     expect(result!.datasets[0].label).toBe('Team Alpha');
     expect(result!.datasets[1].label).toBe('Team Beta');
@@ -356,7 +356,7 @@ describe('transformCapabilityMetricData', () => {
 describe('mergeChartDataForComparison', () => {
   function makeSimpleChartData() {
     return {
-      labels: ['January 1, 2026', 'January 2, 2026'],
+      labels: ['2026-01-01', '2026-01-02'],
       datasets: [
         {
           label: 'Metric A',
@@ -371,7 +371,7 @@ describe('mergeChartDataForComparison', () => {
   it('merges two chart datasets with aligned dates', () => {
     const data1 = makeSimpleChartData();
     const data2 = {
-      labels: ['January 1, 2026', 'January 2, 2026'],
+      labels: ['2026-01-01', '2026-01-02'],
       datasets: [
         {
           label: 'Metric B',
@@ -385,7 +385,7 @@ describe('mergeChartDataForComparison', () => {
     const result = mergeChartDataForComparison(data1, data2);
 
     expect(result).not.toBeNull();
-    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026']);
+    expect(result!.labels).toEqual(['2026-01-01', '2026-01-02']);
     expect(result!.datasets).toHaveLength(2);
     expect(result!.datasets[0].yAxisID).toBe('y');
     expect(result!.datasets[1].yAxisID).toBe('y1');
@@ -407,7 +407,7 @@ describe('mergeChartDataForComparison', () => {
 
   it('merges qualitative data with numeric data for combo charts', () => {
     const qualitativeData = {
-      labels: ['January 1, 2026'],
+      labels: ['2026-01-01'],
       datasets: [
         {
           label: 'anecdotes',
@@ -424,14 +424,14 @@ describe('mergeChartDataForComparison', () => {
     const result = mergeChartDataForComparison(qualitativeData, numericData);
 
     expect(result).not.toBeNull();
-    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026']);
+    expect(result!.labels).toEqual(['2026-01-01', '2026-01-02']);
     expect(result!.datasets[0].yAxisID).toBe('y');
     expect(result!.datasets[1].yAxisID).toBe('y1');
   });
 
   it('aligns dates with nulls for missing data points', () => {
     const data1 = {
-      labels: ['January 1, 2026', 'January 3, 2026'],
+      labels: ['2026-01-01', '2026-01-03'],
       datasets: [
         {
           label: 'Metric A',
@@ -443,7 +443,7 @@ describe('mergeChartDataForComparison', () => {
     };
 
     const data2 = {
-      labels: ['January 2, 2026', 'January 3, 2026'],
+      labels: ['2026-01-02', '2026-01-03'],
       datasets: [
         {
           label: 'Metric B',
@@ -456,14 +456,14 @@ describe('mergeChartDataForComparison', () => {
 
     const result = mergeChartDataForComparison(data1, data2);
 
-    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+    expect(result!.labels).toEqual(['2026-01-01', '2026-01-02', '2026-01-03']);
     expect(result!.datasets[0].data).toEqual([10, null, 30]);
     expect(result!.datasets[1].data).toEqual([null, 20, 30]);
   });
 
   it('preserves metadata from both datasets', () => {
     const data1 = {
-      labels: ['January 1, 2026'],
+      labels: ['2026-01-01'],
       datasets: [
         {
           label: 'A',
@@ -476,7 +476,7 @@ describe('mergeChartDataForComparison', () => {
     };
 
     const data2 = {
-      labels: ['January 1, 2026'],
+      labels: ['2026-01-01'],
       datasets: [
         {
           label: 'B',
@@ -496,7 +496,7 @@ describe('mergeChartDataForComparison', () => {
 
   it('aligns metadata with nulls when dates differ', () => {
     const data1 = {
-      labels: ['January 1, 2026', 'January 2, 2026'],
+      labels: ['2026-01-01', '2026-01-02'],
       datasets: [
         {
           label: 'A',
@@ -509,7 +509,7 @@ describe('mergeChartDataForComparison', () => {
     };
 
     const data2 = {
-      labels: ['January 2, 2026', 'January 3, 2026'],
+      labels: ['2026-01-02', '2026-01-03'],
       datasets: [
         {
           label: 'B',
@@ -546,7 +546,7 @@ describe('mergeChartDataForComparison', () => {
 
   it('uses different colors for second metric datasets', () => {
     const data1 = {
-      labels: ['January 1, 2026'],
+      labels: ['2026-01-01'],
       datasets: [
         {
           label: 'A1',
@@ -564,7 +564,7 @@ describe('mergeChartDataForComparison', () => {
     };
 
     const data2 = {
-      labels: ['January 1, 2026'],
+      labels: ['2026-01-01'],
       datasets: [
         {
           label: 'B1',
@@ -585,7 +585,7 @@ describe('mergeChartDataForComparison', () => {
 
   it('sorts merged labels chronologically', () => {
     const data1 = {
-      labels: ['January 3, 2026', 'January 1, 2026'],
+      labels: ['2026-01-03', '2026-01-01'],
       datasets: [
         {
           label: 'A',
@@ -597,7 +597,7 @@ describe('mergeChartDataForComparison', () => {
     };
 
     const data2 = {
-      labels: ['January 2, 2026'],
+      labels: ['2026-01-02'],
       datasets: [
         {
           label: 'B',
@@ -610,6 +610,6 @@ describe('mergeChartDataForComparison', () => {
 
     const result = mergeChartDataForComparison(data1, data2);
 
-    expect(result!.labels).toEqual(['January 1, 2026', 'January 2, 2026', 'January 3, 2026']);
+    expect(result!.labels).toEqual(['2026-01-01', '2026-01-02', '2026-01-03']);
   });
 });

@@ -7,10 +7,12 @@ import type {
   ChartInstance,
   ChartConfiguration,
   ZoomAxisLimits,
+  AnnotationBoxOptions,
   AnnotationPluginOptions,
   TooltipContext,
+  ExperimentOverlayInfo,
 } from './chart-types';
-import { formatDataDateForDisplay } from './insights-date-utils';
+import { formatDataDateForDisplay, parseDataDate } from './insights-date-utils';
 
 /**
  * Resolve chart type based on data density.
@@ -31,28 +33,51 @@ function resolveChartType(data: ChartData): 'line' | 'bar' {
  *
  * Y-axis: bounded by [min - padding, max + padding] with a minimum padding of
  * 0.5 to avoid collapsing the range on flat data.
- * X-axis: bounded by the label indices [0, length-1]; minRange prevents
- * zooming in to fewer than 3 visible points (or all points if fewer than 3).
+ * X-axis (time scale): bounded by dateRange timestamps; minRange is 3 days.
+ * X-axis (categorical): bounded by label indices [0, length-1]; minRange
+ *   prevents zooming in to fewer than 3 visible points (or all if fewer than 3).
  */
-function computeLimits(data: ChartData): { x: ZoomAxisLimits; y: ZoomAxisLimits } {
+function computeLimits(
+  data: ChartData,
+  dateRange?: { start: string; end: string }
+): { x: ZoomAxisLimits; y: ZoomAxisLimits } {
   const allValues = data.datasets.flatMap(ds => ds.data).filter((v): v is number => v !== null);
 
   const yMin = allValues.length > 0 ? Math.min(...allValues) : 0;
   const yMax = allValues.length > 0 ? Math.max(...allValues) : 1;
   const yPadding = Math.max((yMax - yMin) * 0.1, 0.5);
 
+  const xLimits: ZoomAxisLimits = dateRange
+    ? {
+        min: new Date(dateRange.start).getTime(),
+        max: new Date(dateRange.end).getTime(),
+        minRange: 3 * 24 * 60 * 60 * 1000,
+      }
+    : {
+        min: 0,
+        max: data.labels.length - 1,
+        minRange: Math.min(2, data.labels.length - 1),
+      };
+
   return {
-    x: {
-      min: 0,
-      max: data.labels.length - 1,
-      minRange: Math.min(2, data.labels.length - 1),
-    },
+    x: xLimits,
     y: {
       min: yMin - yPadding,
       max: yMax + yPadding,
       minRange: yPadding * 2,
     },
   };
+}
+
+/**
+ * Determine Chart.js time unit based on the span of the date range.
+ */
+function determineTimeUnit(start: string, end: string): string {
+  const days = (new Date(end).getTime() - new Date(start).getTime()) / (24 * 60 * 60 * 1000);
+  if (days <= 14) return 'day';
+  if (days <= 90) return 'week';
+  if (days <= 730) return 'month';
+  return 'quarter';
 }
 
 type AxisRange = {
@@ -111,11 +136,13 @@ function computeAxisRanges(data: ChartData): AxisRange {
 
 const CAPABILITY_Y_RANGE = { min: 0, max: 4 };
 
-export interface ComparisonConfig {
-  metric1Label: string;
-  metric2Label: string;
-  metric1IsCapability?: boolean;
-  metric2IsCapability?: boolean;
+export interface AxisConfig {
+  leftAxisLabel: string;
+  rightAxisLabel?: string;
+  leftAxisIsCapability: boolean;
+  rightAxisIsCapability: boolean;
+  hasRightAxis: boolean;
+  dateRange?: { start: string; end: string };
 }
 
 /**
@@ -167,94 +194,123 @@ function createAnnotationsForQualitativeData(data: ChartData): AnnotationPluginO
   const tooltipListeners = new Map<string, (e: MouseEvent) => void>();
 
   data.qualitativeData.forEach((point, index) => {
-    const labelIndex = data.labels.findIndex(
-      label => label === formatDataDateForDisplay(point.date)
-    );
+    const pointDateMs = parseDataDate(point.date).getTime();
+    const halfDayMs = 12 * 60 * 60 * 1000;
+    // Create a tooltip div that will be shown on hover
+    const tooltipId = `qualitative-tooltip-${index}`;
 
-    if (labelIndex >= 0) {
-      // Create a tooltip div that will be shown on hover
-      const tooltipId = `qualitative-tooltip-${index}`;
+    annotations[`qualitative-${index}`] = {
+      type: 'box',
+      xMin: pointDateMs - halfDayMs,
+      xMax: pointDateMs + halfDayMs,
+      yMin: 'min',
+      yMax: 'max',
+      backgroundColor: 'rgba(255, 206, 86, 0.1)',
+      borderColor: 'rgba(255, 206, 86, 0.5)',
+      borderWidth: 2,
+      label: {
+        display: false,
+        content: point.value,
+      },
+      enter: () => {
+        // Clean up any existing tooltip and listener first
+        const existingTooltip = document.getElementById(tooltipId);
+        if (existingTooltip) {
+          existingTooltip.remove();
+        }
+        const existingListener = tooltipListeners.get(tooltipId);
+        if (existingListener) {
+          document.removeEventListener('mousemove', existingListener);
+          tooltipListeners.delete(tooltipId);
+        }
 
-      annotations[`qualitative-${index}`] = {
-        type: 'box',
-        xMin: labelIndex - 0.3,
-        xMax: labelIndex + 0.3,
-        yMin: 'min',
-        yMax: 'max',
-        backgroundColor: 'rgba(255, 206, 86, 0.1)',
-        borderColor: 'rgba(255, 206, 86, 0.5)',
-        borderWidth: 2,
-        label: {
-          display: false,
-          content: point.value,
-        },
-        enter: () => {
-          // Clean up any existing tooltip and listener first
-          const existingTooltip = document.getElementById(tooltipId);
-          if (existingTooltip) {
-            existingTooltip.remove();
+        // Create tooltip
+        const tooltip = document.createElement('div');
+        tooltip.id = tooltipId;
+        tooltip.style.position = 'fixed';
+        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        tooltip.style.color = 'white';
+        tooltip.style.padding = '10px';
+        tooltip.style.borderRadius = '4px';
+        tooltip.style.maxWidth = '400px';
+        tooltip.style.zIndex = '10000';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.whiteSpace = 'pre-wrap';
+        tooltip.style.overflowWrap = 'break-word';
+
+        let content = `Date: ${formatDataDateForDisplay(point.date)}\n\n${point.value}`;
+
+        // Add metadata if present
+        if (point.metadata) {
+          content += '\n\n';
+          for (const [key, value] of Object.entries(point.metadata)) {
+            content += `${key}: ${value}\n`;
           }
-          const existingListener = tooltipListeners.get(tooltipId);
-          if (existingListener) {
-            document.removeEventListener('mousemove', existingListener);
-            tooltipListeners.delete(tooltipId);
-          }
+        }
 
-          // Create tooltip
-          const tooltip = document.createElement('div');
-          tooltip.id = tooltipId;
-          tooltip.style.position = 'fixed';
-          tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-          tooltip.style.color = 'white';
-          tooltip.style.padding = '10px';
-          tooltip.style.borderRadius = '4px';
-          tooltip.style.maxWidth = '400px';
-          tooltip.style.zIndex = '10000';
-          tooltip.style.pointerEvents = 'none';
-          tooltip.style.whiteSpace = 'pre-wrap';
-          tooltip.style.overflowWrap = 'break-word';
+        tooltip.textContent = content;
+        document.body.appendChild(tooltip);
 
-          let content = `Date: ${formatDataDateForDisplay(point.date)}\n\n${point.value}`;
+        // Create and store the mousemove listener
+        const updateTooltipPosition = (e: MouseEvent) => {
+          tooltip.style.left = `${e.clientX + 10}px`;
+          tooltip.style.top = `${e.clientY + 10}px`;
+        };
 
-          // Add metadata if present
-          if (point.metadata) {
-            content += '\n\n';
-            for (const [key, value] of Object.entries(point.metadata)) {
-              content += `${key}: ${value}\n`;
-            }
-          }
+        tooltipListeners.set(tooltipId, updateTooltipPosition);
+        document.addEventListener('mousemove', updateTooltipPosition);
+      },
+      leave: () => {
+        // Remove tooltip from DOM
+        const tooltip = document.getElementById(tooltipId);
+        if (tooltip) {
+          tooltip.remove();
+        }
 
-          tooltip.textContent = content;
-          document.body.appendChild(tooltip);
-
-          // Create and store the mousemove listener
-          const updateTooltipPosition = (e: MouseEvent) => {
-            tooltip.style.left = `${e.clientX + 10}px`;
-            tooltip.style.top = `${e.clientY + 10}px`;
-          };
-
-          tooltipListeners.set(tooltipId, updateTooltipPosition);
-          document.addEventListener('mousemove', updateTooltipPosition);
-        },
-        leave: () => {
-          // Remove tooltip from DOM
-          const tooltip = document.getElementById(tooltipId);
-          if (tooltip) {
-            tooltip.remove();
-          }
-
-          // Remove the mousemove listener using the stored reference
-          const listener = tooltipListeners.get(tooltipId);
-          if (listener) {
-            document.removeEventListener('mousemove', listener);
-            tooltipListeners.delete(tooltipId);
-          }
-        },
-      };
-    }
+        // Remove the mousemove listener using the stored reference
+        const listener = tooltipListeners.get(tooltipId);
+        if (listener) {
+          document.removeEventListener('mousemove', listener);
+          tooltipListeners.delete(tooltipId);
+        }
+      },
+    };
   });
 
   return { annotations };
+}
+
+/**
+ * Create box annotations for experiment overlays.
+ * Each overlay spans the full chart height over its date range.
+ */
+function createAnnotationsForExperiments(
+  overlays: ExperimentOverlayInfo[]
+): Record<string, AnnotationBoxOptions> {
+  const annotations: Record<string, AnnotationBoxOptions> = {};
+
+  for (const overlay of overlays) {
+    annotations[`experiment-${overlay.id}`] = {
+      type: 'box',
+      xMin: overlay.startDate,
+      xMax: overlay.endDate,
+      yMin: 'min',
+      yMax: 'max',
+      yScaleID: 'y',
+      backgroundColor: overlay.color,
+      borderColor: overlay.borderColor,
+      borderWidth: 1,
+      label: {
+        display: true,
+        content: overlay.title,
+        position: 'start',
+        color: 'rgba(0,0,0,0.55)',
+        font: { size: 11 },
+      },
+    };
+  }
+
+  return annotations;
 }
 
 /**
@@ -316,14 +372,11 @@ function createTooltipCallbacks() {
 
 function resolveAxisRanges(
   axisRanges: AxisRange,
-  comparisonConfig: ComparisonConfig | undefined,
-  isCapabilityMetric: boolean | undefined
+  axisConfig: AxisConfig
 ): { yRange: Range | null; y1Range: Range | null } {
-  const yIsCapability = comparisonConfig?.metric1IsCapability ?? isCapabilityMetric ?? false;
-  const y1IsCapability = comparisonConfig?.metric2IsCapability ?? false;
   return {
-    yRange: yIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y,
-    y1Range: y1IsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1,
+    yRange: axisConfig.leftAxisIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y,
+    y1Range: axisConfig.rightAxisIsCapability ? CAPABILITY_Y_RANGE : axisRanges.y1,
   };
 }
 
@@ -355,30 +408,49 @@ export class ChartManager {
   }
 
   /**
-   * Render or update chart with new data
+   * Render or update chart with new data.
+   * axisConfig controls axis labels, capability ranges, and dual-axis presence.
+   * experimentOverlays draws translucent box annotations over experiment date ranges.
    */
   render(
     data: ChartData,
     title: string,
-    comparisonConfig?: ComparisonConfig,
-    isCapabilityMetric?: boolean,
-    chartTypeOverride?: 'line' | 'bar'
+    axisConfig?: AxisConfig,
+    chartTypeOverride?: 'line' | 'bar',
+    experimentOverlays?: ExperimentOverlayInfo[]
   ): void {
     this.destroy();
 
-    const limits = computeLimits(data);
+    const effectiveAxisConfig: AxisConfig = axisConfig ?? {
+      leftAxisLabel: '',
+      leftAxisIsCapability: false,
+      rightAxisIsCapability: false,
+      hasRightAxis: false,
+    };
+
+    const limits = computeLimits(data, effectiveAxisConfig.dateRange);
     const chartType = chartTypeOverride ?? resolveChartType(data);
-    // Only use annotation boxes for old-style qualitative data that has no numeric datasets
-    const annotations =
+
+    // Qualitative annotation boxes (old-style data with no numeric datasets)
+    const qualAnnotations =
       data.qualitativeData && data.datasets.length === 0
-        ? createAnnotationsForQualitativeData(data)
-        : undefined;
+        ? (createAnnotationsForQualitativeData(data)?.annotations ?? {})
+        : {};
+
+    // Experiment overlay boxes
+    const expAnnotations =
+      experimentOverlays && experimentOverlays.length > 0
+        ? createAnnotationsForExperiments(experimentOverlays)
+        : {};
+
+    const allAnnotations = { ...qualAnnotations, ...expAnnotations };
+    const hasAnnotations = Object.keys(allAnnotations).length > 0;
+
     const axisRanges = computeAxisRanges(data);
+    const { yRange, y1Range } = resolveAxisRanges(axisRanges, effectiveAxisConfig);
 
-    const { yRange, y1Range } = resolveAxisRanges(axisRanges, comparisonConfig, isCapabilityMetric);
-
-    // Calculate aligned tick count when comparing metrics
-    const alignedTickCount = comparisonConfig
+    // Align tick counts when both axes are present
+    const alignedTickCount = effectiveAxisConfig.hasRightAxis
       ? calculateAlignedTickCount(yRange, y1Range)
       : undefined;
 
@@ -414,35 +486,51 @@ export class ChartManager {
           },
         },
         scales: {
-          x: {
-            ticks: {
-              maxRotation: 90,
-              minRotation: 45,
-            },
-          },
+          x: effectiveAxisConfig.dateRange
+            ? {
+                type: 'time',
+                time: {
+                  unit: determineTimeUnit(
+                    effectiveAxisConfig.dateRange.start,
+                    effectiveAxisConfig.dateRange.end
+                  ),
+                  displayFormats: {
+                    day: 'MMM d',
+                    week: 'MMM d',
+                    month: 'MMM yyyy',
+                    quarter: 'MMM yyyy',
+                  },
+                  tooltipFormat: 'MMM d, yyyy',
+                },
+                min: effectiveAxisConfig.dateRange.start,
+                max: effectiveAxisConfig.dateRange.end,
+                ticks: { maxRotation: 45, minRotation: 0 },
+              }
+            : {
+                ticks: { maxRotation: 90, minRotation: 45 },
+              },
           y: buildScaleConfig(
             chartType,
             yRange,
             'left',
-            comparisonConfig?.metric1Label,
+            effectiveAxisConfig.leftAxisLabel || undefined,
             alignedTickCount
           ),
         },
       },
     };
 
-    // Add annotations if we have qualitative data without stacking
-    if (annotations) {
-      config.options.plugins.annotation = annotations;
+    if (hasAnnotations) {
+      config.options.plugins.annotation = { annotations: allAnnotations };
     }
 
-    // Add second y-axis if comparing metrics
-    if (comparisonConfig) {
+    // Add right y-axis when needed
+    if (effectiveAxisConfig.hasRightAxis) {
       config.options.scales.y1 = buildScaleConfig(
         chartType,
         y1Range,
         'right',
-        comparisonConfig.metric2Label,
+        effectiveAxisConfig.rightAxisLabel,
         alignedTickCount
       );
     }

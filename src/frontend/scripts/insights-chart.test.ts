@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 // This must happen before the module is imported.
 (globalThis as unknown as Record<string, unknown>)['window'] = globalThis;
 
-import { ChartManager, calculateAlignedTickCount, type ComparisonConfig } from './insights-chart';
+import { ChartManager, calculateAlignedTickCount, type AxisConfig } from './insights-chart';
 import type { ChartConfiguration, ChartInstance } from './chart-types';
 
 // ---------------------------------------------------------------------------
@@ -633,20 +633,21 @@ describe('ChartManager', () => {
   // render() with comparison config — dual y-axes
   // -------------------------------------------------------------------------
 
-  describe('render() with comparison config', () => {
-    it('creates a second y-axis (y1) when comparisonConfig is provided', () => {
+  describe('render() with axis config', () => {
+    it('creates a second y-axis (y1) when axisConfig.hasRightAxis is true', () => {
       // Arrange
       const manager = new ChartManager(canvas);
       const data = makeChartData();
-      const comparisonConfig: ComparisonConfig = {
-        metric1Label: 'Test Coverage',
-        metric2Label: 'Bug Count',
-        metric1IsCapability: false,
-        metric2IsCapability: false,
+      const axisConfig: AxisConfig = {
+        leftAxisLabel: 'Test Coverage',
+        rightAxisLabel: 'Bug Count',
+        leftAxisIsCapability: false,
+        rightAxisIsCapability: false,
+        hasRightAxis: true,
       };
 
       // Act
-      manager.render(data, 'Comparison Chart', comparisonConfig);
+      manager.render(data, 'Comparison Chart', axisConfig);
 
       // Assert
       const config = instances[0].config;
@@ -659,15 +660,16 @@ describe('ChartManager', () => {
       // Arrange
       const manager = new ChartManager(canvas);
       const data = makeChartData();
-      const comparisonConfig: ComparisonConfig = {
-        metric1Label: 'Deployment Frequency',
-        metric2Label: 'Lead Time',
-        metric1IsCapability: false,
-        metric2IsCapability: false,
+      const axisConfig: AxisConfig = {
+        leftAxisLabel: 'Deployment Frequency',
+        rightAxisLabel: 'Lead Time',
+        leftAxisIsCapability: false,
+        rightAxisIsCapability: false,
+        hasRightAxis: true,
       };
 
       // Act
-      manager.render(data, 'Comparison', comparisonConfig);
+      manager.render(data, 'Comparison', axisConfig);
 
       // Assert
       const config = instances[0].config;
@@ -700,15 +702,16 @@ describe('ChartManager', () => {
           },
         ],
       };
-      const comparisonConfig: ComparisonConfig = {
-        metric1Label: 'Small Range',
-        metric2Label: 'Large Range',
-        metric1IsCapability: false,
-        metric2IsCapability: false,
+      const axisConfig: AxisConfig = {
+        leftAxisLabel: 'Small Range',
+        rightAxisLabel: 'Large Range',
+        leftAxisIsCapability: false,
+        rightAxisIsCapability: false,
+        hasRightAxis: true,
       };
 
       // Act
-      manager.render(data, 'Aligned Ticks', comparisonConfig);
+      manager.render(data, 'Aligned Ticks', axisConfig);
 
       // Assert
       const config = instances[0].config;
@@ -726,7 +729,7 @@ describe('ChartManager', () => {
       const manager = new ChartManager(canvas);
       const data = makeChartData();
 
-      // Act — render without comparisonConfig
+      // Act — render without axisConfig
       manager.render(data, 'Single Metric');
 
       // Assert

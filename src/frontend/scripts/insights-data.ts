@@ -1,7 +1,7 @@
 // Data transformation for chart rendering
 
 import { filterByDateRange, sortByDate, getNumericValue } from './insights-utils';
-import { formatDataDateForDisplay, sortDisplayDates } from './insights-date-utils';
+import { dataDateToInputDate } from './insights-date-utils';
 import type {
   ChartData,
   ChartDataset,
@@ -113,9 +113,9 @@ export function transformTeamMetricData(
     // combined in the tooltip via the `anecdotes` metadata key.
     const entryMap = new Map<string, string[]>();
     for (const point of sortedData) {
-      const displayDate = formatDataDateForDisplay(point.date);
-      if (!entryMap.has(displayDate)) entryMap.set(displayDate, []);
-      entryMap.get(displayDate)!.push(String(point.value));
+      const isoDate = dataDateToInputDate(point.date);
+      if (!entryMap.has(isoDate)) entryMap.set(isoDate, []);
+      entryMap.get(isoDate)!.push(String(point.value));
     }
 
     const uniqueDates = Array.from(entryMap.keys());
@@ -146,7 +146,7 @@ export function transformTeamMetricData(
   }
 
   return {
-    labels: sortedData.map(d => formatDataDateForDisplay(d.date)),
+    labels: sortedData.map(d => dataDateToInputDate(d.date)),
     datasets: [
       {
         label: `${teamIdToName(metric.teamId, teams)} - ${metric.metricName}`,
@@ -251,8 +251,73 @@ export function transformCapabilityMetricData(
   const datasets = createTeamDatasets(teamDataMap, sortedDates, teams, metricName);
 
   return {
-    labels: sortedDates.map(date => formatDataDateForDisplay(date)),
+    labels: sortedDates.map(date => dataDateToInputDate(date)),
     datasets,
+  };
+}
+
+/**
+ * Merge multiple ChartData objects into a single dataset for multi-axis display.
+ * All left-axis datasets get yAxisID 'y'; all right-axis get 'y1'.
+ * Colors are assigned globally across all datasets to avoid duplication.
+ * Returns null if both arrays are empty.
+ */
+export function buildMultiAxisChartData(
+  leftData: ChartData[],
+  rightData: ChartData[]
+): ChartData | null {
+  const allChartData = [...leftData, ...rightData];
+  if (allChartData.length === 0) return null;
+
+  // Collect all unique display labels and sort chronologically
+  const allLabelSet = new Set<string>();
+  for (const cd of allChartData) {
+    for (const label of cd.labels) {
+      allLabelSet.add(label);
+    }
+  }
+  const allLabels = Array.from(allLabelSet).sort();
+
+  const mergedDatasets: ChartDataset[] = [];
+  let colorIndex = 0;
+
+  function alignDatasets(chartData: ChartData, yAxisID: string): void {
+    const labelIndexMap = new Map(chartData.labels.map((label, idx) => [label, idx]));
+    for (const ds of chartData.datasets) {
+      const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
+      colorIndex++;
+      mergedDatasets.push({
+        ...ds,
+        yAxisID,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        data: allLabels.map(label => {
+          const idx = labelIndexMap.get(label);
+          return idx !== undefined ? (ds.data[idx] ?? null) : null;
+        }),
+        metadata: ds.metadata
+          ? allLabels.map(label => {
+              const idx = labelIndexMap.get(label);
+              return idx !== undefined ? ds.metadata![idx] : undefined;
+            })
+          : undefined,
+      });
+    }
+  }
+
+  for (const cd of leftData) {
+    alignDatasets(cd, 'y');
+  }
+  for (const cd of rightData) {
+    alignDatasets(cd, 'y1');
+  }
+
+  const qualitativeData = allChartData.flatMap(cd => cd.qualitativeData ?? []);
+
+  return {
+    labels: allLabels,
+    datasets: mergedDatasets,
+    qualitativeData: qualitativeData.length > 0 ? qualitativeData : undefined,
   };
 }
 
@@ -267,7 +332,7 @@ export function mergeChartDataForComparison(data1: ChartData, data2: ChartData):
   }
 
   // Get all unique dates from both datasets (labels are already formatted for display)
-  const allLabels = sortDisplayDates(Array.from(new Set([...data1.labels, ...data2.labels])));
+  const allLabels = Array.from(new Set([...data1.labels, ...data2.labels])).sort();
 
   // Map display labels back to a common ordering
   // Since we need to align data points, we'll use the combined label set

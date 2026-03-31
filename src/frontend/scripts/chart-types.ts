@@ -33,12 +33,18 @@ export interface ChartAxisTicks {
 }
 
 export interface ChartAxis {
+  type?: string;
+  time?: {
+    unit?: string;
+    displayFormats?: Record<string, string>;
+    tooltipFormat?: string;
+  };
   beginAtZero?: boolean;
   stacked?: boolean;
   ticks?: ChartAxisTicks;
   grace?: string;
-  min?: number;
-  max?: number;
+  min?: number | string;
+  max?: number | string;
   position?: 'left' | 'right' | 'top' | 'bottom';
   title?: {
     display: boolean;
@@ -81,10 +87,11 @@ export interface ZoomPluginOptions {
 
 export interface AnnotationBoxOptions {
   type: 'box';
-  xMin: number;
-  xMax: number;
+  xMin: number | string;
+  xMax: number | string;
   yMin?: number | string;
   yMax?: number | string;
+  yScaleID?: string;
   backgroundColor: string;
   borderColor?: string;
   borderWidth?: number;
@@ -92,6 +99,9 @@ export interface AnnotationBoxOptions {
     display: boolean;
     content: string;
     position?: string;
+    rotation?: number;
+    color?: string;
+    font?: { size?: number; weight?: string };
   };
   enter?: (context: { element: unknown }) => void;
   leave?: (context: { element: unknown }) => void;
@@ -162,6 +172,15 @@ export interface ChartInstance {
 
 export interface ChartConstructor {
   new (canvas: HTMLCanvasElement, config: ChartConfiguration): ChartInstance;
+}
+
+export interface ExperimentOverlayInfo {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  color: string;
+  borderColor: string;
 }
 
 declare global {
