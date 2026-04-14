@@ -22,6 +22,8 @@ bun test
 
 # Run E2E tests (requires server on :3000)
 bun test:pw  # Note: You may need to run `bunx playwright install` first
+# In order to have passing pw tests you need to load the example data.
+# IE comment out your .env file and restart the server.
 
 # Build for production
 bun b:prod
