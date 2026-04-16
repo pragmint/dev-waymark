@@ -286,6 +286,28 @@
   }
 }
 
+.team-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32rem, 1fr));
+  gap: $spacing-xl;
+  margin-top: $spacing-xl;
+}
+
+.team-metric-card {
+  background: $bg-white;
+  border: 0.1rem solid $border-color-light;
+  border-radius: $border-radius-md;
+  padding: $spacing-xl;
+  box-shadow: $shadow-sm;
+}
+
+.team-metric-title {
+  font-size: $font-base;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 $spacing-lg 0;
+}
+
 .experiment-hypothesis {
   display: flex;
   flex-direction: column;

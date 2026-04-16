@@ -2,6 +2,7 @@ import type { FC } from 'hono/jsx';
 import { Page } from '../components/Page';
 import { TeamCapabilityTile } from '../components/TeamCapabilityTile';
 import { CapabilityBadge } from '../components/CapabilityBadge';
+import { MiniChart, type MiniChartData } from '../components/MiniChart';
 import type { Team, TeamCapability } from '../../schemas/teamSchemas';
 import type { Experiment } from '../../schemas/experimentSchemas';
 import type { Capability } from '../../schemas/capabilitySchemas';
@@ -9,6 +10,36 @@ import type { Practice } from '../../loaders/loadPracticeFromFilesystem';
 import type { TeamMetric } from '../../schemas/metricSchemas';
 import { parseDate } from '../../domain/parseDate';
 import { compareExperimentsByStatus } from '../../domain/experimentQueries';
+
+const METRIC_NAME_ACRONYMS: Record<string, string> = {
+  wip: 'WIP',
+  pr: 'PR',
+  qa: 'QA',
+};
+
+function formatMetricName(metricName: string): string {
+  return metricName
+    .replace(/[-_]/g, ' ')
+    .split(' ')
+    .map(w => METRIC_NAME_ACRONYMS[w.toLowerCase()] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function toMiniChartData(metric: TeamMetric): MiniChartData | null {
+  const numericPoints = metric.data.filter(d => typeof d.value === 'number');
+  if (numericPoints.length === 0) return null;
+  return {
+    labels: numericPoints.map(d => d.date),
+    datasets: [
+      {
+        label: formatMetricName(metric.metricName),
+        data: numericPoints.map(d => d.value as number),
+        borderColor: 'rgb(42, 171, 133)',
+        backgroundColor: 'rgba(42, 171, 133, 0.2)',
+      },
+    ],
+  };
+}
 
 function getStatusBadge(status: Experiment['status']): string {
   const statusColors: Record<Experiment['status'], { bg: string; text: string }> = {
@@ -79,7 +110,7 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
   teamCapabilityMap,
   practiceMap,
   experiments,
-  teamMetrics: _teamMetrics,
+  teamMetrics,
 }) => {
   return (
     <Page title={team.name} heading={team.name} activePage={team.id}>
@@ -189,6 +220,21 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
           )}
         </section>
 
+        {teamMetrics.length > 0 && (
+          <section class="team-section">
+            <h2>Metrics</h2>
+            <p class="section-intro">Team-specific time-series metrics collected over time.</p>
+            <div class="team-metrics-grid">
+              {teamMetrics.map(metric => (
+                <div class="team-metric-card">
+                  <h3 class="team-metric-title">{formatMetricName(metric.metricName)}</h3>
+                  <MiniChart chartData={toMiniChartData(metric)} metricId={metric.metricName} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div class="team-actions">
           <a href="/" class="btn btn-secondary">
             ← Back to Overview
@@ -200,6 +246,7 @@ export const TeamDetailPage: FC<TeamDetailPageProps> = ({
       </div>
 
       <script src="/public/team-detail.js"></script>
+      <script type="module" src="/public/mini-chart.js"></script>
     </Page>
   );
 };
