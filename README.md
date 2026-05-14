@@ -1,6 +1,6 @@
 # Step Engine
 
-A simple website that helps software and data engineering teams continuously experiment with relevant and novel engineering practices.
+A simple website that helps software and data engineering teams continuously surface bottlenecks and experiment with relevant and novel engineering practices.
 
 ## Getting Started
 
@@ -21,21 +21,47 @@ bun dev
 bun test
 
 # Run E2E tests (requires server on :3000)
-bun test:pw  # Note: You may need to run `bunx playwright install` first
-# In order to have passing pw tests you need to load the example data.
-# IE comment out your .env file and restart the server.
+bun test:e2e  # Note: You may need to run `bunx playwright install` first
+# In order to have passing e2e tests you need to load the test data.
+# IE run the generate and seed commands to populate the database.
 
 # Build for production
 bun b:prod
 
 # Start app from dist
 bun start
-
-# Download a mirror of the site (requires server on :3000)
-bun mirror
 ```
 
-Server runs at `http://localhost:3000`
+Unless otherwise configured, the server runs at `http://localhost:3000`
+
+## Database
+
+The app uses a local SQLite database (default: `step-engine.sqlite`). Override the path with the `DATABASE_PATH` env var.
+
+### Migrations
+
+```bash
+# Apply all pending migrations
+bun migrate
+
+# Roll back the most recent migration
+bun rollback
+```
+
+Migrations run automatically on `bun dev` and `bun start`. Run `bun migrate` manually when you need to apply them without starting the server.
+
+### Seed data
+
+```bash
+# Seed the database with fixture data (also runs pending migrations)
+bun seed
+```
+
+The fixtures are parquet files in `pipelines/fixtures/`. To regenerate them after changing the fixture definitions:
+
+```bash
+bun generate
+```
 
 ## Architecture
 
@@ -43,26 +69,6 @@ Server-side rendered web app built with **Hono** + **Bun**, JSX templating, no c
 
 ### Data flow
 
-```
-Filesystem (YAML/Markdown) → Loaders → Parsers (Zod validation) → Domain (queries/aggregations) → Handlers → Pages → HTML
-```
+Data can originate from a number of sources (JIRA, Linear, GitHub, Claude, Slack, Google Calendar, DataDog, etc). That data gets fed into a data lake where it can be sliced and diced by this application.
 
-### Layers
-
-- **Handlers** — Thin route handlers: load data, call prepare functions, render a Page. No business logic.
-- **Loaders** — Read YAML/Markdown from `examples/` and `resources/`.
-- **Parsers** — Zod-validated parsing for team, experiment, metric, and capability schemas.
-- **Domain** — Pure business logic: queries, aggregations, and `prepare*Data` transforms that structure data for rendering.
-- **Pages** — Full page components (`src/frontend/Pages/`).
-- **Components** — Reusable view components: Layout, Sidebar, tiles, etc. (`src/frontend/components/`).
-
-### Data sources
-
-Content lives in the filesystem, not a database:
-
-- `resources/capabilities/*.md` — Capability definitions
-- `resources/practices/*.md` — Practice definitions
-- `examples/teams/*.yaml` — Team definitions
-- `examples/experiments/{teamId}/*.yaml` — Experiment definitions
-- `examples/metrics/capability_scores/*.yaml` — Capability score metrics
-- `examples/metrics/team_specific/{teamId}/*.yaml` — Team-specific metrics
+Internally, all of this data gets organized into entities and meta-data. For example, one of the entities that could get extracted is a ticket. Each ticket could have meta-data like issue-type, created-at, in-progress-at, etc.

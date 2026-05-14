@@ -1,59 +1,21 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { serveStatic } from 'hono/bun';
-import { trimTrailingSlash } from 'hono/trailing-slash';
-import { NotFoundError, isAppError, formatErrorForLogging } from './src/domain/errors';
-import { handleOverview } from './src/handlers/handleOverview';
-import { handleInsight } from './src/handlers/handleInsight';
-import { handleCapabilityCatalog } from './src/handlers/handleCapabilityCatalog';
-import { handleCapabilityDetail } from './src/handlers/handleCapabilityDetail';
-import { handlePracticeCatalog } from './src/handlers/handlePracticeCatalog';
-import { handlePracticeDetail } from './src/handlers/handlePracticeDetail';
-import { handleTeamDetail } from './src/handlers/handleTeamDetail';
-import { handleExperimentDetail } from './src/handlers/handleExperimentDetail';
-import { createMiddleware } from 'hono/factory';
+import { getDb } from './src/db/client';
+import { runMigrations } from './src/db/migrate';
+import { entitiesHandler } from './src/handlers/entitiesHandler';
+import { entityDetailHandler } from './src/handlers/entityDetailHandler';
 
-// Imperative Shell - All I/O happens here
-// Core business logic is imported as pure functions
 const app = new Hono();
 
-app.onError(async (err: Error, c: Context) => {
-  console.log(formatErrorForLogging(err, { path: c.req.path, method: c.req.method }));
+runMigrations(getDb());
 
-  if (isAppError(err)) {
-    if (err instanceof NotFoundError) {
-      return c.text(err.message, 404);
-    }
-    return c.text(`Server error: ${err.message}`, 500);
-  }
+app.use('/*', serveStatic({ root: './public' }));
 
-  return c.text('An unexpected error occurred', 500);
-});
-
-const logger = createMiddleware(async (c, next) => {
-  console.log(`[${c.req.method}] ${c.req.url}`);
-  await next();
-});
-
-app.use(logger);
-
-app.use(trimTrailingSlash());
-app.use('/public/*', serveStatic({ root: './' }));
-app.get('/favicon.ico', serveStatic({ path: './assets/favicon.ico' }));
-
-app.get('/', handleOverview);
-app.get('/archive/:date', handleOverview);
-app.get('/insight', handleInsight);
-app.get('/catalog/capability', handleCapabilityCatalog);
-app.get('/catalog/capability/:capabilityId', handleCapabilityDetail);
-app.get('/catalog/practice', handlePracticeCatalog);
-app.get('/catalog/practice/:practiceId', handlePracticeDetail);
-app.get('/team/:teamId', handleTeamDetail);
-app.get('/experiment/:experimentId', handleExperimentDetail);
+app.get('/', c => c.redirect('/entities'));
+app.get('/entities', entitiesHandler);
+app.get('/entities/:id', entityDetailHandler);
 
 export default {
-  port: 3000,
+  port: parseInt(process.env.PORT ?? '3000'),
   fetch: app.fetch,
 };
-
-console.log('Server running at http://localhost:3000');

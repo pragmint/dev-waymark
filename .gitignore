@@ -30,6 +30,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# SQLite databases (generated — run `bun run pipelines/seed.ts` to recreate)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Generated Parquet fixtures (run `bun run pipelines/fixtures/generate.ts` to recreate)
+pipelines/fixtures/*.parquet
+
+# Claude session memory (local to this machine)
+memory/
+
 # Runtime data
 pids/
 *.pid

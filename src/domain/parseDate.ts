@@ -1,9 +1,11 @@
-/**
- * Parses a date string in d.m.yyyy or dd.mm.yyyy format to a Date object
- * Example: "27.1.2026" -> Date object
- */
-export function parseDate(dateString: string): Date {
-  const [day, month, year] = dateString.split('.');
-  // Month is 0-indexed in JavaScript Date
-  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+export function parseDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDate(value: string | null | undefined): string {
+  const date = parseDate(value);
+  if (!date) return '—';
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }

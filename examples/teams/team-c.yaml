@@ -1,9 +1,0 @@
-id: team-c
-name: Team C
-description: >
-  Mobile application team building iOS and Android apps for customer engagement.
-targetedCapabilities:
-  - test-automation
-  - code-maintainability
-  - trunk-based-development
-  - learning-culture
