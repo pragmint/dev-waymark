@@ -1,20 +1,13 @@
 import type { FC } from 'hono/jsx';
-import type {
-  MetaFilter,
-  AvailableFilter,
-  DateRangeFilters,
-  EntityWithMetadata,
-} from '../../schemas/entity';
+import type { MetaFilter, AvailableFilter, EntityWithMetadata } from '../../schemas/entity';
 import { Layout } from '../components/Layout';
 import { FilterBar } from '../components/FilterBar';
-import { formatDate } from '../../domain/parseDate';
 import { getEntityTitle, getMetadataValue } from '../../domain/entityQueries';
 
 type EntitiesPageProps = {
   entities: EntityWithMetadata[];
   activeFilters: MetaFilter[];
   availableFilters: AvailableFilter[];
-  dateRange: DateRangeFilters;
   addingKey?: string;
 };
 
@@ -25,7 +18,6 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   entities,
   activeFilters,
   availableFilters,
-  dateRange,
   addingKey,
 }) => {
   const extraKeys = [...new Set(activeFilters.map(f => f.key))].filter(
@@ -44,7 +36,6 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
       <FilterBar
         activeFilters={activeFilters}
         availableFilters={availableFilters}
-        dateRange={dateRange}
         addingKey={addingKey}
       />
 
@@ -60,8 +51,6 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
               {extraKeys.map(k => (
                 <th>{k}</th>
               ))}
-              <th>Created</th>
-              <th>Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -79,8 +68,6 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
                 {extraKeys.map(k => (
                   <td>{getMetadataValue(e, k) ?? '—'}</td>
                 ))}
-                <td>{formatDate(e.created_at)}</td>
-                <td>{formatDate(e.updated_at)}</td>
               </tr>
             ))}
           </tbody>

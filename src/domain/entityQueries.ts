@@ -1,4 +1,4 @@
-import type { Entity, EntityWithMetadata } from '../schemas/entity';
+import type { EntityWithMetadata } from '../schemas/entity';
 
 export function getMetadataValue(
   entity: EntityWithMetadata,
@@ -8,18 +8,7 @@ export function getMetadataValue(
 }
 
 export function getEntityTitle(entity: EntityWithMetadata): string {
-  const source = getMetadataValue(entity, 'source');
-  return source ? `${source}/${entity.source_id}` : entity.source_id;
-}
-
-export function sortEntitiesByDate<T extends Entity>(
-  entities: T[],
-  direction: 'asc' | 'desc'
-): T[] {
-  return [...entities].sort((a, b) => {
-    const diff = a.created_at.localeCompare(b.created_at);
-    return direction === 'asc' ? diff : -diff;
-  });
+  return entity.name;
 }
 
 export function groupEntitiesByType(

@@ -1,25 +1,18 @@
 import type { FC } from 'hono/jsx';
-import type { MetaFilter, AvailableFilter, DateRangeFilters } from '../../schemas/entity';
+import type { MetaFilter, AvailableFilter } from '../../schemas/entity';
 
 type FilterBarProps = {
   activeFilters: MetaFilter[];
   availableFilters: AvailableFilter[];
-  dateRange: DateRangeFilters;
   addingKey?: string;
 };
 
-function removeFilterUrl(
-  activeFilters: MetaFilter[],
-  dateRange: DateRangeFilters,
-  removeKey: string
-): string {
+function removeFilterUrl(activeFilters: MetaFilter[], removeKey: string): string {
   const params = new URLSearchParams();
   for (const f of activeFilters) {
     if (f.key === removeKey) continue;
     params.append(`mf__${f.key}__${f.op}`, f.value);
   }
-  if (dateRange.from) params.set('from', dateRange.from);
-  if (dateRange.to) params.set('to', dateRange.to);
   const qs = params.toString();
   return `/entities${qs ? '?' + qs : ''}`;
 }
@@ -138,12 +131,7 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
   );
 }
 
-export const FilterBar: FC<FilterBarProps> = ({
-  activeFilters,
-  availableFilters,
-  dateRange,
-  addingKey,
-}) => {
+export const FilterBar: FC<FilterBarProps> = ({ activeFilters, availableFilters, addingKey }) => {
   // Group active filters by key for chip display
   const grouped = new Map<string, MetaFilter[]>();
   for (const f of activeFilters) {
@@ -153,7 +141,6 @@ export const FilterBar: FC<FilterBarProps> = ({
 
   const activeKeys = new Set(activeFilters.map(f => f.key));
   const inactive = availableFilters.filter(f => !activeKeys.has(f.key));
-  const hasAnyFilter = activeFilters.length > 0 || dateRange.from || dateRange.to;
 
   return (
     <div class="filter-bar">
@@ -161,7 +148,7 @@ export const FilterBar: FC<FilterBarProps> = ({
       <div class="filter-chips-row">
         {Array.from(grouped.entries()).map(([key, filters]) => (
           <a
-            href={removeFilterUrl(activeFilters, dateRange, key)}
+            href={removeFilterUrl(activeFilters, key)}
             class="filter-chip"
             title={`Remove ${key} filter`}
           >
@@ -180,8 +167,6 @@ export const FilterBar: FC<FilterBarProps> = ({
               {activeFilters.map(f => (
                 <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
               ))}
-              {dateRange.from && <input type="hidden" name="from" value={dateRange.from} />}
-              {dateRange.to && <input type="hidden" name="to" value={dateRange.to} />}
               <select
                 name="add_filter"
                 class="filter-select filter-add-select"
@@ -201,14 +186,14 @@ export const FilterBar: FC<FilterBarProps> = ({
           </div>
         )}
 
-        {hasAnyFilter && (
+        {activeFilters.length > 0 && (
           <a href="/entities" class="filter-clear">
             Clear all
           </a>
         )}
       </div>
 
-      {/* Row 2+: widget panels + date range, inside one form */}
+      {/* Widget panels inside one form */}
       <form action="/entities" method="get" class="filter-form" data-filter-form>
         {/* Preserve all active metadata filters as hidden inputs */}
         {activeFilters.map(f => (
@@ -236,30 +221,6 @@ export const FilterBar: FC<FilterBarProps> = ({
             </div>
           );
         })}
-
-        {/* Date range filter — always visible */}
-        <div class="filter-date-row">
-          <span class="filter-group-label">Created</span>
-          <input type="date" name="from" value={dateRange.from ?? ''} class="filter-input" />
-          <span class="filter-sep">–</span>
-          <input type="date" name="to" value={dateRange.to ?? ''} class="filter-input" />
-          <button type="submit" class="filter-btn">
-            Apply
-          </button>
-          {(dateRange.from || dateRange.to) && (
-            <a
-              href={(() => {
-                const p = new URLSearchParams();
-                for (const f of activeFilters) p.append(`mf__${f.key}__${f.op}`, f.value);
-                const qs = p.toString();
-                return `/entities${qs ? '?' + qs : ''}`;
-              })()}
-              class="filter-clear"
-            >
-              Clear
-            </a>
-          )}
-        </div>
       </form>
     </div>
   );

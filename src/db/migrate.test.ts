@@ -29,9 +29,10 @@ describe('runMigrations', () => {
     const db = new Database(':memory:');
     runMigrations(db);
     const rows = db.query<{ name: string }, []>('SELECT name FROM _migrations').all();
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     const names = rows.map(r => r.name);
     expect(names).toContain('migration-20260514T000000Z.ts');
+    expect(names).toContain('migration-20260516T000000Z.ts');
   });
 
   it('is idempotent — does not re-apply on second run', () => {
@@ -39,7 +40,7 @@ describe('runMigrations', () => {
     runMigrations(db);
     runMigrations(db);
     const rows = db.query('SELECT * FROM _migrations').all();
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
   });
 });
 
@@ -53,6 +54,7 @@ describe('rollbackMigration', () => {
   });
 
   it('drops entity tables after rolling back all migrations', () => {
+    rollbackMigration(db); // rolls back migration-20260516T000000Z
     rollbackMigration(db); // rolls back migration-20260514T000000Z — drops tables
     const entities = db
       .query("SELECT name FROM sqlite_master WHERE type='table' AND name='entities'")
@@ -62,11 +64,13 @@ describe('rollbackMigration', () => {
 
   it('removes all migration records after rolling back all migrations', () => {
     rollbackMigration(db);
+    rollbackMigration(db);
     const rows = db.query('SELECT * FROM _migrations').all();
     expect(rows).toHaveLength(0);
   });
 
   it('does nothing when no migrations have been applied', () => {
+    rollbackMigration(db);
     rollbackMigration(db);
     rollbackMigration(db); // no-op
     const rows = db.query('SELECT * FROM _migrations').all();

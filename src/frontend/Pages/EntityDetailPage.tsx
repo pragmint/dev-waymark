@@ -2,7 +2,6 @@ import type { FC } from 'hono/jsx';
 import type { EntityWithMetadata } from '../../schemas/entity';
 import { Layout } from '../components/Layout';
 import { MetadataTable } from '../components/MetadataTable';
-import { formatDate } from '../../domain/parseDate';
 import { getEntityTitle } from '../../domain/entityQueries';
 
 export const EntityDetailPage: FC<{ entity: EntityWithMetadata }> = ({ entity }) => (
@@ -19,14 +18,8 @@ export const EntityDetailPage: FC<{ entity: EntityWithMetadata }> = ({ entity })
         <dt>ID</dt>
         <dd>{entity.id}</dd>
 
-        <dt>Source ID</dt>
-        <dd>{entity.source_id}</dd>
-
-        <dt>Created</dt>
-        <dd>{formatDate(entity.created_at)}</dd>
-
-        <dt>Updated</dt>
-        <dd>{formatDate(entity.updated_at)}</dd>
+        <dt>Name</dt>
+        <dd>{entity.name}</dd>
       </dl>
     </section>
 

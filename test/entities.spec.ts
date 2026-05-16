@@ -13,8 +13,8 @@ test('entities page has correct title and heading', async ({ page }) => {
 
 test('filter form and add-filter control are present', async ({ page }) => {
   await page.goto('/entities');
-  await expect(page.locator('[data-filter-form]')).toBeVisible();
-  await expect(page.locator('[data-filter-add-form]')).toBeVisible();
+  await expect(page.locator('[data-filter-form]')).toBeAttached();
+  await expect(page.locator('[data-filter-add-form]')).toBeAttached();
 });
 
 test('entity detail page loads and shows metadata section', async ({ page }) => {

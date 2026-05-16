@@ -1,10 +1,8 @@
 import { z } from 'zod';
 
 export const EntitySchema = z.object({
-  id: z.string(),
-  source_id: z.string(),
-  created_at: z.string(),
-  updated_at: z.string(),
+  id: z.number(),
+  name: z.string(),
 });
 
 export type Entity = z.infer<typeof EntitySchema>;
@@ -13,7 +11,7 @@ export const MetadataValueTypeSchema = z.enum(['string', 'number', 'date', 'bool
 export type MetadataValueType = z.infer<typeof MetadataValueTypeSchema>;
 
 export const MetadataSchema = z.object({
-  entity_id: z.string(),
+  entity_id: z.number(),
   key: z.string(),
   value: z.string().nullable(),
   value_type: MetadataValueTypeSchema,
@@ -38,12 +36,6 @@ export const MetaFilterSchema = z.object({
   value: z.string(),
 });
 export type MetaFilter = z.infer<typeof MetaFilterSchema>;
-
-export const DateRangeFiltersSchema = z.object({
-  from: z.string().optional(),
-  to: z.string().optional(),
-});
-export type DateRangeFilters = z.infer<typeof DateRangeFiltersSchema>;
 
 export const AvailableFilterSchema = z.object({
   key: z.string(),

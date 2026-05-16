@@ -4,10 +4,11 @@ import { createEntityRepository } from '../db/entityRepository';
 import { EntityDetailPage } from '../frontend/Pages/EntityDetailPage';
 
 export async function entityDetailHandler(c: Context) {
-  const id = c.req.param('id') ?? '';
+  const idParam = c.req.param('id') ?? '';
+  const id = parseInt(idParam, 10);
   const db = getDb();
   const repo = createEntityRepository(db);
-  const entity = repo.get(id);
+  const entity = isNaN(id) ? null : repo.get(id);
 
   if (!entity) {
     return c.html(
@@ -15,7 +16,7 @@ export async function entityDetailHandler(c: Context) {
         <body>
           <h1>Not found</h1>
           <p>
-            Entity <code>{id}</code> does not exist.
+            Entity <code>{idParam}</code> does not exist.
           </p>
           <a href="/entities">← Back to entities</a>
         </body>

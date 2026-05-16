@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { getDb } from '../db/client';
 import { createEntityRepository } from '../db/entityRepository';
-import { MetaFilterOpSchema, DateRangeFiltersSchema } from '../schemas/entity';
+import { MetaFilterOpSchema } from '../schemas/entity';
 import type { MetaFilter } from '../schemas/entity';
 import { EntitiesPage } from '../frontend/Pages/EntitiesPage';
 
@@ -24,14 +24,9 @@ export async function entitiesHandler(c: Context) {
     metaFilters.push({ key, op: parsed.data, value });
   }
 
-  const dateRange = DateRangeFiltersSchema.parse({
-    from: c.req.query('from') || undefined,
-    to: c.req.query('to') || undefined,
-  });
-
   const addingKey = c.req.query('add_filter') || undefined;
 
-  const entities = repo.list(metaFilters, dateRange);
+  const entities = repo.list(metaFilters);
   const availableFilters = repo.getAvailableFilters(entities.map(e => e.id));
 
   return c.html(
@@ -39,7 +34,6 @@ export async function entitiesHandler(c: Context) {
       entities={entities}
       activeFilters={metaFilters}
       availableFilters={availableFilters}
-      dateRange={dateRange}
       addingKey={addingKey}
     />
   );
