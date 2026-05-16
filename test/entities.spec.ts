@@ -11,12 +11,10 @@ test('entities page has correct title and heading', async ({ page }) => {
   await expect(page.locator('h1')).toHaveText('Entities');
 });
 
-test('filter form is present with source and type selects', async ({ page }) => {
+test('filter form and add-filter control are present', async ({ page }) => {
   await page.goto('/entities');
-  const form = page.locator('[data-filter-form]');
-  await expect(form).toBeVisible();
-  await expect(form.locator('select[name="source"]')).toBeVisible();
-  await expect(form.locator('select[name="type"]')).toBeVisible();
+  await expect(page.locator('[data-filter-form]')).toBeVisible();
+  await expect(page.locator('[data-filter-add-form]')).toBeVisible();
 });
 
 test('entity detail page loads and shows metadata section', async ({ page }) => {

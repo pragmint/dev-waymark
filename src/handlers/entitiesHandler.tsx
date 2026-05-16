@@ -1,25 +1,46 @@
 import type { Context } from 'hono';
 import { getDb } from '../db/client';
 import { createEntityRepository } from '../db/entityRepository';
-import { EntityFiltersSchema } from '../schemas/entity';
+import { MetaFilterOpSchema, DateRangeFiltersSchema } from '../schemas/entity';
+import type { MetaFilter } from '../schemas/entity';
 import { EntitiesPage } from '../frontend/Pages/EntitiesPage';
+
+const META_FILTER_RE = /^mf__(.+)__([a-z]+)$/;
 
 export async function entitiesHandler(c: Context) {
   const db = getDb();
   const repo = createEntityRepository(db);
 
-  const filters = EntityFiltersSchema.parse({
-    source: c.req.query('source') || undefined,
-    type: c.req.query('type') || undefined,
+  const url = new URL(c.req.url);
+  const metaFilters: MetaFilter[] = [];
+
+  for (const [name, value] of url.searchParams) {
+    if (!value) continue;
+    const match = META_FILTER_RE.exec(name);
+    if (!match) continue;
+    const [, key, opRaw] = match;
+    const parsed = MetaFilterOpSchema.safeParse(opRaw);
+    if (!parsed.success) continue;
+    metaFilters.push({ key, op: parsed.data, value });
+  }
+
+  const dateRange = DateRangeFiltersSchema.parse({
     from: c.req.query('from') || undefined,
     to: c.req.query('to') || undefined,
   });
 
-  const entities = repo.list(filters);
-  const sources = repo.distinctSources();
-  const types = repo.distinctTypes();
+  const addingKey = c.req.query('add_filter') || undefined;
+
+  const entities = repo.list(metaFilters, dateRange);
+  const availableFilters = repo.getAvailableFilters(entities.map(e => e.id));
 
   return c.html(
-    <EntitiesPage entities={entities} filters={filters} sources={sources} types={types} />
+    <EntitiesPage
+      entities={entities}
+      activeFilters={metaFilters}
+      availableFilters={availableFilters}
+      dateRange={dateRange}
+      addingKey={addingKey}
+    />
   );
 }
