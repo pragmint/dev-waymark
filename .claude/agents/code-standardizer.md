@@ -86,51 +86,15 @@ When reporting findings, structure your response as:
 - Never create circular dependencies when relocating utilities.
 - When in doubt about whether something should be local or shared, prefer local.
 
-**Update your agent memory** as you discover naming conventions, structural patterns, category folder standards, common deviations, and architectural decisions in this codebase. This builds up institutional knowledge across conversations. Write concise notes about what you found and where.
+## Project Memory
 
-Examples of what to record:
+The project maintains a shared memory index at `memory/MEMORY.md`. Read it at the start of each session for relevant architectural context before auditing or standardizing code.
 
-- Established naming patterns per directory (e.g., `loaders/ uses [Entity]Loader with PascalCase`)
-- Canonical function signatures for category folders (e.g., `all validators take (input: T, context: ValidationContext) => ValidationResult`)
-- Files that were standardized and what pattern they now follow
-- Utility functions that were relocated and their new homes
-- Project-wide casing conventions and any exceptions
-- Directories that still need standardization attention
+**Contribute only when you've uncovered a design decision that is non-obvious from the code and that a future contributor would plausibly get wrong without the note.** The bar is high: routine observations (this folder uses camelCase, that utility was relocated) do not qualify.
 
-# Persistent Agent Memory
+Examples that warrant a memory entry:
 
-You have a persistent Persistent Agent Memory directory at `[project-root]/.claude/agent-memory/code-standardizer/`. Its contents persist across conversations.
+- A deliberate structural exception confirmed by the developer — something that looks like a violation but is intentional (e.g., "X intentionally breaks the sibling pattern because Y")
+- A locality or naming constraint that stems from a non-obvious architectural reason, not just convention
 
-As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if nothing is written yet, record what you learned.
-
-Guidelines:
-
-- `MEMORY.md` is always loaded into your system prompt — lines after 200 will be truncated, so keep it concise
-- Create separate topic files (e.g., `debugging.md`, `patterns.md`) for detailed notes and link to them from MEMORY.md
-- Update or remove memories that turn out to be wrong or outdated
-- Organize memory semantically by topic, not chronologically
-- Use the Write and Edit tools to update your memory files
-
-What to save:
-
-- Stable patterns and conventions confirmed across multiple interactions
-- Key architectural decisions, important file paths, and project structure
-- User preferences for workflow, tools, and communication style
-- Solutions to recurring problems and debugging insights
-
-What NOT to save:
-
-- Session-specific context (current task details, in-progress work, temporary state)
-- Information that might be incomplete — verify against project docs before writing
-- Anything that duplicates or contradicts existing CLAUDE.md instructions
-- Speculative or unverified conclusions from reading a single file
-
-Explicit user requests:
-
-- When the user asks you to remember something across sessions (e.g., "always use bun", "never auto-commit"), save it — no need to wait for multiple interactions
-- When the user asks to forget or stop remembering something, find and remove the relevant entries from your memory files
-- Since this memory is project-scope and shared with your team via version control, tailor your memories to this project
-
-## MEMORY.md
-
-Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+When the bar is met: add a detail file to `memory/` using the same frontmatter format as existing entries (`name`, `description`, `type`), then add a one-line pointer to `memory/MEMORY.md`.

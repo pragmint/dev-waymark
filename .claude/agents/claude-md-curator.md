@@ -88,50 +88,15 @@ After completing your updates, briefly report:
 2. What `.claude/info/` file(s) were created or updated and why
 3. Any content that was extracted from CLAUDE.md to a reference file
 
-**Update your agent memory** as you discover patterns about what kinds of information tend to accumulate in this project's CLAUDE.md, which `.claude/info/` files exist and what they cover, and any recurring decisions about what belongs inline vs. in a reference file. This builds up institutional knowledge so future curation decisions are faster and more consistent.
+## Project Memory
 
-Examples of what to record:
+The project maintains a shared memory index at `memory/MEMORY.md`. Read it at the start of each session for relevant architectural context before auditing or editing documentation.
 
-- The current list of `.claude/info/` files and their topics
-- Patterns of what this project's maintainers consider "core" vs. "reference" information
-- Any CLAUDE.md sections that have historically been stable vs. frequently updated
-- Decisions made about borderline cases (inline vs. extract) for future consistency
+**Contribute only when you've uncovered a design decision that is non-obvious from the code and that a future contributor would plausibly get wrong without the note.** The bar is high: routine observations (this section belongs in a reference file, that path was renamed) do not qualify.
 
-# Persistent Agent Memory
+Examples that warrant a memory entry:
 
-You have a persistent Persistent Agent Memory directory at `.claude/agent-memory/claude-md-curator/`. Its contents persist across conversations.
+- A deliberate documentation structure decision confirmed by the developer that should not be relitigated (e.g., "X is intentionally kept inline despite its length because Y")
+- A constraint on what CLAUDE.md must or must not contain that stems from a non-obvious project requirement
 
-As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if nothing is written yet, record what you learned.
-
-Guidelines:
-
-- `MEMORY.md` is always loaded into your system prompt — lines after 200 will be truncated, so keep it concise
-- Create separate topic files (e.g., `debugging.md`, `patterns.md`) for detailed notes and link to them from MEMORY.md
-- Update or remove memories that turn out to be wrong or outdated
-- Organize memory semantically by topic, not chronologically
-- Use the Write and Edit tools to update your memory files
-
-What to save:
-
-- Stable patterns and conventions confirmed across multiple interactions
-- Key architectural decisions, important file paths, and project structure
-- User preferences for workflow, tools, and communication style
-- Solutions to recurring problems and debugging insights
-
-What NOT to save:
-
-- Session-specific context (current task details, in-progress work, temporary state)
-- Information that might be incomplete — verify against project docs before writing
-- Anything that duplicates or contradicts existing CLAUDE.md instructions
-- Speculative or unverified conclusions from reading a single file
-
-Explicit user requests:
-
-- When the user asks you to remember something across sessions (e.g., "always use bun", "never auto-commit"), save it — no need to wait for multiple interactions
-- When the user asks to forget or stop remembering something, find and remove the relevant entries from your memory files
-- When the user corrects you on something you stated from memory, you MUST update or remove the incorrect entry. A correction means the stored memory is wrong — fix it at the source before continuing, so the same mistake does not repeat in future conversations.
-- Since this memory is project-scope and shared with your team via version control, tailor your memories to this project
-
-## MEMORY.md
-
-Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+When the bar is met: add a detail file to `memory/` using the same frontmatter format as existing entries (`name`, `description`, `type`), then add a one-line pointer to `memory/MEMORY.md`.

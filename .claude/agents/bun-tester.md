@@ -136,50 +136,15 @@ After editing or writing files, `bun check` runs automatically. Ensure your test
 - **Refactored modules**: After extracting pure logic, test the pure parts thoroughly and the impure orchestration lightly.
 - Always explain your coverage reasoning to the developer.
 
-**Update your agent memory** as you discover testing patterns, common module structures, which modules are pure vs impure, recurring mocking patterns, and any test utilities or helpers that exist in the codebase. This builds institutional knowledge across conversations. Write concise notes about what you found and where.
+## Project Memory
 
-Examples of what to record:
+The project maintains a shared memory index at `memory/MEMORY.md`. Read it at the start of each session for relevant architectural context before analyzing testability or writing tests.
 
-- Which modules are pure and which are impure
-- Common test patterns and utilities used in existing tests
-- Mocking strategies that work well with Bun's test runner
-- Schema validation testing patterns for Zod 4
-- Edge cases and boundary conditions specific to this domain
+**Contribute only when you've uncovered a design decision that is non-obvious from the code and that a future contributor would plausibly get wrong without the note.** The bar is high: routine observations (this module is pure, that one uses Bun's test runner) do not qualify.
 
-# Persistent Agent Memory
+Examples that warrant a memory entry:
 
-You have a persistent Persistent Agent Memory directory at `/Users/tristanbarrow/Projects/step-engine/.claude/agent-memory/bun-tester/`. Its contents persist across conversations.
+- An architectural constraint discovered through testing that has non-obvious consequences (e.g., "the repository intentionally does X, don't suggest changing it")
+- A design decision confirmed by the developer that future contributors should not relitigate
 
-As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if nothing is written yet, record what you learned.
-
-Guidelines:
-
-- `MEMORY.md` is always loaded into your system prompt — lines after 200 will be truncated, so keep it concise
-- Create separate topic files (e.g., `debugging.md`, `patterns.md`) for detailed notes and link to them from MEMORY.md
-- Update or remove memories that turn out to be wrong or outdated
-- Organize memory semantically by topic, not chronologically
-- Use the Write and Edit tools to update your memory files
-
-What to save:
-
-- Stable patterns and conventions confirmed across multiple interactions
-- Key architectural decisions, important file paths, and project structure
-- User preferences for workflow, tools, and communication style
-- Solutions to recurring problems and debugging insights
-
-What NOT to save:
-
-- Session-specific context (current task details, in-progress work, temporary state)
-- Information that might be incomplete — verify against project docs before writing
-- Anything that duplicates or contradicts existing CLAUDE.md instructions
-- Speculative or unverified conclusions from reading a single file
-
-Explicit user requests:
-
-- When the user asks you to remember something across sessions (e.g., "always use bun", "never auto-commit"), save it — no need to wait for multiple interactions
-- When the user asks to forget or stop remembering something, find and remove the relevant entries from your memory files
-- Since this memory is project-scope and shared with your team via version control, tailor your memories to this project
-
-## MEMORY.md
-
-Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+When the bar is met: add a detail file to `memory/` using the same frontmatter format as existing entries (`name`, `description`, `type`), then add a one-line pointer to `memory/MEMORY.md`.

@@ -14,38 +14,30 @@ Unit tests live alongside source files as `*.test.ts`. Run a single file with `b
 
 ## Architecture
 
-Server-side rendered web app: **Hono** + **Bun**, JSX templating, no client-side framework. Tracks engineering team capability assessments, experiments, and metrics.
+Server-side rendered web app: **Hono** + **Bun**, JSX templating, no client-side framework. Browses and filters engineering entities stored in SQLite.
 
 ### Data flow
 
 ```
-Filesystem (YAML/Markdown) → Loaders → Parsers (Zod validation) → Aggregations/Queries → Handlers → Page Components → HTML
+SQLite → Repository (entityRepository) → Queries → Handlers → Page Components → HTML
 ```
 
 ### Layer responsibilities
 
 - **`index.tsx`** — Entry point. Route definitions, middleware, error handler. Imperative shell — all I/O wiring here.
-- **`src/handlers/`** — Thin route handlers: load data, call prepare functions, render a Page component. No business logic.
-- **`src/loaders/`** — Read YAML/Markdown from `examples/` and `resources/`. Return parsed data.
-- **`src/parsers/`** — Zod-validated parsing. `yaml/` for team/experiment/metric schemas; `markdown/` for capability content and maturity assessments.
-- **`src/domain/`** — Pure business logic: queries, aggregations, errors, date parsing, and `prepare*Data.ts` transforms that structure data for rendering.
+- **`src/db/`** — SQLite client, migrations, and entity repository. All database access goes through here.
+- **`src/handlers/`** — Thin route handlers: query the repository, call domain functions, render a Page component. No business logic.
+- **`src/domain/`** — Pure business logic: entity queries and date parsing.
 - **`src/schemas/`** — Shared Zod schemas and inferred types.
 - **`src/frontend/Pages/`** — Full page components.
-- **`src/frontend/components/`** — Reusable view components (`Layout`, `Page`, `Sidebar`, tiles).
-- **`src/frontend/scripts/`** — Client-side vanilla JS (compiled to `public/`). Minimal interactivity and Chart.js visualizations.
+- **`src/frontend/components/`** — Reusable view components (`Layout`, `FilterBar`, `MetadataTable`).
+- **`src/frontend/scripts/`** — Client-side vanilla JS (compiled to `public/`). Filter panel interaction.
 
-**Layer dependency rule**: `src/domain/`, `src/loaders/`, and `src/handlers/` must never import from `src/frontend/`. Frontend scripts may import from `src/schemas/` and `src/domain/`.
+**Layer dependency rule**: `src/domain/`, `src/db/`, and `src/handlers/` must never import from `src/frontend/`. Frontend scripts may import from `src/schemas/` and `src/domain/`.
 
 ### Data sources
 
-Content lives in the filesystem, not a database:
-
-- `resources/capabilities/*.md` — Capability definitions
-- `resources/practices/*.md` — Practice definitions
-- `examples/teams/*.yaml` — Team definitions
-- `examples/experiments/{teamId}/*.yaml` — Experiment definitions
-- `examples/metrics/capability_scores/*.yaml` — Capability score metrics
-- `examples/metrics/team_specific/{teamId}/*.yaml` — Team-specific metrics
+Data is stored in a SQLite database (`step-engine.sqlite`) and accessed exclusively via `src/db/entityRepository.ts`.
 
 ## Hooks
 
@@ -62,12 +54,8 @@ Content lives in the filesystem, not a database:
 
 ## Shared utilities
 
-Never reimplement these inline — see [Shared Utilities](.claude/info/shared-utilities.md) for usage examples.
-
-- **ENOENT checks**: Use `isEnoentError(error)` from `src/loaders/isEnoentError.ts`.
-- **Date parsing**: Server-side → `parseDate()` from `src/domain/parseDate.ts`. Frontend scripts → `parseDataDate()` from `src/frontend/scripts/insights-date-utils.ts`.
+- **Date parsing**: Use `parseDate()` from `src/domain/parseDate.ts` for all server-side date parsing. Do not reimplement inline.
 
 ## Reference Files
 
 - [Zod Schema Conventions](.claude/info/zod-schema-conventions.md) — Type export rules, the passthrough/transform exception, and examples.
-- [Shared Utilities](.claude/info/shared-utilities.md) — ENOENT error checking and date parsing utilities with usage examples.
