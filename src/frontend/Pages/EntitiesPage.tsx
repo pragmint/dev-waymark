@@ -11,8 +11,9 @@ type EntitiesPageProps = {
   addingKey?: string;
 };
 
-// Keys already shown as fixed columns — don't add a duplicate column for these
-const FIXED_COLUMN_KEYS = new Set(['type', 'source']);
+// Keys that don't need an extra column: fixed metadata columns already shown, and entity_name
+// which is a pseudo-metadata key that maps to the Entity column
+const FIXED_COLUMN_KEYS = new Set(['type', 'source', 'entity_name']);
 
 export const EntitiesPage: FC<EntitiesPageProps> = ({
   entities,
