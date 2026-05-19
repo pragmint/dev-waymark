@@ -15,7 +15,7 @@ await sourceAdapter.validateConnection();
 initSourceAdapter(sourceAdapter);
 
 const appStateRepo = createAppStateRepo(config.appDb);
-await appStateRepo.initialize();
+await appStateRepo.migrate();
 initAppStateRepo(appStateRepo);
 
 const app = new Hono();

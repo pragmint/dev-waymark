@@ -34,7 +34,7 @@ export class PostgresAppStateRepository implements AppStateRepository {
     this.pool = new Pool({ connectionString });
   }
 
-  async initialize(): Promise<void> {
+  async migrate(): Promise<void> {
     await runMigrations(this.pool);
   }
 

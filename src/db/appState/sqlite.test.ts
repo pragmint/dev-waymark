@@ -2,9 +2,9 @@ import { describe, expect, it, beforeEach } from 'bun:test';
 import { SqliteAppStateRepository } from './sqlite';
 
 describe('SqliteAppStateRepository — migration', () => {
-  it('initialize creates _app_migrations tracking table', async () => {
+  it('migrate creates _app_migrations tracking table', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
+    await repo.migrate();
     const row = repo
       .getDb()
       .query("SELECT name FROM sqlite_master WHERE type='table' AND name='_app_migrations'")
@@ -13,9 +13,9 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.close();
   });
 
-  it('initialize applies the datasets migration', async () => {
+  it('migrate applies the datasets migration', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
+    await repo.migrate();
     const db = repo.getDb();
     const tables = db
       .query(
@@ -26,18 +26,18 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.close();
   });
 
-  it('initialize records applied migrations', async () => {
+  it('migrate records applied migrations', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
+    await repo.migrate();
     const rows = repo.getDb().query<{ name: string }, []>('SELECT name FROM _app_migrations').all();
     expect(rows.map(r => r.name)).toContain('migration-20260518T000000Z');
     await repo.close();
   });
 
-  it('initialize is idempotent', async () => {
+  it('migrate is idempotent', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
-    await repo.initialize();
+    await repo.migrate();
+    await repo.migrate();
     const rows = repo.getDb().query('SELECT * FROM _app_migrations').all();
     expect(rows).toHaveLength(1);
     await repo.close();
@@ -49,7 +49,7 @@ describe('SqliteAppStateRepository — datasets', () => {
 
   beforeEach(async () => {
     repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
+    await repo.migrate();
   });
 
   it('saveDataset returns a numeric id', async () => {
@@ -134,7 +134,7 @@ describe('SqliteAppStateRepository — datasets', () => {
 describe('app state DB independence from source DB', () => {
   it('app state DB has no entity/source tables', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
-    await repo.initialize();
+    await repo.migrate();
     const tables = repo
       .getDb()
       .query(

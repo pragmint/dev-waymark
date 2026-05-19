@@ -41,7 +41,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
     this.db.query('PRAGMA foreign_keys = ON').run();
   }
 
-  async initialize(): Promise<void> {
+  async migrate(): Promise<void> {
     runMigrations(this.db);
   }
 

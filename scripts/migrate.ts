@@ -5,5 +5,5 @@ import { createAppStateRepo } from '../src/db/appState/factory';
 
 const config = loadConfig();
 const repo = createAppStateRepo(config.appDb);
-await repo.initialize();
+await repo.migrate();
 await repo.close();

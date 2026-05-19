@@ -9,10 +9,11 @@ import type { MetaFilter } from '../../schemas/entity';
  */
 export interface AppStateRepository {
   /**
-   * Run any pending app-state schema migrations and prepare the repository
-   * for use. Must be called once at startup before any other method.
+   * Run any pending app-state schema migrations. It's good practice to run
+   * at startup before any other method to ensure the db is in sync with
+   * the expectations of the codebase.
    */
-  initialize(): Promise<void>;
+  migrate(): Promise<void>;
 
   /**
    * Roll back the most recently applied migration. No-op if no migrations
