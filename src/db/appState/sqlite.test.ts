@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import { SqliteAppStateRepository } from './sqlite';
+import { migrations } from './migrations/index';
 
 describe('SqliteAppStateRepository — migration', () => {
   it('migrate creates _app_migrations tracking table', async () => {
@@ -39,7 +40,7 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.migrate();
     await repo.migrate();
     const rows = repo.getDb().query('SELECT * FROM _app_migrations').all();
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(migrations.length);
     await repo.close();
   });
 });

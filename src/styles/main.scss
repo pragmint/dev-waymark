@@ -85,6 +85,13 @@ body {
   }
 }
 
+.page-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .count {
   color: var(--color-muted);
   font-size: 13px;
@@ -437,6 +444,39 @@ body {
 .meta-key {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+// ── Save dataset panel ─────────────────────────────────────────────────────────
+
+.save-dataset-panel {
+  margin-bottom: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+
+  form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--color-bg);
+  }
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  padding: 0 10px;
+  height: 32px;
+  font-size: 13px;
+  color: var(--color-muted);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--color-text);
+  }
 }
 
 // ── Empty states ──────────────────────────────────────────────────────────────

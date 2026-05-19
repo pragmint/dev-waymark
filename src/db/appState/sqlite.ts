@@ -22,7 +22,12 @@ function runMigrations(db: Database): void {
       .get(migration.name);
 
     if (!already) {
-      runSql(db, migration.sqlite.up);
+      const up = migration.sqlite.up;
+      if (typeof up === 'function') {
+        up(db);
+      } else {
+        runSql(db, up);
+      }
       db.query('INSERT INTO _app_migrations (name, applied_at) VALUES (?, ?)').run(
         migration.name,
         new Date().toISOString()

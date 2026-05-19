@@ -32,6 +32,33 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
         <span class="count">
           {entities.length} result{entities.length !== 1 ? 's' : ''}
         </span>
+        <div class="page-header-actions">
+          <button type="button" id="save-dataset-btn" class="filter-chip">
+            Save dataset
+          </button>
+        </div>
+      </div>
+
+      <div id="save-dataset-panel" class="save-dataset-panel" style="display:none">
+        <form method="post" action="/datasets" class="save-dataset-form">
+          {activeFilters.map(f => (
+            <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
+          ))}
+          <span class="filter-widget-label">Name</span>
+          <input
+            type="text"
+            name="name"
+            class="filter-input"
+            placeholder="Dataset name…"
+            required
+          />
+          <button type="submit" class="filter-btn">
+            Save
+          </button>
+          <button type="button" id="save-dataset-cancel" class="btn-text">
+            Cancel
+          </button>
+        </form>
       </div>
 
       <FilterBar

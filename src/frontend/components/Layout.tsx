@@ -17,6 +17,9 @@ export const Layout: FC<{ title: string; children?: Child }> = ({ title, childre
           <a href="/entities" class="nav-link">
             Entities
           </a>
+          <a href="/datasets" class="nav-link">
+            Saved Datasets
+          </a>
         </nav>
       </header>
       <main class="main">{children}</main>

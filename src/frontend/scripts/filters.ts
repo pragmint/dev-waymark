@@ -115,4 +115,21 @@ document.addEventListener('DOMContentLoaded', () => {
       addSelect.value = '';
     }
   });
+
+  // Save dataset panel toggle
+  const saveBtn = document.getElementById('save-dataset-btn');
+  const savePanel = document.getElementById('save-dataset-panel');
+  const saveCancel = document.getElementById('save-dataset-cancel');
+
+  if (saveBtn && savePanel) {
+    saveBtn.addEventListener('click', () => {
+      savePanel.style.display = '';
+      savePanel.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
+    });
+  }
+  if (saveCancel && savePanel) {
+    saveCancel.addEventListener('click', () => {
+      savePanel.style.display = 'none';
+    });
+  }
 });
