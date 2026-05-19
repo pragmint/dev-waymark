@@ -1,7 +1,17 @@
-import { ParquetWriter, ParquetSchema } from '@dsnp/parquetjs';
-import { mkdirSync } from 'node:fs';
+import type { SourceDataAdapter } from './adapter';
 
-mkdirSync(new URL('.', import.meta.url).pathname, { recursive: true });
+/**
+ * Golden dataset — seeded automatically into in-memory SQLite source databases.
+ *
+ * Contains representative engineering data covering three entity types:
+ *   - Jira tickets (story, bug, task) with lead-time breakdowns
+ *   - GitHub PRs (feature, chore, release) with review metrics
+ *   - WIP snapshots for board-trend analysis
+ *
+ * This data is the sole replacement for the old Parquet fixture pipeline.
+ * External source databases are assumed to be pre-populated; this seed only
+ * runs when no source database is configured (the in-memory default).
+ */
 
 type EntityRow = { id: number; name: string };
 type MetaRow = { entity_id: number; key: string; value: string | null; value_type: string };
@@ -16,27 +26,17 @@ function d(entity_id: number, key: string, value: string | null): MetaRow {
   return { entity_id, key, value, value_type: 'date' };
 }
 
-// ---------------------------------------------------------------------------
-// Golden dataset
-//
-// 5 Jira tickets: a mix of types, priorities, and lead times — two of which
-//   have linked GitHub PRs (ENG-3349, ENG-3411).
-// 4 GitHub PRs: MERGED, with varying review times; two linked to tickets,
-//   one version-bump chore (no ticket), one release PR.
-// 3 WIP snapshots: first, mid, and latest board state for trend analysis.
-// ---------------------------------------------------------------------------
+const entities: EntityRow[] = [];
+const metadata: MetaRow[] = [];
 
-const entityRows: EntityRow[] = [];
-const metadataRows: MetaRow[] = [];
-
-function addEntity(entity: EntityRow, meta: MetaRow[]): void {
-  entityRows.push(entity);
-  metadataRows.push(...meta);
+function add(entity: EntityRow, meta: MetaRow[]): void {
+  entities.push(entity);
+  metadata.push(...meta);
 }
 
-// --- Jira tickets ---
+// ── Jira tickets ─────────────────────────────────────────────────────────────
 
-addEntity({ id: 1, name: 'jira:ENG-2' }, [
+add({ id: 1, name: 'jira:ENG-2' }, [
   s(1, 'source', 'jira'),
   s(1, 'type', 'jira_ticket'),
   s(1, 'ticket_type', 'Story'),
@@ -63,7 +63,7 @@ addEntity({ id: 1, name: 'jira:ENG-2' }, [
   n(1, 'release_seconds', '0'),
 ]);
 
-addEntity({ id: 2, name: 'jira:ENG-7' }, [
+add({ id: 2, name: 'jira:ENG-7' }, [
   s(2, 'source', 'jira'),
   s(2, 'type', 'jira_ticket'),
   s(2, 'ticket_type', 'Story'),
@@ -90,8 +90,8 @@ addEntity({ id: 2, name: 'jira:ENG-7' }, [
   n(2, 'release_seconds', '0'),
 ]);
 
-// Bug with Highest priority and very long lead time — good edge case for outlier detection
-addEntity({ id: 3, name: 'jira:OPS-15' }, [
+// Bug with Highest priority and long lead time — good edge case for outlier detection
+add({ id: 3, name: 'jira:OPS-15' }, [
   s(3, 'source', 'jira'),
   s(3, 'type', 'jira_ticket'),
   s(3, 'ticket_type', 'Bug'),
@@ -123,8 +123,8 @@ addEntity({ id: 3, name: 'jira:OPS-15' }, [
   n(3, 'release_seconds', '8284377'),
 ]);
 
-// Story with a linked PR (github:1029)
-addEntity({ id: 4, name: 'jira:ENG-3349' }, [
+// Story with linked PR github:1029
+add({ id: 4, name: 'jira:ENG-3349' }, [
   s(4, 'source', 'jira'),
   s(4, 'type', 'jira_ticket'),
   s(4, 'ticket_type', 'Story'),
@@ -155,8 +155,8 @@ addEntity({ id: 4, name: 'jira:ENG-3349' }, [
   n(4, 'release_seconds', '118138'),
 ]);
 
-// Task with a linked PR (github:1026) — fast turnaround example
-addEntity({ id: 5, name: 'jira:ENG-3411' }, [
+// Task with linked PR github:1026 — fast turnaround example
+add({ id: 5, name: 'jira:ENG-3411' }, [
   s(5, 'source', 'jira'),
   s(5, 'type', 'jira_ticket'),
   s(5, 'ticket_type', 'Task'),
@@ -188,10 +188,10 @@ addEntity({ id: 5, name: 'jira:ENG-3411' }, [
   n(5, 'release_seconds', '95941'),
 ]);
 
-// --- GitHub PRs ---
+// ── GitHub PRs ───────────────────────────────────────────────────────────────
 
 // Feature PR linked to ENG-3349
-addEntity({ id: 6, name: 'github:1029' }, [
+add({ id: 6, name: 'github:1029' }, [
   s(6, 'source', 'github'),
   s(6, 'type', 'github_pr'),
   s(6, 'repo', 'acme-corp/web-platform'),
@@ -223,8 +223,8 @@ addEntity({ id: 6, name: 'github:1029' }, [
   n(6, 'last_review_to_resolution_seconds', '1231400'),
 ]);
 
-// Chore PR — no linked Jira ticket, tiny diff, very fast review
-addEntity({ id: 7, name: 'github:1028' }, [
+// Chore PR — no linked ticket, tiny diff, very fast review
+add({ id: 7, name: 'github:1028' }, [
   s(7, 'source', 'github'),
   s(7, 'type', 'github_pr'),
   s(7, 'repo', 'acme-corp/web-platform'),
@@ -258,7 +258,7 @@ addEntity({ id: 7, name: 'github:1028' }, [
 ]);
 
 // Release PR — no ticket, large diff (accumulated sprint work)
-addEntity({ id: 8, name: 'github:1027' }, [
+add({ id: 8, name: 'github:1027' }, [
   s(8, 'source', 'github'),
   s(8, 'type', 'github_pr'),
   s(8, 'repo', 'acme-corp/web-platform'),
@@ -292,7 +292,7 @@ addEntity({ id: 8, name: 'github:1027' }, [
 ]);
 
 // Data update PR linked to ENG-3411 — fast cycle time from commit to merge
-addEntity({ id: 9, name: 'github:1026' }, [
+add({ id: 9, name: 'github:1026' }, [
   s(9, 'source', 'github'),
   s(9, 'type', 'github_pr'),
   s(9, 'repo', 'acme-corp/web-platform'),
@@ -325,9 +325,9 @@ addEntity({ id: 9, name: 'github:1026' }, [
   n(9, 'merge_to_main_seconds', '79144'),
 ]);
 
-// --- WIP snapshots (first, mid, latest) ---
+// ── WIP snapshots ─────────────────────────────────────────────────────────────
 
-addEntity({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z' }, [
+add({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z' }, [
   s(10, 'source', 'jira'),
   s(10, 'type', 'wip_snapshot'),
   n(10, 'in_progress', '21'),
@@ -354,7 +354,7 @@ addEntity({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z' }, [
   n(10, 'assignee_size', '10'),
 ]);
 
-addEntity({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z' }, [
+add({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z' }, [
   s(11, 'source', 'jira'),
   s(11, 'type', 'wip_snapshot'),
   n(11, 'in_progress', '8'),
@@ -381,7 +381,7 @@ addEntity({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z' }, [
   n(11, 'assignee_size', '10'),
 ]);
 
-addEntity({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z' }, [
+add({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z' }, [
   s(12, 'source', 'jira'),
   s(12, 'type', 'wip_snapshot'),
   n(12, 'in_progress', '9'),
@@ -412,32 +412,17 @@ addEntity({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z' }, [
   n(12, 'assignee_size', '10'),
 ]);
 
-// --- Write Parquet files ---
-
-const entitySchema = new ParquetSchema({
-  id: { type: 'INT32' },
-  name: { type: 'UTF8' },
-});
-
-const metadataSchema = new ParquetSchema({
-  entity_id: { type: 'INT32' },
-  key: { type: 'UTF8' },
-  value: { type: 'UTF8', optional: true },
-  value_type: { type: 'UTF8' },
-});
-
-const dir = new URL('.', import.meta.url).pathname;
-
-const entityWriter = await ParquetWriter.openFile(entitySchema, `${dir}/entities.parquet`);
-for (const row of entityRows) {
-  await entityWriter.appendRow(row);
+export async function seedGoldenData(adapter: SourceDataAdapter): Promise<void> {
+  for (const e of entities) {
+    await adapter.execute(
+      'INSERT INTO entities (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name',
+      [e.id, e.name]
+    );
+  }
+  for (const m of metadata) {
+    await adapter.execute(
+      'INSERT INTO entity_metadata (entity_id, key, value, value_type) VALUES (?, ?, ?, ?) ON CONFLICT(entity_id, key) DO UPDATE SET value = excluded.value, value_type = excluded.value_type',
+      [m.entity_id, m.key, m.value, m.value_type]
+    );
+  }
 }
-await entityWriter.close();
-console.log(`Wrote ${entityRows.length} rows → fixtures/entities.parquet`);
-
-const metaWriter = await ParquetWriter.openFile(metadataSchema, `${dir}/entity_metadata.parquet`);
-for (const row of metadataRows) {
-  await metaWriter.appendRow(row);
-}
-await metaWriter.close();
-console.log(`Wrote ${metadataRows.length} rows → fixtures/entity_metadata.parquet`);

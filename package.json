@@ -14,21 +14,19 @@
     "check:commit": "prettier --check . && eslint . && tsc --noEmit",
     "migrate": "bun scripts/migrate.ts",
     "rollback": "bun scripts/rollback.ts",
-    "seed": "bun pipelines/seed.ts",
-    "generate": "bun pipelines/fixtures/generate.ts",
     "test": "bun test",
     "test:e2e": "PLAYWRIGHT_HTML_OPEN=never bunx playwright test",
     "install-hooks": "bun scripts/install-hooks.ts"
   },
   "dependencies": {
-    "@dsnp/parquetjs": "^1.7.0",
-    "glob": "^11.0.0",
     "hono": "^4.0.0",
+    "pg": "^8.21.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@playwright/test": "^1.45.0",
+    "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "bun-types": "^1.3.14",

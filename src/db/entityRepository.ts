@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite';
+import type { SourceDataAdapter, SqlParam } from './source/adapter';
 import { EntitySchema, MetadataSchema, MetadataValueTypeSchema } from '../schemas/entity';
 import type {
   Entity,
@@ -8,100 +8,76 @@ import type {
   AvailableFilter,
 } from '../schemas/entity';
 
-type WhereResult = { where: string; params: Record<string, string | number> };
-type BuildState = { conditions: string[]; params: Record<string, string | number>; i: number };
+type WhereResult = { where: string; params: SqlParam[] };
+type BuildState = { conditions: string[]; params: SqlParam[] };
 
 const ENTITY_NAME_KEY = 'entity_name';
 
 function addEntityNameEqConditions(state: BuildState, values: string[]) {
   const { conditions, params } = state;
   if (values.length === 1) {
-    const vi = `$v${state.i}`;
-    params[vi] = values[0];
-    conditions.push(`e.name = ${vi}`);
-    state.i += 1;
+    params.push(values[0]);
+    conditions.push(`e.name = ?`);
   } else {
-    const placeholders = values.map((_, j) => `$v${state.i + j}`).join(', ');
-    values.forEach((v, j) => {
-      params[`$v${state.i + j}`] = v;
-    });
+    const placeholders = values.map(() => '?').join(', ');
+    values.forEach(v => params.push(v));
     conditions.push(`e.name IN (${placeholders})`);
-    state.i += values.length;
   }
 }
 
 function addEqConditions(state: BuildState, key: string, values: string[]) {
   const { conditions, params } = state;
-  const ki = `$k${state.i}`;
-  params[ki] = key;
   if (values.length === 1) {
-    const vi = `$v${state.i}`;
-    params[vi] = values[0];
+    params.push(key, values[0]);
     conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ${ki} AND value = ${vi})`
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value = ?)`
     );
-    state.i += 2;
   } else {
-    const placeholders = values.map((_, j) => `$v${state.i + j}`).join(', ');
-    values.forEach((v, j) => {
-      params[`$v${state.i + j}`] = v;
-    });
+    const placeholders = values.map(() => '?').join(', ');
+    params.push(key);
+    values.forEach(v => params.push(v));
     conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ${ki} AND value IN (${placeholders}))`
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value IN (${placeholders}))`
     );
-    state.i += 1 + values.length;
   }
 }
 
 function addRangeOrContainsCondition(state: BuildState, f: MetaFilter) {
   const { conditions, params } = state;
-  const vi = `$v${state.i}`;
 
   if (f.key === ENTITY_NAME_KEY) {
     if (f.op === 'contains') {
-      params[vi] = `%${f.value}%`;
-      conditions.push(`e.name LIKE ${vi}`);
+      params.push(`%${f.value}%`);
+      conditions.push(`e.name LIKE ?`);
     }
     // gte/lte on entity_name: not meaningful, skip
-    state.i += 2;
     return;
   }
 
-  const ki = `$k${state.i}`;
-
   if (f.op === 'contains') {
+    params.push(f.key, `%${f.value}%`);
     conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ${ki} AND value LIKE ${vi})`
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value LIKE ?)`
     );
-    params[ki] = f.key;
-    params[vi] = `%${f.value}%`;
   } else if (f.op === 'gte') {
-    const vi2 = `$v${state.i}b`;
+    params.push(f.key, f.value, f.value);
     conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ${ki} AND ` +
-        `(value_type = 'number' AND CAST(value AS REAL) >= CAST(${vi} AS REAL) OR value_type != 'number' AND value >= ${vi2}))`
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
+        `(value_type = 'number' AND CAST(value AS REAL) >= CAST(? AS REAL) OR value_type != 'number' AND value >= ?))`
     );
-    params[ki] = f.key;
-    params[vi] = f.value;
-    params[vi2] = f.value;
   } else if (f.op === 'lte') {
-    const vi2 = `$v${state.i}b`;
+    params.push(f.key, f.value, f.value);
     conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ${ki} AND ` +
-        `(value_type = 'number' AND CAST(value AS REAL) <= CAST(${vi} AS REAL) OR value_type != 'number' AND value <= ${vi2}))`
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
+        `(value_type = 'number' AND CAST(value AS REAL) <= CAST(? AS REAL) OR value_type != 'number' AND value <= ?))`
     );
-    params[ki] = f.key;
-    params[vi] = f.value;
-    params[vi2] = f.value;
   }
-
-  state.i += 2;
 }
 
 // Builds the SQL WHERE clause for all non-regex filters.
 // `re` filters are handled in application code after the query.
 function buildWhereClause(metaFilters: MetaFilter[]): WhereResult {
-  const state: BuildState = { conditions: [], params: {}, i: 0 };
+  const state: BuildState = { conditions: [], params: [] };
 
   // Group eq filters by key so multiple selections become a single IN clause (OR within key).
   const eqByKey = new Map<string, string[]>();
@@ -154,13 +130,17 @@ function applyReFilters(
   );
 }
 
-function attachMetadata(db: Database, entities: Entity[]): EntityWithMetadata[] {
+async function attachMetadata(
+  adapter: SourceDataAdapter,
+  entities: Entity[]
+): Promise<EntityWithMetadata[]> {
   if (entities.length === 0) return [];
 
   const placeholders = entities.map(() => '?').join(',');
-  const metaRows = db
-    .query(`SELECT * FROM entity_metadata WHERE entity_id IN (${placeholders}) ORDER BY key`)
-    .all(...entities.map(e => e.id)) as unknown[];
+  const metaRows = await adapter.query(
+    `SELECT * FROM entity_metadata WHERE entity_id IN (${placeholders}) ORDER BY key`,
+    entities.map(e => e.id)
+  );
   const allMetadata = metaRows.map(m => MetadataSchema.parse(m));
 
   const metaByEntityId = new Map<number, typeof allMetadata>();
@@ -177,47 +157,48 @@ function attachMetadata(db: Database, entities: Entity[]): EntityWithMetadata[] 
 
 export type EntityRepository = ReturnType<typeof createEntityRepository>;
 
-export function createEntityRepository(db: Database) {
+export function createEntityRepository(adapter: SourceDataAdapter) {
   return {
-    list(metaFilters: MetaFilter[]): EntityWithMetadata[] {
+    async list(metaFilters: MetaFilter[]): Promise<EntityWithMetadata[]> {
       const { where, params } = buildWhereClause(metaFilters);
-      const rows = db
-        .query(`SELECT * FROM entities e ${where} ORDER BY e.id DESC`)
-        .all(params) as unknown[];
+      const rows = await adapter.query(
+        `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
+        params
+      );
       const entities = rows.map(row => EntitySchema.parse(row));
-      const withMeta = attachMetadata(db, entities);
+      const withMeta = await attachMetadata(adapter, entities);
       return applyReFilters(withMeta, metaFilters);
     },
 
-    get(id: number): EntityWithMetadata | null {
-      const row = db.query('SELECT * FROM entities WHERE id = ?').get(id) as unknown;
-      if (!row) return null;
+    async get(id: number): Promise<EntityWithMetadata | null> {
+      const rows = await adapter.query('SELECT * FROM entities WHERE id = ?', [id]);
+      if (rows.length === 0) return null;
 
-      const metaRows = db
-        .query('SELECT * FROM entity_metadata WHERE entity_id = ? ORDER BY key')
-        .all(id) as unknown[];
+      const metaRows = await adapter.query(
+        'SELECT * FROM entity_metadata WHERE entity_id = ? ORDER BY key',
+        [id]
+      );
 
       return {
-        ...EntitySchema.parse(row),
+        ...EntitySchema.parse(rows[0]),
         metadata: metaRows.map(m => MetadataSchema.parse(m)),
       };
     },
 
     // Returns available filter metadata keys for the given set of matched entity IDs.
     // Accepts the already-filtered entity list so reactive narrowing is always exact.
-    getAvailableFilters(entityIds: number[]): AvailableFilter[] {
+    async getAvailableFilters(entityIds: number[]): Promise<AvailableFilter[]> {
       if (entityIds.length === 0) return [];
 
       const placeholders = entityIds.map(() => '?').join(', ');
-      const rows = db
-        .query(
-          `SELECT em.key, em.value_type, em.value
-           FROM entity_metadata em
-           WHERE em.entity_id IN (${placeholders})
-           AND em.value IS NOT NULL
-           ORDER BY em.key, em.value`
-        )
-        .all(...entityIds) as { key: string; value_type: string; value: string }[];
+      const rows = await adapter.query<{ key: string; value_type: string; value: string }>(
+        `SELECT em.key, em.value_type, em.value
+         FROM entity_metadata em
+         WHERE em.entity_id IN (${placeholders})
+         AND em.value IS NOT NULL
+         ORDER BY em.key, em.value`,
+        entityIds
+      );
 
       const byKey = new Map<string, { value_type: string; values: Set<string> }>();
       for (const row of rows) {
@@ -239,22 +220,24 @@ export function createEntityRepository(db: Database) {
       return [{ key: ENTITY_NAME_KEY, value_type: 'string' as const }, ...metaFilters];
     },
 
-    upsert(entity: Entity, metadata: Metadata[]): void {
-      db.query(
+    async upsert(entity: Entity, metadata: Metadata[]): Promise<void> {
+      await adapter.execute(
         `INSERT INTO entities (id, name)
          VALUES (?, ?)
          ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name`
-      ).run(entity.id, entity.name);
+           name = excluded.name`,
+        [entity.id, entity.name]
+      );
 
       for (const m of metadata) {
-        db.query(
+        await adapter.execute(
           `INSERT INTO entity_metadata (entity_id, key, value, value_type)
            VALUES (?, ?, ?, ?)
            ON CONFLICT(entity_id, key) DO UPDATE SET
              value = excluded.value,
-             value_type = excluded.value_type`
-        ).run(m.entity_id, m.key, m.value ?? null, m.value_type);
+             value_type = excluded.value_type`,
+          [m.entity_id, m.key, m.value ?? null, m.value_type]
+        );
       }
     },
   };

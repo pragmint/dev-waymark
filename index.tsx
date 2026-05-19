@@ -1,13 +1,24 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
-import { getDb } from './src/db/client';
-import { runMigrations } from './src/db/migrate';
+import { loadConfig } from './src/config';
+import { createSourceAdapter } from './src/db/source/factory';
+import { initSourceAdapter } from './src/db/source/index';
+import { createAppStateRepo } from './src/db/appState/factory';
+import { initAppStateRepo } from './src/db/appState/index';
 import { entitiesHandler } from './src/handlers/entitiesHandler';
 import { entityDetailHandler } from './src/handlers/entityDetailHandler';
 
-const app = new Hono();
+const config = loadConfig();
 
-runMigrations(getDb());
+const sourceAdapter = await createSourceAdapter(config.sourceDb);
+await sourceAdapter.validateConnection();
+initSourceAdapter(sourceAdapter);
+
+const appStateRepo = createAppStateRepo(config.appDb);
+await appStateRepo.initialize();
+initAppStateRepo(appStateRepo);
+
+const app = new Hono();
 
 app.use('/*', serveStatic({ root: './public' }));
 
@@ -16,6 +27,6 @@ app.get('/entities', entitiesHandler);
 app.get('/entities/:id', entityDetailHandler);
 
 export default {
-  port: parseInt(process.env.PORT ?? '3000'),
+  port: config.port,
   fetch: app.fetch,
 };

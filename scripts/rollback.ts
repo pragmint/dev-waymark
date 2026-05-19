@@ -1,5 +1,10 @@
-import { getDb } from '../src/db/client';
-import { rollbackMigration } from '../src/db/migrate';
+// Roll back the most recently applied app-state migration.
+// Source database schema is never managed by Step Engine — see src/db/source/schema.ts.
+import { loadConfig } from '../src/config';
+import { createAppStateRepo } from '../src/db/appState/factory';
 
-const db = getDb();
-rollbackMigration(db);
+const config = loadConfig();
+const repo = createAppStateRepo(config.appDb);
+await repo.initialize();
+await repo.rollbackLast();
+await repo.close();

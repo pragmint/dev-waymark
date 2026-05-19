@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-localhost:3000/
-mirror/
-
 # Build outputs
 dist/
 build/
@@ -34,9 +31,6 @@ yarn-error.log*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-
-# Generated Parquet fixtures (run `bun run pipelines/fixtures/generate.ts` to recreate)
-pipelines/fixtures/*.parquet
 
 # Claude session memory (local to this machine)
 memory/

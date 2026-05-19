@@ -6,7 +6,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:4080',
   },
   projects: [
     {
@@ -15,8 +15,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'bun index.tsx',
-    port: 3000,
-    reuseExistingServer: !process.env.CI,
+    command: 'PORT=4080 bun index.tsx',
+    port: 4080,
+    reuseExistingServer: false,
   },
 });

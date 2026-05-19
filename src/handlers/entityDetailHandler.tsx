@@ -1,14 +1,12 @@
 import type { Context } from 'hono';
-import { getDb } from '../db/client';
-import { createEntityRepository } from '../db/entityRepository';
+import { getEntityRepo } from '../db/source/index';
 import { EntityDetailPage } from '../frontend/Pages/EntityDetailPage';
 
 export async function entityDetailHandler(c: Context) {
   const idParam = c.req.param('id') ?? '';
   const id = parseInt(idParam, 10);
-  const db = getDb();
-  const repo = createEntityRepository(db);
-  const entity = isNaN(id) ? null : repo.get(id);
+  const repo = getEntityRepo();
+  const entity = isNaN(id) ? null : await repo.get(id);
 
   if (!entity) {
     return c.html(
