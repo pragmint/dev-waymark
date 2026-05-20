@@ -1,8 +1,14 @@
 import { Pool } from 'pg';
 import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
+import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
 import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
 import type { MetaFilter } from '../../schemas/entity';
+import type {
+  Visualization,
+  VisualizationConfig,
+  VisualizationSummary,
+} from '../../schemas/visualization';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
 
@@ -104,6 +110,90 @@ export class PostgresAppStateRepository implements AppStateRepository {
 
   async deleteDataset(id: number): Promise<void> {
     await this.pool.query('DELETE FROM datasets WHERE id = $1', [id]);
+  }
+
+  // ── Visualizations ────────────────────────────────────────────────────────
+
+  async saveVisualization(
+    name: string,
+    description: string | null,
+    datasetId: number,
+    config: VisualizationConfig
+  ): Promise<number> {
+    const now = new Date().toISOString();
+    const result = await this.pool.query<{ id: number }>(
+      'INSERT INTO visualizations (name, description, dataset_id, config, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [name, description, datasetId, JSON.stringify(config), now, now]
+    );
+    return result.rows[0].id;
+  }
+
+  async getVisualization(id: number): Promise<Visualization | null> {
+    const result = await this.pool.query<{
+      id: number;
+      name: string;
+      description: string | null;
+      dataset_id: number;
+      config: VisualizationConfig;
+      created_at: string;
+      updated_at: string;
+    }>(
+      'SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations WHERE id = $1',
+      [id]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return VisualizationSchema.parse({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      datasetId: row.dataset_id,
+      config: row.config,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  async listVisualizations(): Promise<VisualizationSummary[]> {
+    const result = await this.pool.query<{
+      id: number;
+      name: string;
+      description: string | null;
+      dataset_id: number;
+      config: VisualizationConfig;
+      created_at: string;
+      updated_at: string;
+    }>(
+      'SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations ORDER BY id'
+    );
+    return result.rows.map(r =>
+      VisualizationSummarySchema.parse({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        datasetId: r.dataset_id,
+        chartType: r.config.chartType,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })
+    );
+  }
+
+  async updateVisualization(
+    id: number,
+    name: string,
+    description: string | null,
+    config: VisualizationConfig
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await this.pool.query(
+      'UPDATE visualizations SET name = $1, description = $2, config = $3, updated_at = $4 WHERE id = $5',
+      [name, description, JSON.stringify(config), now, id]
+    );
+  }
+
+  async deleteVisualization(id: number): Promise<void> {
+    await this.pool.query('DELETE FROM visualizations WHERE id = $1', [id]);
   }
 
   async close(): Promise<void> {

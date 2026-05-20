@@ -1,5 +1,10 @@
 import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
 import type { MetaFilter } from '../../schemas/entity';
+import type {
+  Visualization,
+  VisualizationConfig,
+  VisualizationSummary,
+} from '../../schemas/visualization';
 
 /**
  * AppStateRepository — interface for Step Engine-owned application state.
@@ -34,6 +39,33 @@ export interface AppStateRepository {
 
   /** Delete a dataset and its filters. No-op if the id does not exist. */
   deleteDataset(id: number): Promise<void>;
+
+  // ── Visualizations ────────────────────────────────────────────────────────
+
+  /** Create a new visualization. Returns the new visualization's id. */
+  saveVisualization(
+    name: string,
+    description: string | null,
+    datasetId: number,
+    config: VisualizationConfig
+  ): Promise<number>;
+
+  /** Fetch a visualization by id. Returns null if not found. */
+  getVisualization(id: number): Promise<Visualization | null>;
+
+  /** List all visualizations (summary only, config excluded). */
+  listVisualizations(): Promise<VisualizationSummary[]>;
+
+  /** Update an existing visualization's name, description, and config. */
+  updateVisualization(
+    id: number,
+    name: string,
+    description: string | null,
+    config: VisualizationConfig
+  ): Promise<void>;
+
+  /** Delete a visualization. No-op if the id does not exist. */
+  deleteVisualization(id: number): Promise<void>;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 

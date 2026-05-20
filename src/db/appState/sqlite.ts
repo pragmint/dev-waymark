@@ -2,8 +2,14 @@ import { Database } from 'bun:sqlite';
 import { runSql } from '../sqliteUtils';
 import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
+import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
 import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
 import type { MetaFilter } from '../../schemas/entity';
+import type {
+  Visualization,
+  VisualizationConfig,
+  VisualizationSummary,
+} from '../../schemas/visualization';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
 
@@ -114,6 +120,100 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async deleteDataset(id: number): Promise<void> {
     this.db.query('DELETE FROM datasets WHERE id = ?').run(id);
+  }
+
+  // ── Visualizations ────────────────────────────────────────────────────────
+
+  async saveVisualization(
+    name: string,
+    description: string | null,
+    datasetId: number,
+    config: VisualizationConfig
+  ): Promise<number> {
+    const now = new Date().toISOString();
+    const result = this.db
+      .query<
+        { id: number },
+        [string, string | null, number, string, string, string]
+      >('INSERT INTO visualizations (name, description, dataset_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+      .get(name, description, datasetId, JSON.stringify(config), now, now);
+    return result!.id;
+  }
+
+  async getVisualization(id: number): Promise<Visualization | null> {
+    type Row = {
+      id: number;
+      name: string;
+      description: string | null;
+      dataset_id: number;
+      config: string;
+      created_at: string;
+      updated_at: string;
+    };
+    const row = this.db
+      .query<
+        Row,
+        [number]
+      >('SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations WHERE id = ?')
+      .get(id);
+    if (!row) return null;
+    return VisualizationSchema.parse({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      datasetId: row.dataset_id,
+      config: JSON.parse(row.config),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  async listVisualizations(): Promise<VisualizationSummary[]> {
+    type Row = {
+      id: number;
+      name: string;
+      description: string | null;
+      dataset_id: number;
+      config: string;
+      created_at: string;
+      updated_at: string;
+    };
+    const rows = this.db
+      .query<
+        Row,
+        []
+      >('SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations ORDER BY id')
+      .all();
+    return rows.map(r => {
+      const config = JSON.parse(r.config) as VisualizationConfig;
+      return VisualizationSummarySchema.parse({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        datasetId: r.dataset_id,
+        chartType: config.chartType,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      });
+    });
+  }
+
+  async updateVisualization(
+    id: number,
+    name: string,
+    description: string | null,
+    config: VisualizationConfig
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    this.db
+      .query(
+        'UPDATE visualizations SET name = ?, description = ?, config = ?, updated_at = ? WHERE id = ?'
+      )
+      .run(name, description, JSON.stringify(config), now, id);
+  }
+
+  async deleteVisualization(id: number): Promise<void> {
+    this.db.query('DELETE FROM visualizations WHERE id = ?').run(id);
   }
 
   async close(): Promise<void> {

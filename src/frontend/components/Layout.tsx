@@ -1,6 +1,10 @@
 import type { FC, Child } from 'hono/jsx';
 
-export const Layout: FC<{ title: string; children?: Child }> = ({ title, children }) => (
+export const Layout: FC<{ title: string; children?: Child; extraScripts?: string[] }> = ({
+  title,
+  children,
+  extraScripts,
+}) => (
   <html lang="en">
     <head>
       <meta charset="UTF-8" />
@@ -20,10 +24,16 @@ export const Layout: FC<{ title: string; children?: Child }> = ({ title, childre
           <a href="/datasets" class="nav-link">
             Saved Datasets
           </a>
+          <a href="/visualizations" class="nav-link">
+            Visualizations
+          </a>
         </nav>
       </header>
       <main class="main">{children}</main>
       <script src="/filters.js" />
+      {extraScripts?.map(src => (
+        <script src={src} key={src} />
+      ))}
     </body>
   </html>
 );
