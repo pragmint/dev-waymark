@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { runSql } from '../sqliteUtils';
+import { logger } from '../../logger';
 import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
@@ -38,7 +39,7 @@ function runMigrations(db: Database): void {
         migration.name,
         new Date().toISOString()
       );
-      console.log(`[app-state] Applied: ${migration.name}`);
+      logger.info('[app-state] Applied migration', { name: migration.name });
     }
   }
 }
@@ -70,7 +71,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
     runSql(this.db, migration.sqlite.down);
     this.db.query('DELETE FROM _app_migrations WHERE name = ?').run(row.name);
-    console.log(`[app-state] Rolled back: ${row.name}`);
+    logger.info('[app-state] Rolled back migration', { name: row.name });
   }
 
   // ── Datasets ──────────────────────────────────────────────────────────────

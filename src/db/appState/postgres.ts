@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { logger } from '../../logger';
 import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
@@ -28,7 +29,7 @@ async function runMigrations(pool: Pool): Promise<void> {
     if (result.rows.length === 0) {
       await pool.query(migration.postgres.up);
       await pool.query('INSERT INTO _app_migrations (name) VALUES ($1)', [migration.name]);
-      console.log(`[app-state] Applied: ${migration.name}`);
+      logger.info('[app-state] Applied migration', { name: migration.name });
     }
   }
 }
@@ -56,7 +57,7 @@ export class PostgresAppStateRepository implements AppStateRepository {
 
     await this.pool.query(migration.postgres.down);
     await this.pool.query('DELETE FROM _app_migrations WHERE name = $1', [name]);
-    console.log(`[app-state] Rolled back: ${name}`);
+    logger.info('[app-state] Rolled back migration', { name });
   }
 
   // ── Datasets ──────────────────────────────────────────────────────────────

@@ -14,8 +14,8 @@
     "check:commit": "prettier --check . && eslint . && tsc --noEmit",
     "migrate": "bun scripts/migrate.ts",
     "rollback": "bun scripts/rollback.ts",
-    "test": "bun test",
-    "test:e2e": "PLAYWRIGHT_HTML_OPEN=never bunx playwright test",
+    "test": "NODE_ENV=test bun test",
+    "test:e2e": "NODE_ENV=test PLAYWRIGHT_HTML_OPEN=never bunx playwright test",
     "install-hooks": "bun scripts/install-hooks.ts"
   },
   "dependencies": {
