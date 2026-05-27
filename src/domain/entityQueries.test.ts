@@ -5,6 +5,8 @@ import type { EntityWithMetadata } from '../schemas/entity';
 const makeEntity = (overrides: Partial<EntityWithMetadata> = {}): EntityWithMetadata => ({
   id: 1,
   name: 'ENG-1',
+  type: '',
+  created_at: '',
   metadata: [],
   ...overrides,
 });
@@ -14,6 +16,8 @@ const meta = (entityId: number, key: string, value: string) => ({
   key,
   value,
   value_type: 'string' as const,
+  created_at: '',
+  updated_at: '',
 });
 
 describe('getMetadataValue', () => {
@@ -38,11 +42,11 @@ describe('getEntityTitle', () => {
 });
 
 describe('groupEntitiesByType', () => {
-  it('groups entities by type metadata', () => {
+  it('groups entities by type field', () => {
     const entities = [
-      makeEntity({ id: 1, metadata: [meta(1, 'type', 'ticket')] }),
-      makeEntity({ id: 2, metadata: [meta(2, 'type', 'pr')] }),
-      makeEntity({ id: 3, metadata: [meta(3, 'type', 'ticket')] }),
+      makeEntity({ id: 1, type: 'ticket' }),
+      makeEntity({ id: 2, type: 'pr' }),
+      makeEntity({ id: 3, type: 'ticket' }),
     ];
     const groups = groupEntitiesByType(entities);
     expect(groups['ticket']).toHaveLength(2);
@@ -53,7 +57,7 @@ describe('groupEntitiesByType', () => {
     expect(groupEntitiesByType([])).toEqual({});
   });
 
-  it('groups entities without type metadata under empty string key', () => {
+  it('groups entities with empty type under empty string key', () => {
     const entities = [makeEntity({ id: 1 }), makeEntity({ id: 2 })];
     const groups = groupEntitiesByType(entities);
     expect(groups['']).toHaveLength(2);

@@ -23,11 +23,15 @@ function makeEntity(
   return {
     id,
     name: `entity-${id}`,
+    type: '',
+    created_at: '',
     metadata: Object.entries(metadata).map(([key, { value, value_type }]) => ({
       entity_id: id,
       key,
       value,
       value_type,
+      created_at: '',
+      updated_at: '',
     })),
   };
 }

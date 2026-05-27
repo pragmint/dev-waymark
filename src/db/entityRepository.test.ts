@@ -8,6 +8,8 @@ import type { Entity, Metadata } from '../schemas/entity';
 const makeEntity = (overrides: Partial<Entity> = {}): Entity => ({
   id: 1,
   name: 'ENG-1',
+  type: '',
+  created_at: '',
   ...overrides,
 });
 
@@ -16,6 +18,8 @@ const makeMetadata = (entityId: number, overrides: Partial<Metadata> = {}): Meta
   key: 'status',
   value: 'open',
   value_type: 'string',
+  created_at: '',
+  updated_at: '',
   ...overrides,
 });
 
@@ -133,13 +137,14 @@ describe('entityRepository', () => {
   });
 
   it('upserts without duplicating on re-insert', async () => {
-    await repo.upsert(makeEntity(), [makeMetadata(1, { key: 'type', value: 'ticket' })]);
-    await repo.upsert(makeEntity({ name: 'ENG-1-updated' }), [
-      makeMetadata(1, { key: 'type', value: 'updated-type' }),
+    await repo.upsert(makeEntity({ type: 'ticket' }), [makeMetadata(1)]);
+    await repo.upsert(makeEntity({ name: 'ENG-1-updated', type: 'updated-type' }), [
+      makeMetadata(1, { value: 'closed' }),
     ]);
     const results = await repo.list([]);
     expect(results).toHaveLength(1);
-    expect(results[0].metadata.find(m => m.key === 'type')?.value).toBe('updated-type');
+    expect(results[0].type).toBe('updated-type');
+    expect(results[0].metadata.find(m => m.key === 'status')?.value).toBe('closed');
   });
 
   it('filters entities by multiple eq values on same key (OR / IN)', async () => {

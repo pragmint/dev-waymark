@@ -17,30 +17,36 @@ import { runSql } from '../sqliteUtils';
  * this schema. The Parquet seed pipeline (`bun seed`) can populate a local
  * SQLite file with fixture data.
  *
- * ┌─────────────────────────────────────────────────┐
- * │  entities                                       │
- * │  ─────────────────────────────────────────────  │
- * │  id        INTEGER  PRIMARY KEY                 │
- * │  name      TEXT     NOT NULL                    │
- * └─────────────────────────────────────────────────┘
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │  entities                                                                  │
+ * │  ────────────────────────────────────────────────────────────────────────  │
+ * │  id          INTEGER  PRIMARY KEY                                          │
+ * │  name        TEXT     NOT NULL                                             │
+ * │  type        TEXT     NOT NULL DEFAULT ''                                  │
+ * │  created_at  TEXT     NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
+ * └────────────────────────────────────────────────────────────────────────────┘
  *
- * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  entity_metadata                                                        │
- * │  ─────────────────────────────────────────────────────────────────────  │
- * │  id           INTEGER   PRIMARY KEY AUTOINCREMENT                       │
- * │  entity_id    INTEGER   NOT NULL  REFERENCES entities(id) ON DELETE CASCADE │
- * │  key          TEXT      NOT NULL                                        │
- * │  value        TEXT      (nullable)                                      │
+ * ┌──────────────────────────────────────────────────────────────────────────────┐
+ * │  entity_metadata                                                             │
+ * │  ──────────────────────────────────────────────────────────────────────────  │
+ * │  id           INTEGER   PRIMARY KEY AUTOINCREMENT                            │
+ * │  entity_id    INTEGER   NOT NULL  REFERENCES entities(id) ON DELETE CASCADE  │
+ * │  key          TEXT      NOT NULL                                             │
+ * │  value        TEXT      (nullable)                                           │
  * │  value_type   TEXT      NOT NULL  ('string' | 'number' | 'date' | 'boolean') │
- * │  UNIQUE(entity_id, key)                                                 │
- * └─────────────────────────────────────────────────────────────────────────┘
+ * │  created_at   TEXT      NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
+ * │  updated_at   TEXT      NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
+ * │  UNIQUE(entity_id, key)                                                      │
+ * └──────────────────────────────────────────────────────────────────────────────┘
  *
  * Indexes: idx_metadata_entity_id (entity_id), idx_metadata_key_value (key, value)
  */
 export const SOURCE_SCHEMA_DDL = `
   CREATE TABLE IF NOT EXISTS entities (
-    id   INTEGER PRIMARY KEY,
-    name TEXT    NOT NULL
+    id         INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL,
+    type       TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
   );
 
   CREATE TABLE IF NOT EXISTS entity_metadata (
@@ -49,6 +55,8 @@ export const SOURCE_SCHEMA_DDL = `
     key         TEXT    NOT NULL,
     value       TEXT,
     value_type  TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     UNIQUE(entity_id, key)
   );
 

@@ -16,7 +16,7 @@ export function groupEntitiesByType(
 ): Record<string, EntityWithMetadata[]> {
   return entities.reduce(
     (groups, entity) => {
-      const type = getMetadataValue(entity, 'type') ?? '';
+      const type = entity.type;
       if (!groups[type]) groups[type] = [];
       groups[type].push(entity);
       return groups;

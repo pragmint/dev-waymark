@@ -13,7 +13,7 @@ type EntitiesPageProps = {
 
 // Keys that don't need an extra column: fixed metadata columns already shown, and entity_name
 // which is a pseudo-metadata key that maps to the Entity column
-const FIXED_COLUMN_KEYS = new Set(['type', 'source', 'entity_name']);
+const FIXED_COLUMN_KEYS = new Set(['entity_type', 'entity_created_at', 'source', 'entity_name']);
 
 export const EntitiesPage: FC<EntitiesPageProps> = ({
   entities,
@@ -90,7 +90,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
                   </a>
                 </td>
                 <td>
-                  <span class="badge">{getMetadataValue(e, 'type') ?? '—'}</span>
+                  <span class="badge">{e.type || '—'}</span>
                 </td>
                 <td>{getMetadataValue(e, 'source') ?? '—'}</td>
                 {extraKeys.map(k => (

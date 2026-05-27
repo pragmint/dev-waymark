@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const EntitySchema = z.object({
   id: z.number(),
   name: z.string(),
+  type: z.string(),
+  created_at: z.string(),
 });
 
 export type Entity = z.infer<typeof EntitySchema>;
@@ -15,6 +17,8 @@ export const MetadataSchema = z.object({
   key: z.string(),
   value: z.string().nullable(),
   value_type: MetadataValueTypeSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 
 export type Metadata = z.infer<typeof MetadataSchema>;

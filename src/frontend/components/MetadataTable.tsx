@@ -13,6 +13,7 @@ export const MetadataTable: FC<{ metadata: Metadata[] }> = ({ metadata }) => {
           <th>Key</th>
           <th>Value</th>
           <th>Type</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -21,6 +22,14 @@ export const MetadataTable: FC<{ metadata: Metadata[] }> = ({ metadata }) => {
             <td class="meta-key">{m.key}</td>
             <td class="meta-value">{m.value ?? '—'}</td>
             <td class="meta-type">{m.value_type}</td>
+            <td class="meta-timestamps">
+              <span
+                class="meta-timestamps-trigger"
+                data-tip={`Created: ${m.created_at}\nUpdated: ${m.updated_at}`}
+              >
+                ⏱
+              </span>
+            </td>
           </tr>
         ))}
       </tbody>

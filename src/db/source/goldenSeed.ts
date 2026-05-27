@@ -13,7 +13,7 @@ import type { SourceDataAdapter } from './adapter';
  * runs when no source database is configured (the in-memory default).
  */
 
-type EntityRow = { id: number; name: string };
+type EntityRow = { id: number; name: string; type: string };
 type MetaRow = { entity_id: number; key: string; value: string | null; value_type: string };
 
 function s(entity_id: number, key: string, value: string): MetaRow {
@@ -36,9 +36,8 @@ function add(entity: EntityRow, meta: MetaRow[]): void {
 
 // ── Jira tickets ─────────────────────────────────────────────────────────────
 
-add({ id: 1, name: 'jira:ENG-2' }, [
+add({ id: 1, name: 'jira:ENG-2', type: 'jira_ticket' }, [
   s(1, 'source', 'jira'),
-  s(1, 'type', 'jira_ticket'),
   s(1, 'ticket_type', 'Story'),
   s(1, 'priority', 'Medium'),
   s(1, 'assignee', 'Alex Rivera'),
@@ -63,9 +62,8 @@ add({ id: 1, name: 'jira:ENG-2' }, [
   n(1, 'release_seconds', '0'),
 ]);
 
-add({ id: 2, name: 'jira:ENG-7' }, [
+add({ id: 2, name: 'jira:ENG-7', type: 'jira_ticket' }, [
   s(2, 'source', 'jira'),
-  s(2, 'type', 'jira_ticket'),
   s(2, 'ticket_type', 'Story'),
   s(2, 'priority', 'Medium'),
   s(2, 'assignee', 'Alex Rivera'),
@@ -91,9 +89,8 @@ add({ id: 2, name: 'jira:ENG-7' }, [
 ]);
 
 // Bug with Highest priority and long lead time — good edge case for outlier detection
-add({ id: 3, name: 'jira:OPS-15' }, [
+add({ id: 3, name: 'jira:OPS-15', type: 'jira_ticket' }, [
   s(3, 'source', 'jira'),
-  s(3, 'type', 'jira_ticket'),
   s(3, 'ticket_type', 'Bug'),
   s(3, 'priority', 'Highest'),
   s(3, 'assignee', 'Priya Sharma'),
@@ -124,9 +121,8 @@ add({ id: 3, name: 'jira:OPS-15' }, [
 ]);
 
 // Story with linked PR github:1029
-add({ id: 4, name: 'jira:ENG-3349' }, [
+add({ id: 4, name: 'jira:ENG-3349', type: 'jira_ticket' }, [
   s(4, 'source', 'jira'),
-  s(4, 'type', 'jira_ticket'),
   s(4, 'ticket_type', 'Story'),
   s(4, 'priority', 'Medium'),
   s(4, 'assignee', 'Jordan Kim'),
@@ -156,9 +152,8 @@ add({ id: 4, name: 'jira:ENG-3349' }, [
 ]);
 
 // Task with linked PR github:1026 — fast turnaround example
-add({ id: 5, name: 'jira:ENG-3411' }, [
+add({ id: 5, name: 'jira:ENG-3411', type: 'jira_ticket' }, [
   s(5, 'source', 'jira'),
-  s(5, 'type', 'jira_ticket'),
   s(5, 'ticket_type', 'Task'),
   s(5, 'priority', 'Medium'),
   s(5, 'assignee', 'Sam Chen'),
@@ -191,9 +186,8 @@ add({ id: 5, name: 'jira:ENG-3411' }, [
 // ── GitHub PRs ───────────────────────────────────────────────────────────────
 
 // Feature PR linked to ENG-3349
-add({ id: 6, name: 'github:1029' }, [
+add({ id: 6, name: 'github:1029', type: 'github_pr' }, [
   s(6, 'source', 'github'),
-  s(6, 'type', 'github_pr'),
   s(6, 'repo', 'acme-corp/web-platform'),
   s(6, 'creator', 'jkim'),
   s(6, 'branch', 'feature/ENG-3349'),
@@ -224,9 +218,8 @@ add({ id: 6, name: 'github:1029' }, [
 ]);
 
 // Chore PR — no linked ticket, tiny diff, very fast review
-add({ id: 7, name: 'github:1028' }, [
+add({ id: 7, name: 'github:1028', type: 'github_pr' }, [
   s(7, 'source', 'github'),
-  s(7, 'type', 'github_pr'),
   s(7, 'repo', 'acme-corp/web-platform'),
   s(7, 'creator', 'schen'),
   s(7, 'branch', 'chore/bump-v2.1.5'),
@@ -258,9 +251,8 @@ add({ id: 7, name: 'github:1028' }, [
 ]);
 
 // Release PR — no ticket, large diff (accumulated sprint work)
-add({ id: 8, name: 'github:1027' }, [
+add({ id: 8, name: 'github:1027', type: 'github_pr' }, [
   s(8, 'source', 'github'),
-  s(8, 'type', 'github_pr'),
   s(8, 'repo', 'acme-corp/web-platform'),
   s(8, 'creator', 'mlopez'),
   s(8, 'branch', 'release'),
@@ -292,9 +284,8 @@ add({ id: 8, name: 'github:1027' }, [
 ]);
 
 // Data update PR linked to ENG-3411 — fast cycle time from commit to merge
-add({ id: 9, name: 'github:1026' }, [
+add({ id: 9, name: 'github:1026', type: 'github_pr' }, [
   s(9, 'source', 'github'),
-  s(9, 'type', 'github_pr'),
   s(9, 'repo', 'acme-corp/web-platform'),
   s(9, 'creator', 'schen'),
   s(9, 'branch', 'chore/ENG-3411/q2-pricing-data-refresh'),
@@ -327,9 +318,8 @@ add({ id: 9, name: 'github:1026' }, [
 
 // ── WIP snapshots ─────────────────────────────────────────────────────────────
 
-add({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z' }, [
+add({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z', type: 'wip_snapshot' }, [
   s(10, 'source', 'jira'),
-  s(10, 'type', 'wip_snapshot'),
   n(10, 'in_progress', '21'),
   s(
     10,
@@ -354,9 +344,8 @@ add({ id: 10, name: 'jira_snapshot:2026-04-16T17:21:34Z' }, [
   n(10, 'assignee_size', '10'),
 ]);
 
-add({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z' }, [
+add({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z', type: 'wip_snapshot' }, [
   s(11, 'source', 'jira'),
-  s(11, 'type', 'wip_snapshot'),
   n(11, 'in_progress', '8'),
   s(
     11,
@@ -381,9 +370,8 @@ add({ id: 11, name: 'jira_snapshot:2026-04-28T14:50:45Z' }, [
   n(11, 'assignee_size', '10'),
 ]);
 
-add({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z' }, [
+add({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z', type: 'wip_snapshot' }, [
   s(12, 'source', 'jira'),
-  s(12, 'type', 'wip_snapshot'),
   n(12, 'in_progress', '9'),
   s(
     12,
@@ -415,8 +403,8 @@ add({ id: 12, name: 'jira_snapshot:2026-05-14T13:42:46Z' }, [
 export async function seedGoldenData(adapter: SourceDataAdapter): Promise<void> {
   for (const e of entities) {
     await adapter.execute(
-      'INSERT INTO entities (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name',
-      [e.id, e.name]
+      'INSERT INTO entities (id, name, type) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type',
+      [e.id, e.name, e.type]
     );
   }
   for (const m of metadata) {

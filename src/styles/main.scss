@@ -446,6 +446,47 @@ body {
   font-size: 12px;
 }
 
+.meta-timestamps {
+  width: 24px;
+  text-align: center;
+}
+
+.meta-timestamps-trigger {
+  position: relative;
+  cursor: default;
+  font-size: 12px;
+  opacity: 0.4;
+  transition: opacity 0.1s;
+
+  &::after {
+    content: attr(data-tip);
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 8px;
+    white-space: pre;
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 5px 8px;
+    border-radius: var(--radius);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 10;
+  }
+
+  &:hover {
+    opacity: 1;
+
+    &::after {
+      opacity: 1;
+    }
+  }
+}
+
 // ── Save dataset panel ─────────────────────────────────────────────────────────
 
 .save-dataset-panel {

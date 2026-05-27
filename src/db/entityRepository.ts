@@ -3,6 +3,7 @@ import { EntitySchema, MetadataSchema, MetadataValueTypeSchema } from '../schema
 import type {
   Entity,
   Metadata,
+  MetadataValueType,
   EntityWithMetadata,
   MetaFilter,
   AvailableFilter,
@@ -11,17 +12,35 @@ import type {
 type WhereResult = { where: string; params: SqlParam[] };
 type BuildState = { conditions: string[]; params: SqlParam[] };
 
-const ENTITY_NAME_KEY = 'entity_name';
+type EntityFieldConfig = {
+  column: string;
+  value_type: MetadataValueType;
+  getValue: (entity: EntityWithMetadata) => string;
+  withDistinctValues?: boolean;
+};
 
-function addEntityNameEqConditions(state: BuildState, values: string[]) {
+// Virtual filter keys that map directly to columns on the entities table.
+// Extend this map to expose additional entity fields as filterable.
+const ENTITY_FIELDS: Record<string, EntityFieldConfig> = {
+  entity_name: { column: 'name', value_type: 'string', getValue: e => e.name },
+  entity_type: {
+    column: 'type',
+    value_type: 'string',
+    getValue: e => e.type,
+    withDistinctValues: true,
+  },
+  entity_created_at: { column: 'created_at', value_type: 'date', getValue: e => e.created_at },
+};
+
+function addEntityFieldEqConditions(state: BuildState, column: string, values: string[]) {
   const { conditions, params } = state;
   if (values.length === 1) {
     params.push(values[0]);
-    conditions.push(`e.name = ?`);
+    conditions.push(`e.${column} = ?`);
   } else {
     const placeholders = values.map(() => '?').join(', ');
     values.forEach(v => params.push(v));
-    conditions.push(`e.name IN (${placeholders})`);
+    conditions.push(`e.${column} IN (${placeholders})`);
   }
 }
 
@@ -45,12 +64,13 @@ function addEqConditions(state: BuildState, key: string, values: string[]) {
 function addRangeOrContainsCondition(state: BuildState, f: MetaFilter) {
   const { conditions, params } = state;
 
-  if (f.key === ENTITY_NAME_KEY) {
+  const entityField = ENTITY_FIELDS[f.key];
+  if (entityField) {
     if (f.op === 'contains') {
       params.push(`%${f.value}%`);
-      conditions.push(`e.name LIKE ?`);
+      conditions.push(`e.${entityField.column} LIKE ?`);
     }
-    // gte/lte on entity_name: not meaningful, skip
+    // gte/lte on entity fields: not meaningful, skip
     return;
   }
 
@@ -92,8 +112,9 @@ function buildWhereClause(metaFilters: MetaFilter[]): WhereResult {
   }
 
   for (const [key, values] of eqByKey) {
-    if (key === ENTITY_NAME_KEY) {
-      addEntityNameEqConditions(state, values);
+    const entityField = ENTITY_FIELDS[key];
+    if (entityField) {
+      addEntityFieldEqConditions(state, entityField.column, values);
     } else {
       addEqConditions(state, key, values);
     }
@@ -118,8 +139,10 @@ function applyReFilters(
 
   return entities.filter(entity =>
     reFilters.every(f => {
-      const val =
-        f.key === ENTITY_NAME_KEY ? entity.name : entity.metadata.find(m => m.key === f.key)?.value;
+      const entityField = ENTITY_FIELDS[f.key];
+      const val = entityField
+        ? entityField.getValue(entity)
+        : entity.metadata.find(m => m.key === f.key)?.value;
       if (!val) return false;
       try {
         return new RegExp(f.value).test(val);
@@ -217,16 +240,30 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
         }
         return filter;
       });
-      return [{ key: ENTITY_NAME_KEY, value_type: 'string' as const }, ...metaFilters];
+      const entityFieldFilters: AvailableFilter[] = [];
+      for (const [key, config] of Object.entries(ENTITY_FIELDS)) {
+        const filter: AvailableFilter = { key, value_type: config.value_type };
+        if (config.withDistinctValues) {
+          const rows = await adapter.query<{ val: string }>(
+            `SELECT DISTINCT ${config.column} AS val FROM entities WHERE id IN (${placeholders}) AND ${config.column} != '' ORDER BY ${config.column}`,
+            entityIds
+          );
+          filter.distinctValues = rows.map(r => r.val);
+        }
+        entityFieldFilters.push(filter);
+      }
+
+      return [...entityFieldFilters, ...metaFilters];
     },
 
     async upsert(entity: Entity, metadata: Metadata[]): Promise<void> {
       await adapter.execute(
-        `INSERT INTO entities (id, name)
-         VALUES (?, ?)
+        `INSERT INTO entities (id, name, type)
+         VALUES (?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name`,
-        [entity.id, entity.name]
+           name = excluded.name,
+           type = excluded.type`,
+        [entity.id, entity.name, entity.type]
       );
 
       for (const m of metadata) {
@@ -235,7 +272,8 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
            VALUES (?, ?, ?, ?)
            ON CONFLICT(entity_id, key) DO UPDATE SET
              value = excluded.value,
-             value_type = excluded.value_type`,
+             value_type = excluded.value_type,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
           [m.entity_id, m.key, m.value ?? null, m.value_type]
         );
       }

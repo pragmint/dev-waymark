@@ -20,6 +20,12 @@ export const EntityDetailPage: FC<{ entity: EntityWithMetadata }> = ({ entity })
 
         <dt>Name</dt>
         <dd>{entity.name}</dd>
+
+        <dt>Type</dt>
+        <dd>{entity.type || '—'}</dd>
+
+        <dt>Created at</dt>
+        <dd>{entity.created_at}</dd>
       </dl>
     </section>
 
