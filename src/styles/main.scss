@@ -133,21 +133,43 @@ body {
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   height: 28px;
-  padding: 0 10px;
   background: var(--color-badge-bg);
   border: 1px solid var(--color-border);
   border-radius: 100px;
   font-size: 12px;
   color: var(--color-text);
-  text-decoration: none;
   white-space: nowrap;
-  cursor: pointer;
 
   &:hover {
     background: #e2e6ea;
     border-color: #adb5bd;
+  }
+
+  &--editing {
+    border-color: var(--color-primary);
+    background: #e7f1ff;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.2);
+
+    &:hover {
+      background: #dbe8fc;
+      border-color: var(--color-primary);
+    }
+  }
+}
+
+.filter-chip-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  color: var(--color-text);
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
   }
 }
 
@@ -157,10 +179,22 @@ body {
 }
 
 .filter-chip-x {
-  margin-left: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   color: var(--color-muted);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 1px solid var(--color-border);
+
+  &:hover {
+    color: var(--color-text);
+    background: rgba(0, 0, 0, 0.05);
+  }
 }
 
 .filter-add-wrapper {

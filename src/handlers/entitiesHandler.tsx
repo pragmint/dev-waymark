@@ -10,7 +10,7 @@ export async function entitiesHandler(c: Context) {
   const repo = getEntityRepo();
 
   const url = new URL(c.req.url);
-  const metaFilters: MetaFilter[] = [];
+  const allFilters: MetaFilter[] = [];
 
   for (const [name, value] of url.searchParams) {
     if (!value) continue;
@@ -19,20 +19,25 @@ export async function entitiesHandler(c: Context) {
     const [, key, opRaw] = match;
     const parsed = MetaFilterOpSchema.safeParse(opRaw);
     if (!parsed.success) continue;
-    metaFilters.push({ key, op: parsed.data, value });
+    allFilters.push({ key, op: parsed.data, value });
   }
 
   const addingKey = c.req.query('add_filter') || undefined;
+  const editingKey = c.req.query('edit_filter') || undefined;
 
-  const entities = await repo.list(metaFilters);
+  // When editing a filter, exclude it from the query so results are unfiltered by that key
+  const queryFilters = editingKey ? allFilters.filter(f => f.key !== editingKey) : allFilters;
+
+  const entities = await repo.list(queryFilters);
   const availableFilters = await repo.getAvailableFilters(entities.map(e => e.id));
 
   return c.html(
     <EntitiesPage
       entities={entities}
-      activeFilters={metaFilters}
+      activeFilters={allFilters}
       availableFilters={availableFilters}
       addingKey={addingKey}
+      editingKey={editingKey}
     />
   );
 }

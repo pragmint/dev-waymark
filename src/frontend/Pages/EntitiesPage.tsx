@@ -9,6 +9,7 @@ type EntitiesPageProps = {
   activeFilters: MetaFilter[];
   availableFilters: AvailableFilter[];
   addingKey?: string;
+  editingKey?: string;
 };
 
 // Keys that don't need an extra column: fixed metadata columns already shown, and entity_name
@@ -20,6 +21,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   activeFilters,
   availableFilters,
   addingKey,
+  editingKey,
 }) => {
   const extraKeys = [...new Set(activeFilters.map(f => f.key))].filter(
     k => !FIXED_COLUMN_KEYS.has(k)
@@ -65,6 +67,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
         activeFilters={activeFilters}
         availableFilters={availableFilters}
         addingKey={addingKey}
+        editingKey={editingKey}
       />
 
       {entities.length === 0 ? (

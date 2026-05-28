@@ -4,8 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!filterForm) return;
 
-  // Ensure all widget panels start hidden with all inputs disabled.
+  // Ensure all widget panels start hidden with all inputs disabled,
+  // except panels in editing mode (server-rendered open).
   filterForm.querySelectorAll<HTMLElement>('.filter-widget-panel').forEach(panel => {
+    if (panel.dataset.filterEditing === 'true') return;
     panel.style.display = 'none';
     disableAllInputs(panel);
   });
