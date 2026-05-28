@@ -44,6 +44,7 @@ export type MetaFilter = z.infer<typeof MetaFilterSchema>;
 export const AvailableFilterSchema = z.object({
   key: z.string(),
   value_type: MetadataValueTypeSchema,
+  entityType: z.string(),
   distinctValues: z.array(z.string()).optional(),
 });
 export type AvailableFilter = z.infer<typeof AvailableFilterSchema>;

@@ -214,35 +214,56 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       if (entityIds.length === 0) return [];
 
       const placeholders = entityIds.map(() => '?').join(', ');
-      const rows = await adapter.query<{ key: string; value_type: string; value: string }>(
-        `SELECT em.key, em.value_type, em.value
+      const rows = await adapter.query<{
+        key: string;
+        value_type: string;
+        value: string;
+        entity_type: string;
+      }>(
+        `SELECT em.key, em.value_type, em.value, e.type AS entity_type
          FROM entity_metadata em
+         JOIN entities e ON e.id = em.entity_id
          WHERE em.entity_id IN (${placeholders})
          AND em.value IS NOT NULL
-         ORDER BY em.key, em.value`,
+         ORDER BY e.type, em.key, em.value`,
         entityIds
       );
 
-      const byKey = new Map<string, { value_type: string; values: Set<string> }>();
+      const byKeyAndType = new Map<
+        string,
+        { value_type: string; values: Set<string>; entity_type: string }
+      >();
       for (const row of rows) {
-        if (!byKey.has(row.key)) {
-          byKey.set(row.key, { value_type: row.value_type, values: new Set() });
+        const mapKey = `${row.entity_type}::${row.key}`;
+        if (!byKeyAndType.has(mapKey)) {
+          byKeyAndType.set(mapKey, {
+            value_type: row.value_type,
+            values: new Set(),
+            entity_type: row.entity_type,
+          });
         }
-        byKey.get(row.key)!.values.add(row.value);
+        byKeyAndType.get(mapKey)!.values.add(row.value);
       }
 
-      const metaFilters = Array.from(byKey.entries()).map(([key, { value_type, values }]) => {
-        const parsed = MetadataValueTypeSchema.safeParse(value_type);
-        const vt = parsed.success ? parsed.data : ('string' as const);
-        const filter: AvailableFilter = { key, value_type: vt };
-        if (vt === 'string' && values.size <= 20) {
-          filter.distinctValues = Array.from(values).sort();
+      const metaFilters = Array.from(byKeyAndType.entries()).map(
+        ([mapKey, { value_type, values, entity_type }]) => {
+          const key = mapKey.split('::')[1];
+          const parsed = MetadataValueTypeSchema.safeParse(value_type);
+          const vt = parsed.success ? parsed.data : ('string' as const);
+          const filter: AvailableFilter = {
+            key,
+            value_type: vt,
+            entityType: entity_type,
+          };
+          if (vt === 'string' && values.size <= 20) {
+            filter.distinctValues = Array.from(values).sort();
+          }
+          return filter;
         }
-        return filter;
-      });
+      );
       const entityFieldFilters: AvailableFilter[] = [];
       for (const [key, config] of Object.entries(ENTITY_FIELDS)) {
-        const filter: AvailableFilter = { key, value_type: config.value_type };
+        const filter: AvailableFilter = { key, value_type: config.value_type, entityType: '' };
         if (config.withDistinctValues) {
           const rows = await adapter.query<{ val: string }>(
             `SELECT DISTINCT ${config.column} AS val FROM entities WHERE id IN (${placeholders}) AND ${config.column} != '' ORDER BY ${config.column}`,

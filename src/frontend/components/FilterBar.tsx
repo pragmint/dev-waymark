@@ -7,6 +7,24 @@ type FilterBarProps = {
   addingKey?: string;
 };
 
+function formatValueType(type: string): string {
+  const typeMap: Record<string, string> = {
+    string: 'Text',
+    number: 'Number',
+    date: 'Date',
+    boolean: 'Boolean',
+  };
+  return typeMap[type] || type;
+}
+
+function formatFieldLabel(key: string): string {
+  // Convert snake_case to Title Case
+  return key
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function removeFilterUrl(activeFilters: MetaFilter[], removeKey: string): string {
   const params = new URLSearchParams();
   for (const f of activeFilters) {
@@ -152,7 +170,7 @@ export const FilterBar: FC<FilterBarProps> = ({ activeFilters, availableFilters,
             class="filter-chip"
             title={`Remove ${key} filter`}
           >
-            <span class="filter-chip-key">{key}:</span>{' '}
+            <span class="filter-chip-key">{formatFieldLabel(key)}:</span>{' '}
             <span class="filter-chip-val">{chipLabel(filters)}</span>{' '}
             <span class="filter-chip-x" aria-hidden="true">
               ×
@@ -173,11 +191,47 @@ export const FilterBar: FC<FilterBarProps> = ({ activeFilters, availableFilters,
                 data-filter-add-select
               >
                 <option value="">+ Add filter</option>
-                {inactive.map(f => (
-                  <option value={f.key} selected={addingKey === f.key} data-type={f.value_type}>
-                    {f.key}
-                  </option>
-                ))}
+                {(() => {
+                  const entityFields = inactive.filter(f => f.entityType === '');
+                  const metadataByType = new Map<string, (typeof inactive)[0][]>();
+                  for (const f of inactive.filter(f => f.entityType !== '')) {
+                    if (!metadataByType.has(f.entityType)) {
+                      metadataByType.set(f.entityType, []);
+                    }
+                    metadataByType.get(f.entityType)!.push(f);
+                  }
+                  const sortedTypes = Array.from(metadataByType.keys()).sort();
+                  return (
+                    <>
+                      {entityFields.length > 0 && (
+                        <optgroup label="Fields">
+                          {entityFields.map(f => (
+                            <option
+                              value={f.key}
+                              selected={addingKey === f.key}
+                              data-type={f.value_type}
+                            >
+                              {formatFieldLabel(f.key)} · {formatValueType(f.value_type)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {sortedTypes.map(entityType => (
+                        <optgroup label={entityType}>
+                          {metadataByType.get(entityType)!.map(f => (
+                            <option
+                              value={f.key}
+                              selected={addingKey === f.key}
+                              data-type={f.value_type}
+                            >
+                              {formatFieldLabel(f.key)} · {formatValueType(f.value_type)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </>
+                  );
+                })()}
               </select>
               <button type="submit" class="filter-btn filter-add-submit" data-filter-add-submit>
                 Add
@@ -200,8 +254,12 @@ export const FilterBar: FC<FilterBarProps> = ({ activeFilters, availableFilters,
           <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
         ))}
 
-        {/* One widget panel per inactive available filter */}
-        {inactive.map(f => {
+        {/* One widget panel per unique key (deduplicated by key) */}
+        {Array.from(
+          new Map(
+            inactive.sort((a, b) => a.entityType.localeCompare(b.entityType)).map(f => [f.key, f])
+          ).values()
+        ).map(f => {
           const isOpen = addingKey === f.key;
           return (
             <div
@@ -210,7 +268,7 @@ export const FilterBar: FC<FilterBarProps> = ({ activeFilters, availableFilters,
               data-filter-type={f.value_type}
               style={isOpen ? '' : 'display:none'}
             >
-              <span class="filter-widget-label">{f.key}</span>
+              <span class="filter-widget-label">{formatFieldLabel(f.key)}</span>
               {renderWidget(f, isOpen)}
               <button type="submit" class="filter-btn filter-widget-apply">
                 Apply

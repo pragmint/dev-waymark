@@ -22,7 +22,7 @@ import { runSql } from '../sqliteUtils';
  * │  ────────────────────────────────────────────────────────────────────────  │
  * │  id          INTEGER  PRIMARY KEY                                          │
  * │  name        TEXT     NOT NULL                                             │
- * │  type        TEXT     NOT NULL DEFAULT ''                                  │
+ * │  type        TEXT     NOT NULL                                             │
  * │  created_at  TEXT     NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
  * └────────────────────────────────────────────────────────────────────────────┘
  *
@@ -45,7 +45,7 @@ export const SOURCE_SCHEMA_DDL = `
   CREATE TABLE IF NOT EXISTS entities (
     id         INTEGER PRIMARY KEY,
     name       TEXT    NOT NULL,
-    type       TEXT    NOT NULL DEFAULT '',
+    type       TEXT    NOT NULL,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
   );
 

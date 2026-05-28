@@ -31,7 +31,11 @@ describe('SqliteSourceAdapter', () => {
   });
 
   it('query returns rows from the database', async () => {
-    await adapter.execute('INSERT INTO entities (id, name) VALUES (?, ?)', [1, 'TEST-1']);
+    await adapter.execute('INSERT INTO entities (id, name, type) VALUES (?, ?, ?)', [
+      1,
+      'TEST-1',
+      'Test',
+    ]);
     const rows = await adapter.query<{ id: number; name: string }>(
       'SELECT * FROM entities WHERE id = ?',
       [1]
@@ -41,17 +45,29 @@ describe('SqliteSourceAdapter', () => {
   });
 
   it('query with no params returns all rows', async () => {
-    await adapter.execute('INSERT INTO entities (id, name) VALUES (?, ?)', [1, 'A']);
-    await adapter.execute('INSERT INTO entities (id, name) VALUES (?, ?)', [2, 'B']);
+    await adapter.execute('INSERT INTO entities (id, name, type) VALUES (?, ?, ?)', [
+      1,
+      'A',
+      'Type1',
+    ]);
+    await adapter.execute('INSERT INTO entities (id, name, type) VALUES (?, ?, ?)', [
+      2,
+      'B',
+      'Type2',
+    ]);
     const rows = await adapter.query('SELECT * FROM entities');
     expect(rows).toHaveLength(2);
   });
 
   it('execute performs insert and update', async () => {
-    await adapter.execute('INSERT INTO entities (id, name) VALUES (?, ?)', [10, 'original']);
+    await adapter.execute('INSERT INTO entities (id, name, type) VALUES (?, ?, ?)', [
+      10,
+      'original',
+      'Test',
+    ]);
     await adapter.execute(
-      'INSERT INTO entities (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name',
-      [10, 'updated']
+      'INSERT INTO entities (id, name, type) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name',
+      [10, 'updated', 'Test']
     );
     const rows = await adapter.query<{ name: string }>(
       'SELECT name FROM entities WHERE id = ?',
