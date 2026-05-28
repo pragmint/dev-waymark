@@ -31,9 +31,6 @@ if (isProd) {
   });
 
   cpSync('public', 'dist/public', { recursive: true });
-  cpSync('assets', 'dist/assets', { recursive: true });
-  cpSync('resources', 'dist/resources', { recursive: true });
-  cpSync('examples', 'dist/examples', { recursive: true });
 
   console.log('Production build complete. Run: cd dist && bun server.js');
 }
