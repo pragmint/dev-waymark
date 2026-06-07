@@ -39,7 +39,7 @@ import { runSql } from '../sqliteUtils';
  * │  UNIQUE(entity_id, key)                                                      │
  * └──────────────────────────────────────────────────────────────────────────────┘
  *
- * Indexes: idx_metadata_entity_id (entity_id), idx_metadata_key_value (key, value)
+ * Indexes: idx_entities_type (type), idx_metadata_entity_id (entity_id), idx_metadata_key_value (key, value)
  */
 export const SOURCE_SCHEMA_DDL = `
   CREATE TABLE IF NOT EXISTS entities (
@@ -60,7 +60,8 @@ export const SOURCE_SCHEMA_DDL = `
     UNIQUE(entity_id, key)
   );
 
-  CREATE INDEX IF NOT EXISTS idx_metadata_entity_id ON entity_metadata(entity_id);
+  CREATE INDEX IF NOT EXISTS idx_entities_type       ON entities(type);
+  CREATE INDEX IF NOT EXISTS idx_metadata_entity_id  ON entity_metadata(entity_id);
   CREATE INDEX IF NOT EXISTS idx_metadata_key_value  ON entity_metadata(key, value);
 `;
 

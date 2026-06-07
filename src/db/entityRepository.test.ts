@@ -67,14 +67,14 @@ describe('entityRepository', () => {
 
   it('filters entities by metadata eq', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'J-1' }), [
-      makeMetadata(1, { key: 'source', value: 'jira' }),
+      makeMetadata(1, { key: 'ticket_type', value: 'Story' }),
     ]);
     await repo.upsert(makeEntity({ id: 2, name: 'L-1' }), [
-      makeMetadata(2, { key: 'source', value: 'linear' }),
+      makeMetadata(2, { key: 'ticket_type', value: 'Bug' }),
     ]);
-    const results = await repo.list([{ key: 'source', op: 'eq', value: 'jira' }]);
+    const results = await repo.list([{ key: 'ticket_type', op: 'eq', value: 'Story' }]);
     expect(results).toHaveLength(1);
-    expect(results[0].metadata.find(m => m.key === 'source')?.value).toBe('jira');
+    expect(results[0].metadata.find(m => m.key === 'ticket_type')?.value).toBe('Story');
   });
 
   it('filters entities by metadata contains', async () => {
@@ -149,21 +149,21 @@ describe('entityRepository', () => {
 
   it('filters entities by multiple eq values on same key (OR / IN)', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'J-1' }), [
-      makeMetadata(1, { key: 'source', value: 'jira' }),
+      makeMetadata(1, { key: 'ticket_type', value: 'Story' }),
     ]);
     await repo.upsert(makeEntity({ id: 2, name: 'L-1' }), [
-      makeMetadata(2, { key: 'source', value: 'linear' }),
+      makeMetadata(2, { key: 'ticket_type', value: 'Bug' }),
     ]);
     await repo.upsert(makeEntity({ id: 3, name: 'G-1' }), [
-      makeMetadata(3, { key: 'source', value: 'github' }),
+      makeMetadata(3, { key: 'ticket_type', value: 'Task' }),
     ]);
     const results = await repo.list([
-      { key: 'source', op: 'eq', value: 'jira' },
-      { key: 'source', op: 'eq', value: 'linear' },
+      { key: 'ticket_type', op: 'eq', value: 'Story' },
+      { key: 'ticket_type', op: 'eq', value: 'Bug' },
     ]);
     expect(results).toHaveLength(2);
-    const sources = results.map(r => r.metadata.find(m => m.key === 'source')?.value).sort();
-    expect(sources).toEqual(['jira', 'linear']);
+    const types = results.map(r => r.metadata.find(m => m.key === 'ticket_type')?.value).sort();
+    expect(types).toEqual(['Bug', 'Story']);
   });
 
   it('filters entities by regex', async () => {
@@ -193,17 +193,17 @@ describe('entityRepository', () => {
   describe('getAvailableFilters', () => {
     it('returns all metadata keys when no filters active', async () => {
       await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
-        makeMetadata(1, { key: 'source', value: 'jira', value_type: 'string' }),
+        makeMetadata(1, { key: 'ticket_type', value: 'Story', value_type: 'string' }),
         makeMetadata(1, { key: 'total-wip', value: '40', value_type: 'number' }),
       ]);
       await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
-        makeMetadata(2, { key: 'source', value: 'linear', value_type: 'string' }),
+        makeMetadata(2, { key: 'ticket_type', value: 'Bug', value_type: 'string' }),
         makeMetadata(2, { key: 'description', value: 'foo', value_type: 'string' }),
       ]);
       const entities = await repo.list([]);
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
       const keys = available.map(f => f.key).sort();
-      expect(keys).toContain('source');
+      expect(keys).toContain('ticket_type');
       expect(keys).toContain('total-wip');
       expect(keys).toContain('description');
     });
@@ -264,15 +264,15 @@ describe('entityRepository', () => {
 
     it('populates distinctValues for string keys with ≤20 values', async () => {
       await repo.upsert(makeEntity({ id: 1, name: 'J-1' }), [
-        makeMetadata(1, { key: 'source', value: 'jira', value_type: 'string' }),
+        makeMetadata(1, { key: 'ticket_type', value: 'Story', value_type: 'string' }),
       ]);
       await repo.upsert(makeEntity({ id: 2, name: 'L-1' }), [
-        makeMetadata(2, { key: 'source', value: 'linear', value_type: 'string' }),
+        makeMetadata(2, { key: 'ticket_type', value: 'Bug', value_type: 'string' }),
       ]);
       const entities = await repo.list([]);
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
-      const sourceFilter = available.find(f => f.key === 'source');
-      expect(sourceFilter?.distinctValues).toEqual(['jira', 'linear']);
+      const typeFilter = available.find(f => f.key === 'ticket_type');
+      expect(typeFilter?.distinctValues).toEqual(['Bug', 'Story']);
     });
 
     it('sets correct value_type for each key', async () => {

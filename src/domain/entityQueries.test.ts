@@ -22,12 +22,12 @@ const meta = (entityId: number, key: string, value: string) => ({
 
 describe('getMetadataValue', () => {
   it('returns the value for a known key', () => {
-    const entity = makeEntity({ metadata: [meta(1, 'source', 'jira')] });
-    expect(getMetadataValue(entity, 'source')).toBe('jira');
+    const entity = makeEntity({ metadata: [meta(1, 'priority', 'Medium')] });
+    expect(getMetadataValue(entity, 'priority')).toBe('Medium');
   });
 
   it('returns undefined for an unknown key', () => {
-    expect(getMetadataValue(makeEntity(), 'source')).toBeUndefined();
+    expect(getMetadataValue(makeEntity(), 'priority')).toBeUndefined();
   });
 });
 

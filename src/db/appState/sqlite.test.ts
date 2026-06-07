@@ -61,14 +61,14 @@ describe('SqliteAppStateRepository — datasets', () => {
 
   it('getDataset returns the saved dataset', async () => {
     const id = await repo.saveDataset('Sprint velocity', [
-      { key: 'source', op: 'eq', value: 'jira' },
+      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
       { key: 'ticket_type', op: 'eq', value: 'story' },
     ]);
     const dataset = await repo.getDataset(id);
     expect(dataset).not.toBeNull();
     expect(dataset!.name).toBe('Sprint velocity');
     expect(dataset!.filters).toHaveLength(2);
-    expect(dataset!.filters[0]).toEqual({ key: 'source', op: 'eq', value: 'jira' });
+    expect(dataset!.filters[0]).toEqual({ key: 'entity_type', op: 'eq', value: 'jira_ticket' });
     expect(dataset!.filters[1]).toEqual({ key: 'ticket_type', op: 'eq', value: 'story' });
   });
 
@@ -93,7 +93,7 @@ describe('SqliteAppStateRepository — datasets', () => {
   });
 
   it('listDatasets returns all saved datasets without filters', async () => {
-    await repo.saveDataset('Alpha', [{ key: 'source', op: 'eq', value: 'jira' }]);
+    await repo.saveDataset('Alpha', [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }]);
     await repo.saveDataset('Beta', []);
     const list = await repo.listDatasets();
     expect(list).toHaveLength(2);
@@ -103,7 +103,9 @@ describe('SqliteAppStateRepository — datasets', () => {
   });
 
   it('deleteDataset removes the dataset and its filters', async () => {
-    const id = await repo.saveDataset('to-delete', [{ key: 'source', op: 'eq', value: 'github' }]);
+    const id = await repo.saveDataset('to-delete', [
+      { key: 'entity_type', op: 'eq', value: 'github_pr' },
+    ]);
     await repo.deleteDataset(id);
     expect(await repo.getDataset(id)).toBeNull();
     // filters should be cascade-deleted
