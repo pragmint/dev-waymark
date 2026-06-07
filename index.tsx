@@ -15,6 +15,7 @@ import {
 import {
   visualizationsListHandler,
   visualizationsNewHandler,
+  visualizationsTemplateHandler,
   visualizationsSaveHandler,
   visualizationsDetailHandler,
   visualizationsEditHandler,
@@ -50,6 +51,7 @@ app.post('/datasets/:id/delete', datasetsDeleteHandler);
 
 app.get('/visualizations', visualizationsListHandler);
 app.get('/visualizations/new', visualizationsNewHandler);
+app.get('/visualizations/new/:templateId', visualizationsTemplateHandler);
 app.post('/visualizations', visualizationsSaveHandler);
 app.get('/visualizations/:id', visualizationsDetailHandler);
 app.get('/visualizations/:id/edit', visualizationsEditHandler);
@@ -57,7 +59,7 @@ app.post('/visualizations/:id', visualizationsUpdateHandler);
 app.post('/visualizations/:id/delete', visualizationsDeleteHandler);
 
 app.get('/api/chart-data/:id', chartDataByIdHandler);
-app.post('/api/chart-data', chartDataPreviewHandler);
+app.post('/api/chart-data/preview', chartDataPreviewHandler);
 app.get('/api/dataset-fields/:id', datasetFieldsHandler);
 
 export default {

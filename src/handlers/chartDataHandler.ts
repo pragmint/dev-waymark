@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
 import { getEntityRepo } from '../db/source/index';
-import { VisualizationConfigSchema } from '../schemas/visualization';
+import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
+import { resolveTemplate } from '../domain/templateResolver';
 import {
   buildChartData,
   buildChartJsConfig,
@@ -52,21 +53,21 @@ export async function chartDataByIdHandler(c: Context) {
   });
 }
 
-/** POST /api/chart-data — preview chart data without saving */
+/** POST /api/chart-data/preview — preview chart data from template config */
 export async function chartDataPreviewHandler(c: Context) {
   const repo = getAppStateRepo();
-  const body = await c.req.json<{ datasetId: number; config: unknown }>();
+  const body = await c.req.json<{ datasetId: number; templateConfig: unknown }>();
 
   if (!body || typeof body.datasetId !== 'number') {
     return c.json({ error: 'datasetId required' }, 400);
   }
 
-  const parsed = VisualizationConfigSchema.safeParse(body.config);
-  if (!parsed.success) {
-    return c.json({ error: 'Invalid config', details: parsed.error.issues }, 400);
+  const tcParsed = TemplateConfigSchema.safeParse(body.templateConfig);
+  if (!tcParsed.success) {
+    return c.json({ error: 'Invalid template config', details: tcParsed.error.issues }, 400);
   }
 
-  const config = parsed.data;
+  const config = resolveTemplate(tcParsed.data);
   const validationErrors = validateVisualizationConfig(config);
   if (validationErrors.length > 0) {
     return c.json({ error: 'Config validation failed', details: validationErrors }, 400);

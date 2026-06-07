@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TemplateConfigSchema } from './visualizationTemplate';
 
 export const ChartTypeSchema = z.enum(['line', 'bar', 'pie', 'doughnut', 'scatter']);
 export type ChartType = z.infer<typeof ChartTypeSchema>;
@@ -82,6 +83,7 @@ export const VisualizationConfigSchema = z.object({
   derivedMetric: DerivedMetricConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),
+  _templateConfig: TemplateConfigSchema.optional(),
 });
 export type VisualizationConfig = z.infer<typeof VisualizationConfigSchema>;
 

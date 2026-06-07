@@ -562,3 +562,68 @@ body {
   padding: 32px 0;
   text-align: center;
 }
+
+// ── Template cards ───────────────────────────────────────────────────────────
+
+.template-card {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  text-decoration: none;
+  color: var(--color-text);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+  }
+}
+
+// ── Warnings ─────────────────────────────────────────────────────────────────
+
+.warning-box {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #f5c6cb;
+  border-radius: var(--radius);
+  background: #fff3f3;
+}
+
+.warning {
+  margin: 0;
+  font-size: 13px;
+  color: #721c24;
+
+  & + & {
+    margin-top: 4px;
+  }
+}
+
+// ── Form sections ────────────────────────────────────────────────────────────
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

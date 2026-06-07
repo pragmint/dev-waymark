@@ -1,16 +1,19 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
 import { getEntityRepo } from '../db/source/index';
-import { VisualizationConfigSchema } from '../schemas/visualization';
+import { TemplateConfigSchema, TemplateIdSchema } from '../schemas/visualizationTemplate';
+import { resolveTemplate } from '../domain/templateResolver';
 import {
   buildChartData,
   buildChartJsConfig,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 import { VisualizationsPage } from '../frontend/Pages/VisualizationsPage';
-import { ChartBuilderPage } from '../frontend/Pages/ChartBuilderPage';
+import { TemplatePickerPage } from '../frontend/Pages/TemplatePickerPage';
+import { TemplateConfigPage } from '../frontend/Pages/TemplateConfigPage';
 import { VisualizationDetailPage } from '../frontend/Pages/VisualizationDetailPage';
 import type { AvailableFilter } from '../schemas/entity';
+import type { TemplateId } from '../schemas/visualizationTemplate';
 
 export async function visualizationsListHandler(c: Context) {
   const repo = getAppStateRepo();
@@ -23,33 +26,41 @@ export async function visualizationsListHandler(c: Context) {
 export async function visualizationsNewHandler(c: Context) {
   const repo = getAppStateRepo();
   const datasets = await repo.listDatasets();
-
   const datasetIdRaw = c.req.query('dataset_id');
   const parsedId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : null;
-  const datasetId =
+  const selectedDatasetId =
     parsedId != null && !isNaN(parsedId) ? parsedId : datasets.length > 0 ? datasets[0].id : null;
 
-  let availableFilters: AvailableFilter[] = [];
-  let selectedDatasetName: string | null = null;
+  return c.html(<TemplatePickerPage datasets={datasets} selectedDatasetId={selectedDatasetId} />);
+}
 
-  if (datasetId != null) {
-    const dataset = await repo.getDataset(datasetId);
-    if (dataset) {
-      selectedDatasetName = dataset.name;
-      const entityRepo = getEntityRepo();
-      const entities = await entityRepo.list(dataset.filters);
-      const entityIds = entities.map(e => e.id);
-      if (entityIds.length > 0) {
-        availableFilters = await entityRepo.getAvailableFilters(entityIds);
-      }
-    }
+export async function visualizationsTemplateHandler(c: Context) {
+  const templateIdRaw = c.req.param('templateId');
+  const parsed = TemplateIdSchema.safeParse(templateIdRaw);
+  if (!parsed.success) return c.notFound();
+  const templateId = parsed.data;
+
+  const repo = getAppStateRepo();
+  const datasetIdRaw = c.req.query('dataset_id');
+  const datasetId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : NaN;
+  if (isNaN(datasetId)) return c.redirect('/visualizations/new');
+
+  const dataset = await repo.getDataset(datasetId);
+  if (!dataset) return c.redirect('/visualizations/new');
+
+  const entityRepo = getEntityRepo();
+  const entities = await entityRepo.list(dataset.filters);
+  const entityIds = entities.map(e => e.id);
+  let availableFilters: AvailableFilter[] = [];
+  if (entityIds.length > 0) {
+    availableFilters = await entityRepo.getAvailableFilters(entityIds);
   }
 
   return c.html(
-    <ChartBuilderPage
-      datasets={datasets}
-      selectedDatasetId={datasetId}
-      selectedDatasetName={selectedDatasetName}
+    <TemplateConfigPage
+      templateId={templateId}
+      datasetId={datasetId}
+      datasetName={dataset.name}
       availableFilters={availableFilters}
       visualization={null}
       errors={[]}
@@ -65,27 +76,44 @@ export async function visualizationsSaveHandler(c: Context) {
   const description = (formData.get('description') as string | null)?.trim() || null;
   const datasetIdRaw = formData.get('dataset_id') as string | null;
   const datasetId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : null;
+  const templateIdRaw = formData.get('template_id') as string | null;
 
-  if (!name || datasetId == null || isNaN(datasetId)) {
+  if (!name || datasetId == null || isNaN(datasetId) || !templateIdRaw) {
     return c.redirect('/visualizations/new');
   }
 
-  const configRaw = parseVisualizationForm(formData);
-  const parsed = VisualizationConfigSchema.safeParse(configRaw);
-  if (!parsed.success) {
-    return c.redirect('/visualizations/new');
+  const templateIdParsed = TemplateIdSchema.safeParse(templateIdRaw);
+  if (!templateIdParsed.success) return c.redirect('/visualizations/new');
+  const templateId = templateIdParsed.data;
+
+  const templateConfig = parseTemplateForm(templateId, formData);
+  const tcParsed = TemplateConfigSchema.safeParse(templateConfig);
+  if (!tcParsed.success) {
+    return c.redirect(`/visualizations/new/${templateId}?dataset_id=${datasetId}`);
   }
 
-  const config = parsed.data;
+  const config = resolveTemplate(tcParsed.data);
+  // Store template config alongside for editing round-trips
+  const configWithTemplate = { ...config, _templateConfig: tcParsed.data };
+
   const errors = validateVisualizationConfig(config);
   if (errors.length > 0) {
-    const datasets = await repo.listDatasets();
+    const dataset = await repo.getDataset(datasetId);
+    const entityRepo = getEntityRepo();
+    let availableFilters: AvailableFilter[] = [];
+    if (dataset) {
+      const entities = await entityRepo.list(dataset.filters);
+      const entityIds = entities.map(e => e.id);
+      if (entityIds.length > 0) {
+        availableFilters = await entityRepo.getAvailableFilters(entityIds);
+      }
+    }
     return c.html(
-      <ChartBuilderPage
-        datasets={datasets}
-        selectedDatasetId={datasetId}
-        selectedDatasetName={null}
-        availableFilters={[]}
+      <TemplateConfigPage
+        templateId={templateId}
+        datasetId={datasetId}
+        datasetName={dataset?.name ?? `Dataset ${datasetId}`}
+        availableFilters={availableFilters}
         visualization={null}
         errors={errors}
       />,
@@ -93,7 +121,7 @@ export async function visualizationsSaveHandler(c: Context) {
     );
   }
 
-  const id = await repo.saveVisualization(name, description, datasetId, config);
+  const id = await repo.saveVisualization(name, description, datasetId, configWithTemplate);
   return c.redirect(`/visualizations/${id}`);
 }
 
@@ -140,9 +168,13 @@ export async function visualizationsEditHandler(c: Context) {
   const viz = await repo.getVisualization(id);
   if (!viz) return c.notFound();
 
-  const datasets = await repo.listDatasets();
-  const dataset = await repo.getDataset(viz.datasetId);
+  const tc = viz.config._templateConfig;
+  if (!tc) {
+    // Legacy visualization without template config — redirect to detail
+    return c.redirect(`/visualizations/${id}`);
+  }
 
+  const dataset = await repo.getDataset(viz.datasetId);
   let availableFilters: AvailableFilter[] = [];
   if (dataset) {
     const entityRepo = getEntityRepo();
@@ -154,10 +186,10 @@ export async function visualizationsEditHandler(c: Context) {
   }
 
   return c.html(
-    <ChartBuilderPage
-      datasets={datasets}
-      selectedDatasetId={viz.datasetId}
-      selectedDatasetName={dataset?.name ?? null}
+    <TemplateConfigPage
+      templateId={tc.templateId}
+      datasetId={viz.datasetId}
+      datasetName={dataset?.name ?? `Dataset ${viz.datasetId}`}
       availableFilters={availableFilters}
       visualization={viz}
       errors={[]}
@@ -173,17 +205,24 @@ export async function visualizationsUpdateHandler(c: Context) {
   const formData = await c.req.formData();
   const name = (formData.get('name') as string | null)?.trim() ?? '';
   const description = (formData.get('description') as string | null)?.trim() || null;
+  const templateIdRaw = formData.get('template_id') as string | null;
 
-  if (!name) return c.redirect(`/visualizations/${id}/edit`);
+  if (!name || !templateIdRaw) return c.redirect(`/visualizations/${id}/edit`);
 
-  const configRaw = parseVisualizationForm(formData);
-  const parsed = VisualizationConfigSchema.safeParse(configRaw);
-  if (!parsed.success) return c.redirect(`/visualizations/${id}/edit`);
+  const templateIdParsed = TemplateIdSchema.safeParse(templateIdRaw);
+  if (!templateIdParsed.success) return c.redirect(`/visualizations/${id}/edit`);
 
-  const errors = validateVisualizationConfig(parsed.data);
+  const templateConfig = parseTemplateForm(templateIdParsed.data, formData);
+  const tcParsed = TemplateConfigSchema.safeParse(templateConfig);
+  if (!tcParsed.success) return c.redirect(`/visualizations/${id}/edit`);
+
+  const config = resolveTemplate(tcParsed.data);
+  const configWithTemplate = { ...config, _templateConfig: tcParsed.data };
+
+  const errors = validateVisualizationConfig(config);
   if (errors.length > 0) return c.redirect(`/visualizations/${id}/edit`);
 
-  await repo.updateVisualization(id, name, description, parsed.data);
+  await repo.updateVisualization(id, name, description, configWithTemplate);
   return c.redirect(`/visualizations/${id}`);
 }
 
@@ -196,76 +235,43 @@ export async function visualizationsDeleteHandler(c: Context) {
 
 // ── Form parsing ──────────────────────────────────────────────────────────────
 
-function str(s: FormDataEntryValue | null): string | undefined {
-  const v = (s as string | null)?.trim();
-  return v || undefined;
+function str(s: FormDataEntryValue | null): string {
+  return ((s as string | null)?.trim() ?? '') || '';
 }
 
-function parseAxesFromForm(formData: FormData) {
-  const xAxisKey = str(formData.get('x_axis_key'));
-  const xAxis = xAxisKey
-    ? {
-        metadataKey: xAxisKey,
-        type: formData.get('x_axis_type') ?? 'date',
-        timeBucket: str(formData.get('x_axis_time_bucket')),
-      }
-    : undefined;
+function parseTemplateForm(templateId: TemplateId, formData: FormData): Record<string, unknown> {
+  const slots: Record<string, string> = {};
 
-  const yAxisKey = str(formData.get('y_axis_key'));
-  const yAxis = yAxisKey
-    ? {
-        metadataKey: yAxisKey,
-        type: formData.get('y_axis_type') ?? 'number',
-        unit: str(formData.get('y_axis_unit')),
-        displayUnit: str(formData.get('y_axis_display_unit')),
-      }
-    : undefined;
-
-  const categoryKey = str(formData.get('category_key'));
-  const category = categoryKey
-    ? { metadataKey: categoryKey, sortBy: str(formData.get('category_sort_by')) }
-    : undefined;
-
-  return { xAxis, yAxis, category };
-}
-
-function parseDerivedMetricFromForm(formData: FormData): Record<string, unknown> | undefined {
-  if (formData.get('derived_metric_enabled') !== 'on') return undefined;
-  return {
-    name: str(formData.get('derived_metric_name')) ?? 'derived',
-    type: 'duration',
-    startMetadataKey: formData.get('derived_metric_start_key'),
-    endMetadataKey: formData.get('derived_metric_end_key'),
-    unit: formData.get('derived_metric_unit') ?? 'seconds',
-  };
-}
-
-function parseTargetFromForm(formData: FormData): Record<string, unknown> | undefined {
-  if (formData.get('target_enabled') !== 'on') return undefined;
-  const targetType = formData.get('target_type') as string | null;
-  const label = str(formData.get('target_label'));
-  if (targetType === 'horizontal_line') {
-    return { type: 'horizontal_line', value: Number(formData.get('target_value') ?? 0), label };
+  switch (templateId) {
+    case 'duration_trend':
+      slots.startDateField = str(formData.get('start_date_field'));
+      slots.endDateField = str(formData.get('end_date_field'));
+      slots.timeBucket = str(formData.get('time_bucket')) || 'week';
+      slots.unit = str(formData.get('unit')) || 'days';
+      break;
+    case 'category_breakdown':
+      slots.categoryField = str(formData.get('category_field'));
+      break;
+    case 'phase_snapshot':
+      slots.categoryField = str(formData.get('category_field'));
+      slots.dateField = str(formData.get('date_field'));
+      break;
+    case 'throughput_over_time':
+      slots.dateField = str(formData.get('date_field'));
+      slots.timeBucket = str(formData.get('time_bucket')) || 'week';
+      break;
+    case 'field_trend':
+      slots.dateField = str(formData.get('date_field'));
+      slots.numericField = str(formData.get('numeric_field'));
+      slots.timeBucket = str(formData.get('time_bucket')) || 'week';
+      slots.aggregation = str(formData.get('aggregation')) || 'avg';
+      break;
+    case 'category_comparison':
+      slots.categoryField = str(formData.get('category_field'));
+      slots.numericField = str(formData.get('numeric_field'));
+      slots.aggregation = str(formData.get('aggregation')) || 'avg';
+      break;
   }
-  if (targetType === 'vertical_line') {
-    return { type: 'vertical_line', value: formData.get('target_value_str') ?? '', label };
-  }
-  if (targetType === 'band') {
-    return {
-      type: 'band',
-      min: Number(formData.get('target_min') ?? 0),
-      max: Number(formData.get('target_max') ?? 0),
-      label,
-    };
-  }
-  return undefined;
-}
 
-function parseVisualizationForm(formData: FormData): Record<string, unknown> {
-  const chartType = formData.get('chart_type') ?? 'bar';
-  const aggregation = { function: formData.get('aggregation_fn') ?? 'count' };
-  const { xAxis, yAxis, category } = parseAxesFromForm(formData);
-  const derivedMetric = parseDerivedMetricFromForm(formData);
-  const target = parseTargetFromForm(formData);
-  return { chartType, xAxis, yAxis, category, aggregation, derivedMetric, target };
+  return { templateId, slots };
 }
