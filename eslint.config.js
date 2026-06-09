@@ -72,6 +72,14 @@ export default [
     },
   },
   {
-    ignores: ['node_modules', 'dist', 'build', 'public', 'eslint-rules', 'mirror'],
+    ignores: [
+      'node_modules',
+      'dist',
+      'build',
+      'public',
+      'eslint-rules',
+      'mirror',
+      'src/db/source/goldenSeed.ts',
+    ],
   },
 ];
