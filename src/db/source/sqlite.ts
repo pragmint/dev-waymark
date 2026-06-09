@@ -6,14 +6,21 @@ export class SqliteSourceAdapter implements SourceDataAdapter {
   private db: Database;
 
   /**
-   * @param path   File path or `:memory:` for an in-memory database.
+   * @param input  File path, `:memory:` for an in-memory database, or an
+   *               already-open `Database` instance (e.g. one produced by
+   *               `Database.deserialize()` from a snapshot).
    * @param applySchema  If true, apply the expected source schema immediately.
-   *                     Use this only for in-memory databases — configured
-   *                     source databases are assumed to have the schema already.
+   *                     Use this only for in-memory or freshly-created databases
+   *                     — configured source databases are assumed to have the
+   *                     schema already.
    */
-  constructor(path: string, applySchema = false) {
-    this.db = new Database(path);
-    this.db.query('PRAGMA journal_mode = WAL').run();
+  constructor(input: string | Database, applySchema = false) {
+    if (typeof input === 'string') {
+      this.db = new Database(input);
+      this.db.query('PRAGMA journal_mode = WAL').run();
+    } else {
+      this.db = input;
+    }
     this.db.query('PRAGMA foreign_keys = ON').run();
     if (applySchema) {
       applySourceSchema(this.db);

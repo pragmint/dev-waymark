@@ -50,6 +50,9 @@ tmp/
 temp/
 *.tmp
 
+# Seed snapshot cache (rebuilt from goldenSeed.ts on demand)
+.cache/
+
 # Claude hooks sentinel (touch to disable Stop hooks during planning/analysis)
 .no-hooks
 
