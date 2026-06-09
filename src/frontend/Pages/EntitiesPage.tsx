@@ -6,6 +6,9 @@ import { getEntityTitle, getMetadataValue } from '../../domain/entityQueries';
 
 type EntitiesPageProps = {
   entities: EntityWithMetadata[];
+  totalCount: number;
+  page: number;
+  perPage: number;
   activeFilters: MetaFilter[];
   availableFilters: AvailableFilter[];
   addingKey?: string;
@@ -16,8 +19,31 @@ type EntitiesPageProps = {
 // which is a pseudo-metadata key that maps to the Entity column
 const FIXED_COLUMN_KEYS = new Set(['entity_type', 'entity_created_at', 'entity_name']);
 
+// Build a URL preserving filters + add/edit keys, swapping in a new page number.
+function pageHref(
+  page: number,
+  perPage: number,
+  activeFilters: MetaFilter[],
+  addingKey?: string,
+  editingKey?: string
+): string {
+  const params = new URLSearchParams();
+  for (const f of activeFilters) {
+    params.append(`mf__${f.key}__${f.op}`, f.value);
+  }
+  if (addingKey) params.set('add_filter', addingKey);
+  if (editingKey) params.set('edit_filter', editingKey);
+  if (page > 1) params.set('page', String(page));
+  if (perPage !== 50) params.set('per_page', String(perPage));
+  const qs = params.toString();
+  return qs ? `/entities?${qs}` : '/entities';
+}
+
 export const EntitiesPage: FC<EntitiesPageProps> = ({
   entities,
+  totalCount,
+  page,
+  perPage,
   activeFilters,
   availableFilters,
   addingKey,
@@ -26,13 +52,20 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   const extraKeys = [...new Set(activeFilters.map(f => f.key))].filter(
     k => !FIXED_COLUMN_KEYS.has(k)
   );
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * perPage + 1;
+  const rangeEnd = Math.min(page * perPage, totalCount);
 
   return (
     <Layout title="Entities">
       <div class="page-header">
         <h1>Entities</h1>
         <span class="count">
-          {entities.length} result{entities.length !== 1 ? 's' : ''}
+          {totalCount === 0
+            ? '0 results'
+            : `${rangeStart}–${rangeEnd} of ${totalCount} result${totalCount !== 1 ? 's' : ''}`}
         </span>
         <div class="page-header-actions">
           <button type="button" id="save-dataset-btn" class="filter-chip">
@@ -101,6 +134,40 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             ))}
           </tbody>
         </table>
+      )}
+
+      {totalPages > 1 && (
+        <nav class="pagination" data-pagination aria-label="Pagination">
+          {hasPrev ? (
+            <a
+              class="pagination-link"
+              data-pagination-prev
+              href={pageHref(page - 1, perPage, activeFilters, addingKey, editingKey)}
+            >
+              ← Prev
+            </a>
+          ) : (
+            <span class="pagination-link pagination-link--disabled" data-pagination-prev>
+              ← Prev
+            </span>
+          )}
+          <span class="pagination-status" data-pagination-status>
+            Page {page} of {totalPages}
+          </span>
+          {hasNext ? (
+            <a
+              class="pagination-link"
+              data-pagination-next
+              href={pageHref(page + 1, perPage, activeFilters, addingKey, editingKey)}
+            >
+              Next →
+            </a>
+          ) : (
+            <span class="pagination-link pagination-link--disabled" data-pagination-next>
+              Next →
+            </span>
+          )}
+        </nav>
       )}
     </Layout>
   );

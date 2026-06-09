@@ -190,6 +190,70 @@ describe('entityRepository', () => {
     expect(results).toHaveLength(0);
   });
 
+  describe('listPaged', () => {
+    it('returns one page worth of entities, the full id set, and total count', async () => {
+      for (let id = 1; id <= 10; id++) {
+        await repo.upsert(makeEntity({ id, name: `E-${id}`, type: 'jira_ticket' }), []);
+      }
+      const result = await repo.listPaged([], { limit: 3, offset: 0 });
+      expect(result.total).toBe(10);
+      expect(result.allIds).toHaveLength(10);
+      expect(result.pageEntities).toHaveLength(3);
+      // Default ordering is id DESC, so page 1 should contain ids 10, 9, 8.
+      expect(result.pageEntities.map(e => e.id)).toEqual([10, 9, 8]);
+    });
+
+    it('respects offset for subsequent pages', async () => {
+      for (let id = 1; id <= 10; id++) {
+        await repo.upsert(makeEntity({ id, name: `E-${id}`, type: 'jira_ticket' }), []);
+      }
+      const result = await repo.listPaged([], { limit: 3, offset: 3 });
+      expect(result.pageEntities.map(e => e.id)).toEqual([7, 6, 5]);
+    });
+
+    it('returns empty page beyond end without error', async () => {
+      for (let id = 1; id <= 3; id++) {
+        await repo.upsert(makeEntity({ id, name: `E-${id}` }), []);
+      }
+      const result = await repo.listPaged([], { limit: 10, offset: 50 });
+      expect(result.pageEntities).toHaveLength(0);
+      expect(result.total).toBe(3);
+    });
+
+    it('paginates while preserving filter narrowing for getAvailableFilters', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'jira_ticket' }), [
+        makeMetadata(1, { key: 'ticket_type', value: 'Story' }),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'jira_ticket' }), [
+        makeMetadata(2, { key: 'ticket_type', value: 'Story' }),
+      ]);
+      await repo.upsert(makeEntity({ id: 3, name: 'C', type: 'jira_ticket' }), [
+        makeMetadata(3, { key: 'ticket_type', value: 'Bug' }),
+      ]);
+      const result = await repo.listPaged([{ key: 'ticket_type', op: 'eq', value: 'Story' }], {
+        limit: 1,
+        offset: 0,
+      });
+      expect(result.pageEntities).toHaveLength(1);
+      expect(result.allIds.sort()).toEqual([1, 2]);
+      expect(result.total).toBe(2);
+    });
+
+    it('applies regex filters before paginating', async () => {
+      for (let id = 1; id <= 5; id++) {
+        await repo.upsert(makeEntity({ id, name: `E-${id}` }), [
+          makeMetadata(id, { key: 'tag', value: id % 2 === 0 ? 'even' : 'odd' }),
+        ]);
+      }
+      const result = await repo.listPaged([{ key: 'tag', op: 're', value: '^even$' }], {
+        limit: 10,
+        offset: 0,
+      });
+      expect(result.total).toBe(2);
+      expect(result.pageEntities.map(e => e.id).sort()).toEqual([2, 4]);
+    });
+  });
+
   describe('getAvailableFilters', () => {
     it('returns all metadata keys when no filters active', async () => {
       await repo.upsert(makeEntity({ id: 1, name: 'A' }), [

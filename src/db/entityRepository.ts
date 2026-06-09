@@ -178,6 +178,14 @@ async function attachMetadata(
   }));
 }
 
+export type PageOptions = { limit: number; offset: number };
+
+export type PagedEntities = {
+  pageEntities: EntityWithMetadata[];
+  allIds: number[];
+  total: number;
+};
+
 export type EntityRepository = ReturnType<typeof createEntityRepository>;
 
 export function createEntityRepository(adapter: SourceDataAdapter) {
@@ -191,6 +199,51 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       const entities = rows.map(row => EntitySchema.parse(row));
       const withMeta = await attachMetadata(adapter, entities);
       return applyReFilters(withMeta, metaFilters);
+    },
+
+    // Paginated variant: returns one page of entities (with metadata) plus the
+    // full set of matching IDs (so getAvailableFilters can narrow against the
+    // entire filtered population, not just the current page) and a total count.
+    async listPaged(metaFilters: MetaFilter[], page: PageOptions): Promise<PagedEntities> {
+      const { where, params } = buildWhereClause(metaFilters);
+
+      // Regex filters apply in app code, so we must materialise the full filtered
+      // set before slicing. This path keeps correctness for `re` filters at the
+      // cost of paying the metadata fetch — the win is no HTML render of 10k+ rows.
+      if (metaFilters.some(f => f.op === 're')) {
+        const rows = await adapter.query(
+          `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
+          params
+        );
+        const entities = rows.map(row => EntitySchema.parse(row));
+        const withMeta = await attachMetadata(adapter, entities);
+        const filtered = applyReFilters(withMeta, metaFilters);
+        return {
+          pageEntities: filtered.slice(page.offset, page.offset + page.limit),
+          allIds: filtered.map(e => e.id),
+          total: filtered.length,
+        };
+      }
+
+      const idRows = await adapter.query<{ id: number }>(
+        `SELECT e.id FROM entities e ${where} ORDER BY e.id DESC`,
+        params
+      );
+      const allIds = idRows.map(r => r.id);
+      const pageIds = allIds.slice(page.offset, page.offset + page.limit);
+      if (pageIds.length === 0) {
+        return { pageEntities: [], allIds, total: allIds.length };
+      }
+      const placeholders = pageIds.map(() => '?').join(',');
+      const pageRows = await adapter.query(
+        `SELECT * FROM entities WHERE id IN (${placeholders}) ORDER BY id DESC`,
+        pageIds
+      );
+      const pageEntities = await attachMetadata(
+        adapter,
+        pageRows.map(r => EntitySchema.parse(r))
+      );
+      return { pageEntities, allIds, total: allIds.length };
     },
 
     async get(id: number): Promise<EntityWithMetadata | null> {

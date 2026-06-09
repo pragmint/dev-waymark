@@ -554,6 +554,37 @@ body {
   }
 }
 
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.pagination-link {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+.pagination-link--disabled {
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.pagination-status {
+  color: var(--color-muted);
+}
+
 // ── Empty states ──────────────────────────────────────────────────────────────
 
 .empty {
