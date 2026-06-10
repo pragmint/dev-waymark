@@ -8,6 +8,7 @@ import {
   computeDerivedMetric,
   buildChartData,
   buildChartJsConfig,
+  buildPointEntityFilters,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 
@@ -613,5 +614,79 @@ describe('buildChartData — P95 lead time by week', () => {
     // Only 1 or 2 values per week, so p95 ≈ max
     expect(result.datasets[0].data.length).toBe(3);
     result.datasets[0].data.forEach(v => expect(v).toBeGreaterThan(0));
+  });
+});
+
+// ── buildPointEntityFilters ───────────────────────────────────────────────────
+
+describe('buildPointEntityFilters', () => {
+  function timeConfig(
+    timeBucket: 'day' | 'week' | 'month' | 'quarter' | 'year'
+  ): VisualizationConfig {
+    return {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket },
+      aggregation: { function: 'count' },
+    };
+  }
+
+  test('day bucket → gte day-start, lte day-end-of-day', () => {
+    expect(buildPointEntityFilters('2024-03-15', timeConfig('day'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-03-15' },
+      { key: 'done_at', op: 'lte', value: '2024-03-15T23:59:59.999Z' },
+    ]);
+  });
+
+  test('week bucket → gte Monday, lte Sunday-end-of-day', () => {
+    expect(buildPointEntityFilters('Week of 2024-03-04', timeConfig('week'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-03-04' },
+      { key: 'done_at', op: 'lte', value: '2024-03-10T23:59:59.999Z' },
+    ]);
+  });
+
+  test('month bucket → gte month-prefix, lte last-day-of-month', () => {
+    expect(buildPointEntityFilters('2024-03', timeConfig('month'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-03' },
+      { key: 'done_at', op: 'lte', value: '2024-03-31T23:59:59.999Z' },
+    ]);
+    // February in a leap year ends on the 29th
+    expect(buildPointEntityFilters('2024-02', timeConfig('month'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-02' },
+      { key: 'done_at', op: 'lte', value: '2024-02-29T23:59:59.999Z' },
+    ]);
+  });
+
+  test('quarter bucket → gte first-month, lte last-day-of-third-month', () => {
+    expect(buildPointEntityFilters('2024-Q1', timeConfig('quarter'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-01' },
+      { key: 'done_at', op: 'lte', value: '2024-03-31T23:59:59.999Z' },
+    ]);
+    expect(buildPointEntityFilters('2024-Q4', timeConfig('quarter'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-10' },
+      { key: 'done_at', op: 'lte', value: '2024-12-31T23:59:59.999Z' },
+    ]);
+  });
+
+  test('year bucket → gte year, lte Dec-31-end-of-day', () => {
+    expect(buildPointEntityFilters('2024', timeConfig('year'))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024' },
+      { key: 'done_at', op: 'lte', value: '2024-12-31T23:59:59.999Z' },
+    ]);
+  });
+
+  test('category chart → single eq filter on category key', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    expect(buildPointEntityFilters('Alpha', config)).toEqual([
+      { key: 'team', op: 'eq', value: 'Alpha' },
+    ]);
+  });
+
+  test('returns empty array when label does not match bucket format', () => {
+    expect(buildPointEntityFilters('not-a-date', timeConfig('day'))).toEqual([]);
+    expect(buildPointEntityFilters('2024-13', timeConfig('quarter'))).toEqual([]);
   });
 });

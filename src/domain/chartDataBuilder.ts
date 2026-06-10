@@ -1,4 +1,4 @@
-import type { EntityWithMetadata } from '../schemas/entity';
+import type { EntityWithMetadata, MetaFilter } from '../schemas/entity';
 import type {
   VisualizationConfig,
   AggregationFunction,
@@ -104,6 +104,74 @@ export function bucketDate(dateStr: string, bucket: TimeBucket): string | null {
     case 'year':
       return `${date.getUTCFullYear()}`;
   }
+}
+
+// ── Bucket label → entity-filter range ────────────────────────────────────────
+
+// Inverse of bucketDate: given a bucket label, return the [gte, lte] string
+// bounds that match every entity falling into that bucket. Bounds are chosen
+// to compare correctly under SQLite's lexicographic string comparison, which
+// is how MetaFilter gte/lte operate on date values (see entityRepository).
+//
+// gte uses the bucket prefix (e.g. "2024-01" for month) so bare values like
+// "2024-01" or "2024-01-15" both satisfy it. lte uses the last day of the
+// bucket plus the maximum time-of-day, which dominates every timestamp on
+// that day and falls short of the next day's prefix.
+function bucketRange(label: string, bucket: TimeBucket): { gte: string; lte: string } | null {
+  switch (bucket) {
+    case 'day': {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(label)) return null;
+      return { gte: label, lte: `${label}T23:59:59.999Z` };
+    }
+    case 'week': {
+      const m = /^Week of (\d{4}-\d{2}-\d{2})$/.exec(label);
+      if (!m) return null;
+      const start = m[1];
+      const startMs = Date.parse(`${start}T00:00:00Z`);
+      if (isNaN(startMs)) return null;
+      const endStr = new Date(startMs + 6 * 86_400_000).toISOString().slice(0, 10);
+      return { gte: start, lte: `${endStr}T23:59:59.999Z` };
+    }
+    case 'month': {
+      if (!/^\d{4}-\d{2}$/.test(label)) return null;
+      const [y, m] = label.split('-').map(Number);
+      // Day 0 of next month = last day of this month.
+      const lastDay = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+      return { gte: label, lte: `${lastDay}T23:59:59.999Z` };
+    }
+    case 'quarter': {
+      const m = /^(\d{4})-Q([1-4])$/.exec(label);
+      if (!m) return null;
+      const year = parseInt(m[1], 10);
+      const q = parseInt(m[2], 10);
+      const startMonth = (q - 1) * 3 + 1;
+      const startStr = `${year}-${String(startMonth).padStart(2, '0')}`;
+      const lastDay = new Date(Date.UTC(year, startMonth + 2, 0)).toISOString().slice(0, 10);
+      return { gte: startStr, lte: `${lastDay}T23:59:59.999Z` };
+    }
+    case 'year': {
+      if (!/^\d{4}$/.test(label)) return null;
+      return { gte: label, lte: `${label}-12-31T23:59:59.999Z` };
+    }
+  }
+}
+
+// Filters that, combined with the dataset's existing filters, isolate the
+// entities aggregated into a single chart data point. Used to power
+// click-through from chart points to the entities list.
+export function buildPointEntityFilters(label: string, config: VisualizationConfig): MetaFilter[] {
+  if (config.xAxis?.timeBucket) {
+    const range = bucketRange(label, config.xAxis.timeBucket);
+    if (!range) return [];
+    return [
+      { key: config.xAxis.metadataKey, op: 'gte', value: range.gte },
+      { key: config.xAxis.metadataKey, op: 'lte', value: range.lte },
+    ];
+  }
+  if (config.category) {
+    return [{ key: config.category.metadataKey, op: 'eq', value: label }];
+  }
+  return [];
 }
 
 // ── Unit conversion ───────────────────────────────────────────────────────────

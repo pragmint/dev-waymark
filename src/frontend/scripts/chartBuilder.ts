@@ -7,6 +7,26 @@ interface ChartInstance {
   destroy(): void;
 }
 
+interface ChartActiveElement {
+  datasetIndex: number;
+  index: number;
+}
+
+interface ChartOptions {
+  onClick?: (event: unknown, elements: ChartActiveElement[]) => void;
+  onHover?: (
+    event: { native?: { target?: EventTarget | null } },
+    elements: ChartActiveElement[]
+  ) => void;
+  [key: string]: unknown;
+}
+
+interface ChartConfig {
+  type: string;
+  data: unknown;
+  options?: ChartOptions;
+}
+
 let previewChart: ChartInstance | null = null;
 let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -17,12 +37,45 @@ function initDetailChart(): void {
   if (!canvas) return;
   const configStr = canvas.getAttribute('data-config');
   if (!configStr) return;
+  let config: ChartConfig;
   try {
-    const config = JSON.parse(configStr) as object;
-    new Chart(canvas, config);
+    config = JSON.parse(configStr) as ChartConfig;
   } catch {
-    // Ignore parse errors — chart won't render but page still loads
+    return;
   }
+
+  const pointUrls = readPointUrls(canvas);
+  if (pointUrls) attachPointNavigation(config, pointUrls);
+
+  new Chart(canvas, config);
+}
+
+function readPointUrls(canvas: HTMLCanvasElement): string[] | null {
+  const raw = canvas.getAttribute('data-point-urls');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as string[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function attachPointNavigation(config: ChartConfig, pointUrls: string[]): void {
+  const options: ChartOptions = config.options ?? (config.options = {});
+  options.onClick = (_event, elements) => {
+    // Only navigate for the primary dataset; target lines (datasetIndex > 0)
+    // share x-positions with real points and shouldn't trigger.
+    const hit = elements.find(e => e.datasetIndex === 0);
+    if (!hit) return;
+    const url = pointUrls[hit.index];
+    if (url) window.location.href = url;
+  };
+  options.onHover = (event, elements) => {
+    const target = event?.native?.target as HTMLElement | null;
+    if (!target || !('style' in target)) return;
+    target.style.cursor = elements.some(e => e.datasetIndex === 0) ? 'pointer' : 'default';
+  };
 }
 
 // ── Template picker: update card links when dataset changes ──────────────────

@@ -11,6 +11,7 @@ type Props = {
   datasetUrl: string;
   chartResult: ChartDataResult;
   chartJsConfig: ChartJsConfig;
+  pointUrls: string[];
 };
 
 export const VisualizationDetailPage: FC<Props> = ({
@@ -19,8 +20,10 @@ export const VisualizationDetailPage: FC<Props> = ({
   datasetUrl,
   chartResult,
   chartJsConfig,
+  pointUrls,
 }) => {
   const configJson = JSON.stringify(chartJsConfig);
+  const pointUrlsJson = JSON.stringify(pointUrls);
 
   return (
     <Layout title={visualization.name} extraScripts={[CHART_JS_CDN, '/chartBuilder.js']}>
@@ -64,7 +67,12 @@ export const VisualizationDetailPage: FC<Props> = ({
       )}
 
       <div class="chart-container" style="position:relative; max-width:900px; margin-top:24px">
-        <canvas id="main-chart" data-config={configJson} style="max-height:500px" />
+        <canvas
+          id="main-chart"
+          data-config={configJson}
+          data-point-urls={pointUrlsJson}
+          style="max-height:500px"
+        />
       </div>
 
       <div style="margin-top:16px; font-size:0.85rem; color:#6b7280">

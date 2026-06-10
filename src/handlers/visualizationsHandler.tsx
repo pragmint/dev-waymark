@@ -6,14 +6,24 @@ import { resolveTemplate } from '../domain/templateResolver';
 import {
   buildChartData,
   buildChartJsConfig,
+  buildPointEntityFilters,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 import { VisualizationsPage } from '../frontend/Pages/VisualizationsPage';
 import { TemplatePickerPage } from '../frontend/Pages/TemplatePickerPage';
 import { TemplateConfigPage } from '../frontend/Pages/TemplateConfigPage';
 import { VisualizationDetailPage } from '../frontend/Pages/VisualizationDetailPage';
-import type { AvailableFilter } from '../schemas/entity';
+import type { AvailableFilter, MetaFilter } from '../schemas/entity';
 import type { TemplateId } from '../schemas/visualizationTemplate';
+
+function entitiesUrl(filters: MetaFilter[]): string {
+  const params = new URLSearchParams();
+  for (const f of filters) {
+    params.append(`mf__${f.key}__${f.op}`, f.value);
+  }
+  const qs = params.toString();
+  return qs ? `/entities?${qs}` : '/entities';
+}
 
 export async function visualizationsListHandler(c: Context) {
   const repo = getAppStateRepo();
@@ -142,12 +152,10 @@ export async function visualizationsDetailHandler(c: Context) {
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
-  const params = new URLSearchParams();
-  for (const f of dataset.filters) {
-    params.append(`mf__${f.key}__${f.op}`, f.value);
-  }
-  const qs = params.toString();
-  const datasetUrl = qs ? `/entities?${qs}` : '/entities';
+  const datasetUrl = entitiesUrl(dataset.filters);
+  const pointUrls = chartResult.labels.map(label =>
+    entitiesUrl([...dataset.filters, ...buildPointEntityFilters(label, viz.config)])
+  );
 
   return c.html(
     <VisualizationDetailPage
@@ -156,6 +164,7 @@ export async function visualizationsDetailHandler(c: Context) {
       datasetUrl={datasetUrl}
       chartResult={chartResult}
       chartJsConfig={chartJsConfig}
+      pointUrls={pointUrls}
     />
   );
 }
