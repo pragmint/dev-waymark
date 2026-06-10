@@ -12,7 +12,7 @@ let _db: Database | null = null;
 /** @deprecated */
 export function getDb(): Database {
   if (!_db) {
-    const path = process.env.DATABASE_PATH ?? 'step-engine.sqlite';
+    const path = process.env.DATABASE_PATH ?? 'dev-waymark.sqlite';
     _db = new Database(path);
     _db.query('PRAGMA journal_mode = WAL').run();
     _db.query('PRAGMA foreign_keys = ON').run();

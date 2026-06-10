@@ -35,19 +35,19 @@ export function loadConfig(): Config {
   const port = parseInt(process.env.PORT ?? '3000', 10);
 
   // Source DB — default to in-memory SQLite when no source is configured.
-  // Step Engine never migrates a source database; the schema must already exist
+  // Dev Waymark never migrates a source database; the schema must already exist
   // (see src/db/source/schema.ts). The in-memory default is an empty database
   // with the schema applied, useful for local development and testing.
   // DATABASE_PATH is accepted as a legacy fallback for file-based SQLite.
-  const rawSourceAdapter = process.env.STEP_ENGINE_SOURCE_DB_ADAPTER ?? 'sqlite';
+  const rawSourceAdapter = process.env.DEV_WAYMARK_SOURCE_DB_ADAPTER ?? 'sqlite';
   const sourceUrl =
-    process.env.STEP_ENGINE_SOURCE_DB_URL ??
+    process.env.DEV_WAYMARK_SOURCE_DB_URL ??
     (process.env.DATABASE_PATH ? `sqlite:///${process.env.DATABASE_PATH}` : 'sqlite:///:memory:');
-  const sourceName = process.env.STEP_ENGINE_SOURCE_DB_NAME ?? 'default';
+  const sourceName = process.env.DEV_WAYMARK_SOURCE_DB_NAME ?? 'default';
 
   // App state DB — default to local sqlite when not configured
-  const rawAppAdapter = process.env.STEP_ENGINE_APP_DB_ADAPTER ?? 'sqlite';
-  const appUrl = process.env.STEP_ENGINE_APP_DB_URL ?? 'sqlite:///step-engine-app.sqlite';
+  const rawAppAdapter = process.env.DEV_WAYMARK_APP_DB_ADAPTER ?? 'sqlite';
+  const appUrl = process.env.DEV_WAYMARK_APP_DB_URL ?? 'sqlite:///dev-waymark-app.sqlite';
 
   return ConfigSchema.parse({
     port,

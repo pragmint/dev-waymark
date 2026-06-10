@@ -1,7 +1,7 @@
 /**
  * SourceDataAdapter — read-oriented adapter for client/analytical source data.
  *
- * Step Engine never owns source data and never creates or migrates its schema.
+ * Dev Waymark never owns source data and never creates or migrates its schema.
  * The expected schema is documented in src/db/source/schema.ts.
  *
  * The `execute` method is provided so the SQLite adapter can support the

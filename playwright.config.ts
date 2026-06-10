@@ -19,7 +19,7 @@ export default defineConfig({
     port: 4080,
     reuseExistingServer: false,
     env: {
-      STEP_ENGINE_APP_DB_URL: 'sqlite:///:memory:',
+      DEV_WAYMARK_APP_DB_URL: 'sqlite:///:memory:',
     },
   },
 });

@@ -18,7 +18,7 @@ import { seedGoldenData } from './goldenSeed';
 // rather than opened in place — that keeps the runtime semantics identical to
 // the prior `:memory:` default and avoids file-lock / WAL-sidecar headaches
 // when the snapshot is rebuilt (the macOS SQLITE_IOERR_VNODE trap).
-const SEED_CACHE_PATH = join(process.cwd(), '.cache', 'step-engine-seed.sqlite');
+const SEED_CACHE_PATH = join(process.cwd(), '.cache', 'dev-waymark-seed.sqlite');
 const SEED_HASH_PATH = SEED_CACHE_PATH + '.hash';
 const SEED_HASH_SOURCES = [
   join(import.meta.dir, 'goldenSeed.ts'),
@@ -78,7 +78,7 @@ export async function createSourceAdapter(config: Config['sourceDb']): Promise<S
       const path = parseSqliteUrl(config.url);
       // Apply the source schema automatically only for in-memory databases.
       // Configured file-based or external databases are assumed to have the
-      // schema already — Step Engine never migrates a source database.
+      // schema already — Dev Waymark never migrates a source database.
       if (path === ':memory:') return loadInMemorySeed();
       return new SqliteSourceAdapter(path, false);
     }

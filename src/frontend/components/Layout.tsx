@@ -9,14 +9,14 @@ export const Layout: FC<{ title: string; children?: Child; extraScripts?: string
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>{title} — Step Engine</title>
+      <title>{title} — Dev Waymark</title>
       <link rel="stylesheet" href="/style.css" />
     </head>
     <body>
       <header class="site-header">
         <nav class="nav">
           <a href="/entities" class="nav-brand">
-            Step Engine
+            Dev Waymark
           </a>
           <a href="/entities" class="nav-link">
             Entities

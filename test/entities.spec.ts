@@ -7,7 +7,7 @@ test('redirects root to /entities', async ({ page }) => {
 
 test('entities page has correct title and heading', async ({ page }) => {
   await page.goto('/entities');
-  await expect(page).toHaveTitle(/Entities.*Step Engine/);
+  await expect(page).toHaveTitle(/Entities.*Dev Waymark/);
   await expect(page.locator('h1')).toHaveText('Entities');
 });
 

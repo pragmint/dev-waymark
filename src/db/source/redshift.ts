@@ -5,7 +5,7 @@ import { PostgresSourceAdapter } from './postgres';
  *
  * Amazon Redshift speaks the PostgreSQL wire protocol, so the pg driver works
  * without modification. This class exists as a named seam so callers can
- * express intent clearly (e.g., STEP_ENGINE_SOURCE_DB_ADAPTER=redshift) and
+ * express intent clearly (e.g., DEV_WAYMARK_SOURCE_DB_ADAPTER=redshift) and
  * so Redshift-specific behaviour can be added here without touching the
  * Postgres adapter.
  */

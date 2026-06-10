@@ -34,7 +34,7 @@ describe('parseSqliteUrl', () => {
   });
 
   it('passes plain paths through unchanged', () => {
-    expect(parseSqliteUrl('step-engine.sqlite')).toBe('step-engine.sqlite');
+    expect(parseSqliteUrl('dev-waymark.sqlite')).toBe('dev-waymark.sqlite');
     expect(parseSqliteUrl(':memory:')).toBe(':memory:');
   });
 });
@@ -43,11 +43,11 @@ describe('loadConfig', () => {
   const cleanEnv = {
     PORT: undefined,
     DATABASE_PATH: undefined,
-    STEP_ENGINE_SOURCE_DB_ADAPTER: undefined,
-    STEP_ENGINE_SOURCE_DB_URL: undefined,
-    STEP_ENGINE_SOURCE_DB_NAME: undefined,
-    STEP_ENGINE_APP_DB_ADAPTER: undefined,
-    STEP_ENGINE_APP_DB_URL: undefined,
+    DEV_WAYMARK_SOURCE_DB_ADAPTER: undefined,
+    DEV_WAYMARK_SOURCE_DB_URL: undefined,
+    DEV_WAYMARK_SOURCE_DB_NAME: undefined,
+    DEV_WAYMARK_APP_DB_ADAPTER: undefined,
+    DEV_WAYMARK_APP_DB_URL: undefined,
   };
 
   it('returns defaults when no env vars are set', () => {
@@ -58,7 +58,7 @@ describe('loadConfig', () => {
       expect(config.sourceDb.url).toBe('sqlite:///:memory:');
       expect(config.sourceDb.name).toBe('default');
       expect(config.appDb.adapter).toBe('sqlite');
-      expect(config.appDb.url).toBe('sqlite:///step-engine-app.sqlite');
+      expect(config.appDb.url).toBe('sqlite:///dev-waymark-app.sqlite');
     });
   });
 
@@ -78,9 +78,9 @@ describe('loadConfig', () => {
     withEnv(
       {
         ...cleanEnv,
-        STEP_ENGINE_SOURCE_DB_ADAPTER: 'postgres',
-        STEP_ENGINE_SOURCE_DB_URL: 'postgresql://user:pass@localhost:5432/mydb',
-        STEP_ENGINE_SOURCE_DB_NAME: 'analytics',
+        DEV_WAYMARK_SOURCE_DB_ADAPTER: 'postgres',
+        DEV_WAYMARK_SOURCE_DB_URL: 'postgresql://user:pass@localhost:5432/mydb',
+        DEV_WAYMARK_SOURCE_DB_NAME: 'analytics',
       },
       () => {
         const config = loadConfig();
@@ -95,8 +95,8 @@ describe('loadConfig', () => {
     withEnv(
       {
         ...cleanEnv,
-        STEP_ENGINE_APP_DB_ADAPTER: 'postgres',
-        STEP_ENGINE_APP_DB_URL: 'postgresql://user:pass@localhost:5432/app',
+        DEV_WAYMARK_APP_DB_ADAPTER: 'postgres',
+        DEV_WAYMARK_APP_DB_URL: 'postgresql://user:pass@localhost:5432/app',
       },
       () => {
         const config = loadConfig();
@@ -110,10 +110,10 @@ describe('loadConfig', () => {
     withEnv(
       {
         ...cleanEnv,
-        STEP_ENGINE_SOURCE_DB_ADAPTER: 'redshift',
-        STEP_ENGINE_SOURCE_DB_URL: 'redshift://user:pass@host:5439/warehouse',
-        STEP_ENGINE_APP_DB_ADAPTER: 'sqlite',
-        STEP_ENGINE_APP_DB_URL: 'sqlite:///step-engine-app.sqlite',
+        DEV_WAYMARK_SOURCE_DB_ADAPTER: 'redshift',
+        DEV_WAYMARK_SOURCE_DB_URL: 'redshift://user:pass@host:5439/warehouse',
+        DEV_WAYMARK_APP_DB_ADAPTER: 'sqlite',
+        DEV_WAYMARK_APP_DB_URL: 'sqlite:///dev-waymark-app.sqlite',
       },
       () => {
         const config = loadConfig();
@@ -124,13 +124,13 @@ describe('loadConfig', () => {
   });
 
   it('rejects unknown source adapter', () => {
-    withEnv({ ...cleanEnv, STEP_ENGINE_SOURCE_DB_ADAPTER: 'oracle' }, () => {
+    withEnv({ ...cleanEnv, DEV_WAYMARK_SOURCE_DB_ADAPTER: 'oracle' }, () => {
       expect(() => loadConfig()).toThrow();
     });
   });
 
   it('rejects unknown app adapter', () => {
-    withEnv({ ...cleanEnv, STEP_ENGINE_APP_DB_ADAPTER: 'mysql' }, () => {
+    withEnv({ ...cleanEnv, DEV_WAYMARK_APP_DB_ADAPTER: 'mysql' }, () => {
       expect(() => loadConfig()).toThrow();
     });
   });
@@ -140,13 +140,13 @@ describe('source and app DB independence', () => {
   it('source URL and app URL are separate config values', () => {
     withEnv(
       {
-        STEP_ENGINE_SOURCE_DB_URL: 'sqlite:///source.sqlite',
-        STEP_ENGINE_APP_DB_URL: 'sqlite:///app.sqlite',
-        STEP_ENGINE_SOURCE_DB_ADAPTER: 'sqlite',
-        STEP_ENGINE_APP_DB_ADAPTER: 'sqlite',
+        DEV_WAYMARK_SOURCE_DB_URL: 'sqlite:///source.sqlite',
+        DEV_WAYMARK_APP_DB_URL: 'sqlite:///app.sqlite',
+        DEV_WAYMARK_SOURCE_DB_ADAPTER: 'sqlite',
+        DEV_WAYMARK_APP_DB_ADAPTER: 'sqlite',
         PORT: undefined,
         DATABASE_PATH: undefined,
-        STEP_ENGINE_SOURCE_DB_NAME: undefined,
+        DEV_WAYMARK_SOURCE_DB_NAME: undefined,
       },
       () => {
         const config = loadConfig();

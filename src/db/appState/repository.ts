@@ -7,9 +7,9 @@ import type {
 } from '../../schemas/visualization';
 
 /**
- * AppStateRepository — interface for Step Engine-owned application state.
+ * AppStateRepository — interface for Dev Waymark-owned application state.
  *
- * All Step Engine state is stored exclusively through this interface. Source
+ * All Dev Waymark state is stored exclusively through this interface. Source
  * data never flows through here — that lives in the SourceDataAdapter.
  */
 export interface AppStateRepository {

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('presets page loads with correct title', async ({ page }) => {
   await page.goto('/presets');
-  await expect(page).toHaveTitle(/Saved Presets.*Step Engine/);
+  await expect(page).toHaveTitle(/Saved Presets.*Dev Waymark/);
   await expect(page.locator('h1')).toHaveText('Saved Presets');
 });
 

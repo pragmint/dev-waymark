@@ -37,7 +37,7 @@ SQLite → Repository (entityRepository) → Queries → Handlers → Page Compo
 
 ### Data sources
 
-Data is stored in a SQLite database (`step-engine.sqlite`) and accessed exclusively via `src/db/entityRepository.ts`.
+Data is stored in a SQLite database (`dev-waymark.sqlite`) and accessed exclusively via `src/db/entityRepository.ts`.
 
 ## Hooks
 

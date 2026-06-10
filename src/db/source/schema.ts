@@ -4,16 +4,16 @@ import { runSql } from '../sqliteUtils';
 /**
  * Expected source database schema.
  *
- * Step Engine never creates or migrates the schema in a configured source
+ * Dev Waymark never creates or migrates the schema in a configured source
  * database — it assumes the tables below already exist. This DDL serves two
  * purposes:
  *
- *   1. Documentation: the exact schema Step Engine queries.
+ *   1. Documentation: the exact schema Dev Waymark queries.
  *   2. In-memory bootstrap: when no source database is configured (the default),
- *      Step Engine boots an empty in-memory SQLite using this schema so the app
+ *      Dev Waymark boots an empty in-memory SQLite using this schema so the app
  *      starts without any external dependencies.
  *
- * If you are connecting Step Engine to an existing database, ensure it matches
+ * If you are connecting Dev Waymark to an existing database, ensure it matches
  * this schema. The Parquet seed pipeline (`bun seed`) can populate a local
  * SQLite file with fixture data.
  *

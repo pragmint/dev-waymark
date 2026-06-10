@@ -1,4 +1,4 @@
-# Step Engine
+# Dev Waymark
 
 A simple website that helps software and data engineering teams continuously surface bottlenecks and experiment with relevant and novel engineering practices.
 
@@ -44,13 +44,13 @@ Unless otherwise configured, the server runs at `http://localhost:3000`
 
 ### Source database
 
-Step Engine never creates or migrates the source database schema. The expected schema is documented in `src/db/source/schema.ts`. The source database must have the `entities` and `entity_metadata` tables in place before the app starts.
+Dev Waymark never creates or migrates the source database schema. The expected schema is documented in `src/db/source/schema.ts`. The source database must have the `entities` and `entity_metadata` tables in place before the app starts.
 
-When no source database is configured, Step Engine boots with an empty in-memory SQLite database (schema applied automatically). This is the default for local development and tests.
+When no source database is configured, Dev Waymark boots with an empty in-memory SQLite database (schema applied automatically). This is the default for local development and tests.
 
 ### App-state database
 
-Step Engine owns and manages the app-state database schema. Migrations run automatically at startup via `appStateRepo.initialize()`. To run them explicitly without starting the server:
+Dev Waymark owns and manages the app-state database schema. Migrations run automatically at startup via `appStateRepo.initialize()`. To run them explicitly without starting the server:
 
 ```bash
 bun migrate
@@ -58,7 +58,7 @@ bun migrate
 
 ### Golden seed data
 
-When no source database is configured, Step Engine boots with an in-memory SQLite database pre-seeded with a golden dataset (`src/db/source/goldenSeed.ts`). This is the default for local development and tests. No manual seeding step is required — the data is loaded automatically at startup.
+When no source database is configured, Dev Waymark boots with an in-memory SQLite database pre-seeded with a golden dataset (`src/db/source/goldenSeed.ts`). This is the default for local development and tests. No manual seeding step is required — the data is loaded automatically at startup.
 
 ## Architecture
 
@@ -66,14 +66,14 @@ Server-side rendered web app built with **Hono** + **Bun**, JSX templating, no c
 
 ### Two-database design
 
-Step Engine separates **source data** from **application state**:
+Dev Waymark separates **source data** from **application state**:
 
 | Concern                           | Owner             | Adapters                   | Default                  |
 | --------------------------------- | ----------------- | -------------------------- | ------------------------ |
 | Source data (entities + metadata) | External / client | SQLite, Postgres, Redshift | in-memory SQLite         |
-| App state (presets, views, etc.)  | Step Engine       | SQLite, Postgres           | `step-engine-app.sqlite` |
+| App state (presets, views, etc.)  | Dev Waymark       | SQLite, Postgres           | `dev-waymark-app.sqlite` |
 
-The two databases are configured independently and can live on different servers. Step Engine never modifies the source database schema.
+The two databases are configured independently and can live on different servers. Dev Waymark never modifies the source database schema.
 
 ### Data flow
 

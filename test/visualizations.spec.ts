@@ -95,7 +95,7 @@ async function deleteVisualization(page: Page, id: number): Promise<void> {
 
 test('visualizations page loads', async ({ page }) => {
   await page.goto('/visualizations');
-  await expect(page).toHaveTitle(/Visualizations.*Step Engine/);
+  await expect(page).toHaveTitle(/Visualizations.*Dev Waymark/);
   await expect(page.locator('h1')).toHaveText('Visualizations');
 });
 
