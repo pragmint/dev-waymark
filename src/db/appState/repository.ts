@@ -1,4 +1,4 @@
-import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
+import type { Preset, PresetWithFilters } from '../../schemas/preset';
 import type { MetaFilter } from '../../schemas/entity';
 import type {
   Visualization,
@@ -26,19 +26,19 @@ export interface AppStateRepository {
    */
   rollbackLast(): Promise<void>;
 
-  // ── Datasets ──────────────────────────────────────────────────────────────
+  // ── Presets ──────────────────────────────────────────────────────────────
 
-  /** Create a new dataset. Returns the new dataset's id. */
-  saveDataset(name: string, filters: MetaFilter[]): Promise<number>;
+  /** Create a new preset. Returns the new preset's id. */
+  savePreset(name: string, filters: MetaFilter[]): Promise<number>;
 
-  /** Fetch a dataset and its filters by id. Returns null if not found. */
-  getDataset(id: number): Promise<DatasetWithFilters | null>;
+  /** Fetch a preset and its filters by id. Returns null if not found. */
+  getPreset(id: number): Promise<PresetWithFilters | null>;
 
-  /** List all datasets (without filters). */
-  listDatasets(): Promise<Dataset[]>;
+  /** List all presets (without filters). */
+  listPresets(): Promise<Preset[]>;
 
-  /** Delete a dataset and its filters. No-op if the id does not exist. */
-  deleteDataset(id: number): Promise<void>;
+  /** Delete a preset and its filters. No-op if the id does not exist. */
+  deletePreset(id: number): Promise<void>;
 
   // ── Visualizations ────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ export interface AppStateRepository {
   saveVisualization(
     name: string,
     description: string | null,
-    datasetId: number,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<number>;
 

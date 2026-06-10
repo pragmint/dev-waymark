@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
 import { MetaFilterOpSchema } from '../schemas/entity';
 import type { MetaFilter } from '../schemas/entity';
-import { DatasetsPage } from '../frontend/Pages/DatasetsPage';
+import { PresetsPage } from '../frontend/Pages/PresetsPage';
 
 const META_FILTER_RE = /^mf__(.+)__([a-z]+)$/;
 
@@ -15,21 +15,21 @@ function buildEntityUrl(filters: MetaFilter[]): string {
   return qs ? `/entities?${qs}` : '/entities';
 }
 
-export async function datasetsListHandler(c: Context) {
+export async function presetsListHandler(c: Context) {
   const repo = getAppStateRepo();
-  const datasets = await repo.listDatasets();
+  const presets = await repo.listPresets();
 
-  const datasetsWithUrls = await Promise.all(
-    datasets.map(async d => {
-      const full = await repo.getDataset(d.id);
+  const presetsWithUrls = await Promise.all(
+    presets.map(async d => {
+      const full = await repo.getPreset(d.id);
       return { ...d, url: full ? buildEntityUrl(full.filters) : '/entities' };
     })
   );
 
-  return c.html(<DatasetsPage datasets={datasetsWithUrls} />);
+  return c.html(<PresetsPage presets={presetsWithUrls} />);
 }
 
-export async function datasetsSaveHandler(c: Context) {
+export async function presetsSaveHandler(c: Context) {
   const repo = getAppStateRepo();
   const formData = await c.req.formData();
 
@@ -47,13 +47,13 @@ export async function datasetsSaveHandler(c: Context) {
     metaFilters.push({ key: filterKey, op: parsed.data, value });
   }
 
-  await repo.saveDataset(name, metaFilters);
-  return c.redirect('/datasets');
+  await repo.savePreset(name, metaFilters);
+  return c.redirect('/presets');
 }
 
-export async function datasetsDeleteHandler(c: Context) {
+export async function presetsDeleteHandler(c: Context) {
   const repo = getAppStateRepo();
   const id = parseInt(c.req.param('id') ?? '', 10);
-  if (!isNaN(id)) await repo.deleteDataset(id);
-  return c.redirect('/datasets');
+  if (!isNaN(id)) await repo.deletePreset(id);
+  return c.redirect('/presets');
 }

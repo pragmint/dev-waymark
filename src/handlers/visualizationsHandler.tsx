@@ -28,20 +28,20 @@ function entitiesUrl(filters: MetaFilter[]): string {
 export async function visualizationsListHandler(c: Context) {
   const repo = getAppStateRepo();
   const visualizations = await repo.listVisualizations();
-  const datasets = await repo.listDatasets();
-  const datasetMap = new Map(datasets.map(d => [d.id, d.name]));
-  return c.html(<VisualizationsPage visualizations={visualizations} datasetMap={datasetMap} />);
+  const presets = await repo.listPresets();
+  const presetMap = new Map(presets.map(d => [d.id, d.name]));
+  return c.html(<VisualizationsPage visualizations={visualizations} presetMap={presetMap} />);
 }
 
 export async function visualizationsNewHandler(c: Context) {
   const repo = getAppStateRepo();
-  const datasets = await repo.listDatasets();
-  const datasetIdRaw = c.req.query('dataset_id');
-  const parsedId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : null;
-  const selectedDatasetId =
-    parsedId != null && !isNaN(parsedId) ? parsedId : datasets.length > 0 ? datasets[0].id : null;
+  const presets = await repo.listPresets();
+  const presetIdRaw = c.req.query('preset_id');
+  const parsedId = presetIdRaw ? parseInt(presetIdRaw, 10) : null;
+  const selectedPresetId =
+    parsedId != null && !isNaN(parsedId) ? parsedId : presets.length > 0 ? presets[0].id : null;
 
-  return c.html(<TemplatePickerPage datasets={datasets} selectedDatasetId={selectedDatasetId} />);
+  return c.html(<TemplatePickerPage presets={presets} selectedPresetId={selectedPresetId} />);
 }
 
 export async function visualizationsTemplateHandler(c: Context) {
@@ -51,15 +51,15 @@ export async function visualizationsTemplateHandler(c: Context) {
   const templateId = parsed.data;
 
   const repo = getAppStateRepo();
-  const datasetIdRaw = c.req.query('dataset_id');
-  const datasetId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : NaN;
-  if (isNaN(datasetId)) return c.redirect('/visualizations/new');
+  const presetIdRaw = c.req.query('preset_id');
+  const presetId = presetIdRaw ? parseInt(presetIdRaw, 10) : NaN;
+  if (isNaN(presetId)) return c.redirect('/visualizations/new');
 
-  const dataset = await repo.getDataset(datasetId);
-  if (!dataset) return c.redirect('/visualizations/new');
+  const preset = await repo.getPreset(presetId);
+  if (!preset) return c.redirect('/visualizations/new');
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(dataset.filters);
+  const entities = await entityRepo.list(preset.filters);
   const entityIds = entities.map(e => e.id);
   let availableFilters: AvailableFilter[] = [];
   if (entityIds.length > 0) {
@@ -69,8 +69,8 @@ export async function visualizationsTemplateHandler(c: Context) {
   return c.html(
     <TemplateConfigPage
       templateId={templateId}
-      datasetId={datasetId}
-      datasetName={dataset.name}
+      presetId={presetId}
+      presetName={preset.name}
       availableFilters={availableFilters}
       visualization={null}
       errors={[]}
@@ -84,11 +84,11 @@ export async function visualizationsSaveHandler(c: Context) {
 
   const name = (formData.get('name') as string | null)?.trim() ?? '';
   const description = (formData.get('description') as string | null)?.trim() || null;
-  const datasetIdRaw = formData.get('dataset_id') as string | null;
-  const datasetId = datasetIdRaw ? parseInt(datasetIdRaw, 10) : null;
+  const presetIdRaw = formData.get('preset_id') as string | null;
+  const presetId = presetIdRaw ? parseInt(presetIdRaw, 10) : null;
   const templateIdRaw = formData.get('template_id') as string | null;
 
-  if (!name || datasetId == null || isNaN(datasetId) || !templateIdRaw) {
+  if (!name || presetId == null || isNaN(presetId) || !templateIdRaw) {
     return c.redirect('/visualizations/new');
   }
 
@@ -99,7 +99,7 @@ export async function visualizationsSaveHandler(c: Context) {
   const templateConfig = parseTemplateForm(templateId, formData);
   const tcParsed = TemplateConfigSchema.safeParse(templateConfig);
   if (!tcParsed.success) {
-    return c.redirect(`/visualizations/new/${templateId}?dataset_id=${datasetId}`);
+    return c.redirect(`/visualizations/new/${templateId}?preset_id=${presetId}`);
   }
 
   const config = resolveTemplate(tcParsed.data);
@@ -108,11 +108,11 @@ export async function visualizationsSaveHandler(c: Context) {
 
   const errors = validateVisualizationConfig(config);
   if (errors.length > 0) {
-    const dataset = await repo.getDataset(datasetId);
+    const preset = await repo.getPreset(presetId);
     const entityRepo = getEntityRepo();
     let availableFilters: AvailableFilter[] = [];
-    if (dataset) {
-      const entities = await entityRepo.list(dataset.filters);
+    if (preset) {
+      const entities = await entityRepo.list(preset.filters);
       const entityIds = entities.map(e => e.id);
       if (entityIds.length > 0) {
         availableFilters = await entityRepo.getAvailableFilters(entityIds);
@@ -121,8 +121,8 @@ export async function visualizationsSaveHandler(c: Context) {
     return c.html(
       <TemplateConfigPage
         templateId={templateId}
-        datasetId={datasetId}
-        datasetName={dataset?.name ?? `Dataset ${datasetId}`}
+        presetId={presetId}
+        presetName={preset?.name ?? `Preset ${presetId}`}
         availableFilters={availableFilters}
         visualization={null}
         errors={errors}
@@ -131,7 +131,7 @@ export async function visualizationsSaveHandler(c: Context) {
     );
   }
 
-  const id = await repo.saveVisualization(name, description, datasetId, configWithTemplate);
+  const id = await repo.saveVisualization(name, description, presetId, configWithTemplate);
   return c.redirect(`/visualizations/${id}`);
 }
 
@@ -143,25 +143,25 @@ export async function visualizationsDetailHandler(c: Context) {
   const viz = await repo.getVisualization(id);
   if (!viz) return c.notFound();
 
-  const dataset = await repo.getDataset(viz.datasetId);
-  if (!dataset) return c.notFound();
+  const preset = await repo.getPreset(viz.presetId);
+  if (!preset) return c.notFound();
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(dataset.filters);
+  const entities = await entityRepo.list(preset.filters);
 
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
-  const datasetUrl = entitiesUrl(dataset.filters);
+  const presetUrl = entitiesUrl(preset.filters);
   const pointUrls = chartResult.labels.map(label =>
-    entitiesUrl([...dataset.filters, ...buildPointEntityFilters(label, viz.config)])
+    entitiesUrl([...preset.filters, ...buildPointEntityFilters(label, viz.config)])
   );
 
   return c.html(
     <VisualizationDetailPage
       visualization={viz}
-      datasetName={dataset.name}
-      datasetUrl={datasetUrl}
+      presetName={preset.name}
+      presetUrl={presetUrl}
       chartResult={chartResult}
       chartJsConfig={chartJsConfig}
       pointUrls={pointUrls}
@@ -183,11 +183,11 @@ export async function visualizationsEditHandler(c: Context) {
     return c.redirect(`/visualizations/${id}`);
   }
 
-  const dataset = await repo.getDataset(viz.datasetId);
+  const preset = await repo.getPreset(viz.presetId);
   let availableFilters: AvailableFilter[] = [];
-  if (dataset) {
+  if (preset) {
     const entityRepo = getEntityRepo();
-    const entities = await entityRepo.list(dataset.filters);
+    const entities = await entityRepo.list(preset.filters);
     const entityIds = entities.map(e => e.id);
     if (entityIds.length > 0) {
       availableFilters = await entityRepo.getAvailableFilters(entityIds);
@@ -197,8 +197,8 @@ export async function visualizationsEditHandler(c: Context) {
   return c.html(
     <TemplateConfigPage
       templateId={tc.templateId}
-      datasetId={viz.datasetId}
-      datasetName={dataset?.name ?? `Dataset ${viz.datasetId}`}
+      presetId={viz.presetId}
+      presetName={preset?.name ?? `Preset ${viz.presetId}`}
       availableFilters={availableFilters}
       visualization={viz}
       errors={[]}

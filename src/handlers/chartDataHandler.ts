@@ -9,17 +9,17 @@ import {
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 
-/** GET /api/dataset-fields/:id — returns available filter fields for a dataset */
-export async function datasetFieldsHandler(c: Context) {
+/** GET /api/preset-fields/:id — returns available filter fields for a preset */
+export async function presetFieldsHandler(c: Context) {
   const repo = getAppStateRepo();
   const id = parseInt(c.req.param('id') ?? '', 10);
   if (isNaN(id)) return c.json({ error: 'Invalid id' }, 400);
 
-  const dataset = await repo.getDataset(id);
-  if (!dataset) return c.json({ error: 'Not found' }, 404);
+  const preset = await repo.getPreset(id);
+  if (!preset) return c.json({ error: 'Not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(dataset.filters);
+  const entities = await entityRepo.list(preset.filters);
   const entityIds = entities.map(e => e.id);
 
   if (entityIds.length === 0) return c.json([]);
@@ -37,11 +37,11 @@ export async function chartDataByIdHandler(c: Context) {
   const viz = await repo.getVisualization(id);
   if (!viz) return c.json({ error: 'Not found' }, 404);
 
-  const dataset = await repo.getDataset(viz.datasetId);
-  if (!dataset) return c.json({ error: 'Dataset not found' }, 404);
+  const preset = await repo.getPreset(viz.presetId);
+  if (!preset) return c.json({ error: 'Preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(dataset.filters);
+  const entities = await entityRepo.list(preset.filters);
 
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
@@ -56,10 +56,10 @@ export async function chartDataByIdHandler(c: Context) {
 /** POST /api/chart-data/preview — preview chart data from template config */
 export async function chartDataPreviewHandler(c: Context) {
   const repo = getAppStateRepo();
-  const body = await c.req.json<{ datasetId: number; templateConfig: unknown }>();
+  const body = await c.req.json<{ presetId: number; templateConfig: unknown }>();
 
-  if (!body || typeof body.datasetId !== 'number') {
-    return c.json({ error: 'datasetId required' }, 400);
+  if (!body || typeof body.presetId !== 'number') {
+    return c.json({ error: 'presetId required' }, 400);
   }
 
   const tcParsed = TemplateConfigSchema.safeParse(body.templateConfig);
@@ -73,11 +73,11 @@ export async function chartDataPreviewHandler(c: Context) {
     return c.json({ error: 'Config validation failed', details: validationErrors }, 400);
   }
 
-  const dataset = await repo.getDataset(body.datasetId);
-  if (!dataset) return c.json({ error: 'Dataset not found' }, 404);
+  const preset = await repo.getPreset(body.presetId);
+  if (!preset) return c.json({ error: 'Preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(dataset.filters);
+  const entities = await entityRepo.list(preset.filters);
 
   const chartResult = buildChartData(entities, config);
   const chartJsConfig = buildChartJsConfig(chartResult, config);

@@ -71,7 +71,7 @@ Step Engine separates **source data** from **application state**:
 | Concern                           | Owner             | Adapters                   | Default                  |
 | --------------------------------- | ----------------- | -------------------------- | ------------------------ |
 | Source data (entities + metadata) | External / client | SQLite, Postgres, Redshift | in-memory SQLite         |
-| App state (datasets, views, etc.) | Step Engine       | SQLite, Postgres           | `step-engine-app.sqlite` |
+| App state (presets, views, etc.)  | Step Engine       | SQLite, Postgres           | `step-engine-app.sqlite` |
 
 The two databases are configured independently and can live on different servers. Step Engine never modifies the source database schema.
 

@@ -1,5 +1,5 @@
 import type { FC } from 'hono/jsx';
-import type { Dataset } from '../../schemas/dataset';
+import type { Preset } from '../../schemas/preset';
 import type { AvailableFilter } from '../../schemas/entity';
 import type { Visualization } from '../../schemas/visualization';
 import { Layout } from '../components/Layout';
@@ -7,9 +7,9 @@ import { Layout } from '../components/Layout';
 const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
 
 type Props = {
-  datasets: Dataset[];
-  selectedDatasetId: number | null;
-  selectedDatasetName: string | null;
+  presets: Preset[];
+  selectedPresetId: number | null;
+  selectedPresetName: string | null;
   availableFilters: AvailableFilter[];
   visualization: Visualization | null;
   errors: string[];
@@ -58,9 +58,9 @@ const FieldSelect: FC<FieldSelectProps> = ({
 };
 
 export const ChartBuilderPage: FC<Props> = ({
-  datasets,
-  selectedDatasetId,
-  selectedDatasetName,
+  presets,
+  selectedPresetId,
+  selectedPresetName,
   availableFilters,
   visualization,
   errors,
@@ -78,7 +78,7 @@ export const ChartBuilderPage: FC<Props> = ({
   const isCircular = chartType === 'pie' || chartType === 'doughnut';
   const aggFn = c?.aggregation.function ?? (measureType === 'count' ? 'count' : 'avg');
 
-  if (!isEdit && datasets.length === 0) {
+  if (!isEdit && presets.length === 0) {
     return (
       <Layout title="New Visualization">
         <div class="page-header">
@@ -86,7 +86,7 @@ export const ChartBuilderPage: FC<Props> = ({
         </div>
         <div class="form-section">
           <p>
-            No datasets yet. <a href="/datasets">Create one</a>.
+            No presets yet. <a href="/presets">Create one</a>.
           </p>
         </div>
       </Layout>
@@ -113,9 +113,9 @@ export const ChartBuilderPage: FC<Props> = ({
         {/* Left: form */}
         <div style="flex:1;min-width:0">
           <form method="post" action={formAction} id="viz-builder-form">
-            {/* ── Section 1: Name & Dataset ── */}
+            {/* ── Section 1: Name & Preset ── */}
             <div class="form-section">
-              <h2 class="form-section-title">Name &amp; Dataset</h2>
+              <h2 class="form-section-title">Name &amp; Preset</h2>
               <div class="form-field">
                 <label class="filter-widget-label" for="name">
                   Name
@@ -144,23 +144,23 @@ export const ChartBuilderPage: FC<Props> = ({
                 />
               </div>
               <div class="form-field">
-                <label class="filter-widget-label" for="dataset_id">
-                  Dataset
+                <label class="filter-widget-label" for="preset_id">
+                  Preset
                 </label>
                 {isEdit ? (
                   <>
-                    <span>{selectedDatasetName ?? `Dataset ${visualization?.datasetId}`}</span>
+                    <span>{selectedPresetName ?? `Preset ${visualization?.presetId}`}</span>
                     <input
                       type="hidden"
-                      name="dataset_id"
-                      id="dataset_id"
-                      value={visualization?.datasetId ?? ''}
+                      name="preset_id"
+                      id="preset_id"
+                      value={visualization?.presetId ?? ''}
                     />
                   </>
                 ) : (
-                  <select name="dataset_id" id="dataset_id" class="filter-select">
-                    {datasets.map(d => (
-                      <option key={d.id} value={d.id} selected={d.id === selectedDatasetId}>
+                  <select name="preset_id" id="preset_id" class="filter-select">
+                    {presets.map(d => (
+                      <option key={d.id} value={d.id} selected={d.id === selectedPresetId}>
                         {d.name}
                       </option>
                     ))}

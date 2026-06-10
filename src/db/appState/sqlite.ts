@@ -1,10 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { runSql } from '../sqliteUtils';
 import { logger } from '../../logger';
-import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
+import { PresetSchema, PresetWithFiltersSchema } from '../../schemas/preset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
-import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
+import type { Preset, PresetWithFilters } from '../../schemas/preset';
 import type { MetaFilter } from '../../schemas/entity';
 import type {
   Visualization,
@@ -74,11 +74,11 @@ export class SqliteAppStateRepository implements AppStateRepository {
     logger.info('[app-state] Rolled back migration', { name: row.name });
   }
 
-  // ── Datasets ──────────────────────────────────────────────────────────────
+  // ── Presets ──────────────────────────────────────────────────────────────
 
-  async saveDataset(name: string, filters: MetaFilter[]): Promise<number> {
+  async savePreset(name: string, filters: MetaFilter[]): Promise<number> {
     const result = this.db
-      .query<{ id: number }, [string]>('INSERT INTO datasets (name) VALUES (?) RETURNING id')
+      .query<{ id: number }, [string]>('INSERT INTO presets (name) VALUES (?) RETURNING id')
       .get(name);
     const id = result!.id;
 
@@ -86,7 +86,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
       const f = filters[i];
       this.db
         .query(
-          'INSERT INTO dataset_filters (dataset_id, key, op, value, filter_order) VALUES (?, ?, ?, ?, ?)'
+          'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES (?, ?, ?, ?, ?)'
         )
         .run(id, f.key, f.op, f.value, i);
     }
@@ -94,18 +94,16 @@ export class SqliteAppStateRepository implements AppStateRepository {
     return id;
   }
 
-  async getDataset(id: number): Promise<DatasetWithFilters | null> {
-    const row = this.db.query('SELECT id, name FROM datasets WHERE id = ?').get(id);
+  async getPreset(id: number): Promise<PresetWithFilters | null> {
+    const row = this.db.query('SELECT id, name FROM presets WHERE id = ?').get(id);
     if (!row) return null;
 
     const filterRows = this.db
-      .query(
-        'SELECT key, op, value FROM dataset_filters WHERE dataset_id = ? ORDER BY filter_order'
-      )
+      .query('SELECT key, op, value FROM preset_filters WHERE preset_id = ? ORDER BY filter_order')
       .all(id) as { key: string; op: string; value: string }[];
 
-    return DatasetWithFiltersSchema.parse({
-      ...DatasetSchema.parse(row),
+    return PresetWithFiltersSchema.parse({
+      ...PresetSchema.parse(row),
       filters: filterRows.map(r => ({
         key: r.key,
         op: MetaFilterOpSchema.parse(r.op),
@@ -114,13 +112,13 @@ export class SqliteAppStateRepository implements AppStateRepository {
     });
   }
 
-  async listDatasets(): Promise<Dataset[]> {
-    const rows = this.db.query('SELECT id, name FROM datasets ORDER BY id').all();
-    return rows.map(r => DatasetSchema.parse(r));
+  async listPresets(): Promise<Preset[]> {
+    const rows = this.db.query('SELECT id, name FROM presets ORDER BY id').all();
+    return rows.map(r => PresetSchema.parse(r));
   }
 
-  async deleteDataset(id: number): Promise<void> {
-    this.db.query('DELETE FROM datasets WHERE id = ?').run(id);
+  async deletePreset(id: number): Promise<void> {
+    this.db.query('DELETE FROM presets WHERE id = ?').run(id);
   }
 
   // ── Visualizations ────────────────────────────────────────────────────────
@@ -128,7 +126,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
   async saveVisualization(
     name: string,
     description: string | null,
-    datasetId: number,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<number> {
     const now = new Date().toISOString();
@@ -136,8 +134,8 @@ export class SqliteAppStateRepository implements AppStateRepository {
       .query<
         { id: number },
         [string, string | null, number, string, string, string]
-      >('INSERT INTO visualizations (name, description, dataset_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
-      .get(name, description, datasetId, JSON.stringify(config), now, now);
+      >('INSERT INTO visualizations (name, description, preset_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+      .get(name, description, presetId, JSON.stringify(config), now, now);
     return result!.id;
   }
 
@@ -146,7 +144,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
       id: number;
       name: string;
       description: string | null;
-      dataset_id: number;
+      preset_id: number;
       config: string;
       created_at: string;
       updated_at: string;
@@ -155,14 +153,14 @@ export class SqliteAppStateRepository implements AppStateRepository {
       .query<
         Row,
         [number]
-      >('SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations WHERE id = ?')
+      >('SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations WHERE id = ?')
       .get(id);
     if (!row) return null;
     return VisualizationSchema.parse({
       id: row.id,
       name: row.name,
       description: row.description,
-      datasetId: row.dataset_id,
+      presetId: row.preset_id,
       config: JSON.parse(row.config),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -174,7 +172,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
       id: number;
       name: string;
       description: string | null;
-      dataset_id: number;
+      preset_id: number;
       config: string;
       created_at: string;
       updated_at: string;
@@ -183,7 +181,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
       .query<
         Row,
         []
-      >('SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations ORDER BY id')
+      >('SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations ORDER BY id')
       .all();
     return rows.map(r => {
       const config = JSON.parse(r.config) as VisualizationConfig;
@@ -191,7 +189,7 @@ export class SqliteAppStateRepository implements AppStateRepository {
         id: r.id,
         name: r.name,
         description: r.description,
-        datasetId: r.dataset_id,
+        presetId: r.preset_id,
         chartType: config.chartType,
         createdAt: r.created_at,
         updatedAt: r.updated_at,

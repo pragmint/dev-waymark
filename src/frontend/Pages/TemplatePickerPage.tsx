@@ -1,28 +1,28 @@
 import type { FC } from 'hono/jsx';
-import type { Dataset } from '../../schemas/dataset';
+import type { Preset } from '../../schemas/preset';
 import { TEMPLATES } from '../../schemas/visualizationTemplate';
 import { Layout } from '../components/Layout';
 
 type Props = {
-  datasets: Dataset[];
-  selectedDatasetId: number | null;
+  presets: Preset[];
+  selectedPresetId: number | null;
 };
 
-export const TemplatePickerPage: FC<Props> = ({ datasets, selectedDatasetId }) => {
-  if (datasets.length === 0) {
+export const TemplatePickerPage: FC<Props> = ({ presets, selectedPresetId }) => {
+  if (presets.length === 0) {
     return (
       <Layout title="New Visualization">
         <div class="page-header">
           <h1>New Visualization</h1>
         </div>
         <p class="empty">
-          No datasets yet. <a href="/datasets">Create one</a>.
+          No presets yet. <a href="/presets">Create one</a>.
         </p>
       </Layout>
     );
   }
 
-  const dsId = selectedDatasetId ?? datasets[0].id;
+  const dsId = selectedPresetId ?? presets[0].id;
 
   return (
     <Layout title="New Visualization" extraScripts={['/chartBuilder.js']}>
@@ -33,13 +33,13 @@ export const TemplatePickerPage: FC<Props> = ({ datasets, selectedDatasetId }) =
       <div style="margin-bottom:24px">
         <label
           class="filter-widget-label"
-          for="dataset-picker"
+          for="preset-picker"
           style="display:block;margin-bottom:6px"
         >
-          Dataset
+          Preset
         </label>
-        <select id="dataset-picker" class="filter-select" style="min-width:200px">
-          {datasets.map(d => (
+        <select id="preset-picker" class="filter-select" style="min-width:200px">
+          {presets.map(d => (
             <option key={d.id} value={d.id} selected={d.id === dsId}>
               {d.name}
             </option>
@@ -54,7 +54,7 @@ export const TemplatePickerPage: FC<Props> = ({ datasets, selectedDatasetId }) =
         {TEMPLATES.map(t => (
           <a
             key={t.id}
-            href={`/visualizations/new/${t.id}?dataset_id=${dsId}`}
+            href={`/visualizations/new/${t.id}?preset_id=${dsId}`}
             class="template-card"
             data-template-id={t.id}
           >

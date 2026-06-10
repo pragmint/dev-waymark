@@ -14,16 +14,16 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.close();
   });
 
-  it('migrate applies the datasets migration', async () => {
+  it('migrate applies the presets migration', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
     await repo.migrate();
     const db = repo.getDb();
     const tables = db
       .query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('datasets','dataset_filters') ORDER BY name"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('presets','preset_filters') ORDER BY name"
       )
       .all() as { name: string }[];
-    expect(tables.map(t => t.name)).toEqual(['dataset_filters', 'datasets']);
+    expect(tables.map(t => t.name)).toEqual(['preset_filters', 'presets']);
     await repo.close();
   });
 
@@ -45,7 +45,7 @@ describe('SqliteAppStateRepository — migration', () => {
   });
 });
 
-describe('SqliteAppStateRepository — datasets', () => {
+describe('SqliteAppStateRepository — presets', () => {
   let repo: SqliteAppStateRepository;
 
   beforeEach(async () => {
@@ -53,71 +53,71 @@ describe('SqliteAppStateRepository — datasets', () => {
     await repo.migrate();
   });
 
-  it('saveDataset returns a numeric id', async () => {
-    const id = await repo.saveDataset('My dataset', []);
+  it('savePreset returns a numeric id', async () => {
+    const id = await repo.savePreset('My preset', []);
     expect(typeof id).toBe('number');
     expect(id).toBeGreaterThan(0);
   });
 
-  it('getDataset returns the saved dataset', async () => {
-    const id = await repo.saveDataset('Sprint velocity', [
+  it('getPreset returns the saved preset', async () => {
+    const id = await repo.savePreset('Sprint velocity', [
       { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
       { key: 'ticket_type', op: 'eq', value: 'story' },
     ]);
-    const dataset = await repo.getDataset(id);
-    expect(dataset).not.toBeNull();
-    expect(dataset!.name).toBe('Sprint velocity');
-    expect(dataset!.filters).toHaveLength(2);
-    expect(dataset!.filters[0]).toEqual({ key: 'entity_type', op: 'eq', value: 'jira_ticket' });
-    expect(dataset!.filters[1]).toEqual({ key: 'ticket_type', op: 'eq', value: 'story' });
+    const preset = await repo.getPreset(id);
+    expect(preset).not.toBeNull();
+    expect(preset!.name).toBe('Sprint velocity');
+    expect(preset!.filters).toHaveLength(2);
+    expect(preset!.filters[0]).toEqual({ key: 'entity_type', op: 'eq', value: 'jira_ticket' });
+    expect(preset!.filters[1]).toEqual({ key: 'ticket_type', op: 'eq', value: 'story' });
   });
 
-  it('getDataset preserves filter sort order', async () => {
-    const id = await repo.saveDataset('ordered', [
+  it('getPreset preserves filter sort order', async () => {
+    const id = await repo.savePreset('ordered', [
       { key: 'c', op: 'eq', value: '3' },
       { key: 'a', op: 'eq', value: '1' },
       { key: 'b', op: 'eq', value: '2' },
     ]);
-    const dataset = await repo.getDataset(id);
-    expect(dataset!.filters.map(f => f.key)).toEqual(['c', 'a', 'b']);
+    const preset = await repo.getPreset(id);
+    expect(preset!.filters.map(f => f.key)).toEqual(['c', 'a', 'b']);
   });
 
-  it('getDataset returns null for unknown id', async () => {
-    expect(await repo.getDataset(9999)).toBeNull();
+  it('getPreset returns null for unknown id', async () => {
+    expect(await repo.getPreset(9999)).toBeNull();
   });
 
-  it('saveDataset with no filters stores empty filter list', async () => {
-    const id = await repo.saveDataset('empty', []);
-    const dataset = await repo.getDataset(id);
-    expect(dataset!.filters).toHaveLength(0);
+  it('savePreset with no filters stores empty filter list', async () => {
+    const id = await repo.savePreset('empty', []);
+    const preset = await repo.getPreset(id);
+    expect(preset!.filters).toHaveLength(0);
   });
 
-  it('listDatasets returns all saved datasets without filters', async () => {
-    await repo.saveDataset('Alpha', [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }]);
-    await repo.saveDataset('Beta', []);
-    const list = await repo.listDatasets();
+  it('listPresets returns all saved presets without filters', async () => {
+    await repo.savePreset('Alpha', [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }]);
+    await repo.savePreset('Beta', []);
+    const list = await repo.listPresets();
     expect(list).toHaveLength(2);
     expect(list.map(d => d.name)).toEqual(['Alpha', 'Beta']);
-    // listDatasets does not include filters
+    // listPresets does not include filters
     expect(Object.keys(list[0])).not.toContain('filters');
   });
 
-  it('deleteDataset removes the dataset and its filters', async () => {
-    const id = await repo.saveDataset('to-delete', [
+  it('deletePreset removes the preset and its filters', async () => {
+    const id = await repo.savePreset('to-delete', [
       { key: 'entity_type', op: 'eq', value: 'github_pr' },
     ]);
-    await repo.deleteDataset(id);
-    expect(await repo.getDataset(id)).toBeNull();
+    await repo.deletePreset(id);
+    expect(await repo.getPreset(id)).toBeNull();
     // filters should be cascade-deleted
     const filterRows = repo
       .getDb()
-      .query('SELECT * FROM dataset_filters WHERE dataset_id = ?')
+      .query('SELECT * FROM preset_filters WHERE preset_id = ?')
       .all(id);
     expect(filterRows).toHaveLength(0);
   });
 
-  it('deleteDataset is a no-op for unknown id', async () => {
-    await expect(repo.deleteDataset(9999)).resolves.toBeUndefined();
+  it('deletePreset is a no-op for unknown id', async () => {
+    await expect(repo.deletePreset(9999)).resolves.toBeUndefined();
   });
 
   it('supports all filter ops', async () => {
@@ -128,9 +128,9 @@ describe('SqliteAppStateRepository — datasets', () => {
       { key: 'wip', op: 'lte' as const, value: '50' },
       { key: 'name', op: 're' as const, value: '^ENG' },
     ];
-    const id = await repo.saveDataset('all ops', filters);
-    const dataset = await repo.getDataset(id);
-    expect(dataset!.filters).toEqual(filters);
+    const id = await repo.savePreset('all ops', filters);
+    const preset = await repo.getPreset(id);
+    expect(preset!.filters).toEqual(filters);
   });
 });
 

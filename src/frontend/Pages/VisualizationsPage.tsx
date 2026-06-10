@@ -4,10 +4,10 @@ import { Layout } from '../components/Layout';
 
 type Props = {
   visualizations: VisualizationSummary[];
-  datasetMap: Map<number, string>;
+  presetMap: Map<number, string>;
 };
 
-export const VisualizationsPage: FC<Props> = ({ visualizations, datasetMap }) => (
+export const VisualizationsPage: FC<Props> = ({ visualizations, presetMap }) => (
   <Layout title="Visualizations">
     <div class="page-header">
       <h1>Visualizations</h1>
@@ -23,7 +23,7 @@ export const VisualizationsPage: FC<Props> = ({ visualizations, datasetMap }) =>
 
     {visualizations.length === 0 ? (
       <p class="empty">
-        No visualizations yet. <a href="/visualizations/new">Create one</a> from a saved dataset.
+        No visualizations yet. <a href="/visualizations/new">Create one</a> from a saved preset.
       </p>
     ) : (
       <table class="entity-table">
@@ -31,7 +31,7 @@ export const VisualizationsPage: FC<Props> = ({ visualizations, datasetMap }) =>
           <tr>
             <th>Name</th>
             <th>Chart type</th>
-            <th>Dataset</th>
+            <th>Preset</th>
             <th></th>
           </tr>
         </thead>
@@ -44,7 +44,7 @@ export const VisualizationsPage: FC<Props> = ({ visualizations, datasetMap }) =>
               <td>
                 <span class="badge">{v.chartType}</span>
               </td>
-              <td>{datasetMap.get(v.datasetId) ?? `Dataset ${v.datasetId}`}</td>
+              <td>{presetMap.get(v.presetId) ?? `Preset ${v.presetId}`}</td>
               <td style="text-align:right">
                 <a href={`/visualizations/${v.id}/edit`} class="btn-text" style="margin-right:8px">
                   Edit

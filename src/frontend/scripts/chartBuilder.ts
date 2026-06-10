@@ -78,10 +78,10 @@ function attachPointNavigation(config: ChartConfig, pointUrls: string[]): void {
   };
 }
 
-// ── Template picker: update card links when dataset changes ──────────────────
+// ── Template picker: update card links when preset changes ───────────────────
 
 function initTemplatePicker(): void {
-  const picker = document.getElementById('dataset-picker') as HTMLSelectElement | null;
+  const picker = document.getElementById('preset-picker') as HTMLSelectElement | null;
   const grid = document.getElementById('template-grid');
   if (!picker || !grid) return;
 
@@ -90,7 +90,7 @@ function initTemplatePicker(): void {
     const links = grid.querySelectorAll<HTMLAnchorElement>('a[data-template-id]');
     for (const link of links) {
       const templateId = link.getAttribute('data-template-id');
-      link.href = `/visualizations/new/${templateId}?dataset_id=${dsId}`;
+      link.href = `/visualizations/new/${templateId}?preset_id=${dsId}`;
     }
   });
 }
@@ -107,29 +107,29 @@ function schedulePreview(): void {
 
 function readFormConfig(
   form: HTMLFormElement
-): { datasetId: number; templateId: string; slots: Record<string, string> } | null {
+): { presetId: number; templateId: string; slots: Record<string, string> } | null {
   const templateId = (form.elements.namedItem('template_id') as HTMLInputElement | null)?.value;
-  const datasetIdStr = (form.elements.namedItem('dataset_id') as HTMLInputElement | null)?.value;
-  const datasetId = parseInt(datasetIdStr ?? '', 10);
-  if (!templateId || isNaN(datasetId)) return null;
+  const presetIdStr = (form.elements.namedItem('preset_id') as HTMLInputElement | null)?.value;
+  const presetId = parseInt(presetIdStr ?? '', 10);
+  if (!templateId || isNaN(presetId)) return null;
 
   const slots = buildSlotsFromForm(templateId, form);
   if (Object.values(slots).some(v => !v)) return null;
 
-  return { datasetId, templateId, slots };
+  return { presetId, templateId, slots };
 }
 
 async function doFetchPreview(
-  datasetId: number,
+  presetId: number,
   templateConfig: { templateId: string; slots: Record<string, string> }
 ): Promise<void> {
   const statusEl = document.getElementById('preview-status');
-  if (statusEl) statusEl.textContent = 'Loading\u2026';
+  if (statusEl) statusEl.textContent = 'Loading…';
   try {
     const resp = await fetch('/api/chart-data/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ datasetId, templateConfig }),
+      body: JSON.stringify({ presetId, templateConfig }),
     });
     if (statusEl) statusEl.textContent = '';
     if (!resp.ok) {
@@ -155,8 +155,8 @@ async function fetchPreview(): Promise<void> {
   if (!form) return;
   const formConfig = readFormConfig(form);
   if (!formConfig) return;
-  const { datasetId, templateId, slots } = formConfig;
-  await doFetchPreview(datasetId, { templateId, slots });
+  const { presetId, templateId, slots } = formConfig;
+  await doFetchPreview(presetId, { templateId, slots });
 }
 
 type SlotMapping = Array<[slotKey: string, formName: string, fallback?: string]>;

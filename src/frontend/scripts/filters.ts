@@ -118,10 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Save dataset panel toggle
-  const saveBtn = document.getElementById('save-dataset-btn');
-  const savePanel = document.getElementById('save-dataset-panel');
-  const saveCancel = document.getElementById('save-dataset-cancel');
+  // Save preset panel toggle
+  const saveBtn = document.getElementById('save-preset-btn');
+  const savePanel = document.getElementById('save-preset-panel');
+  const saveCancel = document.getElementById('save-preset-cancel');
 
   if (saveBtn && savePanel) {
     saveBtn.addEventListener('click', () => {

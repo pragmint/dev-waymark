@@ -156,7 +156,7 @@ function bucketRange(label: string, bucket: TimeBucket): { gte: string; lte: str
   }
 }
 
-// Filters that, combined with the dataset's existing filters, isolate the
+// Filters that, combined with the preset's existing filters, isolate the
 // entities aggregated into a single chart data point. Used to power
 // click-through from chart points to the entities list.
 export function buildPointEntityFilters(label: string, config: VisualizationConfig): MetaFilter[] {

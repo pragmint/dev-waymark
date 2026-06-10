@@ -1,25 +1,25 @@
 import type { FC } from 'hono/jsx';
-import type { Dataset } from '../../schemas/dataset';
+import type { Preset } from '../../schemas/preset';
 import { Layout } from '../components/Layout';
 
-type DatasetWithUrl = Dataset & { url: string };
+type PresetWithUrl = Preset & { url: string };
 
-type DatasetsPageProps = {
-  datasets: DatasetWithUrl[];
+type PresetsPageProps = {
+  presets: PresetWithUrl[];
 };
 
-export const DatasetsPage: FC<DatasetsPageProps> = ({ datasets }) => (
-  <Layout title="Saved Datasets">
+export const PresetsPage: FC<PresetsPageProps> = ({ presets }) => (
+  <Layout title="Saved Presets">
     <div class="page-header">
-      <h1>Saved Datasets</h1>
+      <h1>Saved Presets</h1>
       <span class="count">
-        {datasets.length} dataset{datasets.length !== 1 ? 's' : ''}
+        {presets.length} preset{presets.length !== 1 ? 's' : ''}
       </span>
     </div>
 
-    {datasets.length === 0 ? (
+    {presets.length === 0 ? (
       <p class="empty">
-        No saved datasets yet. Apply filters on the <a href="/entities">Entities</a> page and save
+        No saved presets yet. Apply filters on the <a href="/entities">Entities</a> page and save
         them.
       </p>
     ) : (
@@ -31,13 +31,13 @@ export const DatasetsPage: FC<DatasetsPageProps> = ({ datasets }) => (
           </tr>
         </thead>
         <tbody>
-          {datasets.map(d => (
+          {presets.map(d => (
             <tr>
               <td>
                 <a href={d.url}>{d.name}</a>
               </td>
               <td style="text-align:right">
-                <form method="post" action={`/datasets/${d.id}/delete`}>
+                <form method="post" action={`/presets/${d.id}/delete`}>
                   <button type="submit" class="btn-text">
                     Delete
                   </button>

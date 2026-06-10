@@ -9,8 +9,8 @@ const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd
 
 type Props = {
   templateId: TemplateId;
-  datasetId: number;
-  datasetName: string;
+  presetId: number;
+  presetName: string;
   availableFilters: AvailableFilter[];
   visualization: Visualization | null;
   errors: string[];
@@ -125,8 +125,8 @@ function getSlotValue(visualization: Visualization | null, path: string): string
 
 export const TemplateConfigPage: FC<Props> = ({
   templateId,
-  datasetId,
-  datasetName,
+  presetId,
+  presetName,
   availableFilters,
   visualization,
   errors,
@@ -164,7 +164,7 @@ export const TemplateConfigPage: FC<Props> = ({
         <div style="flex:1;min-width:0">
           <form method="post" action={formAction} id="template-config-form">
             <input type="hidden" name="template_id" value={templateId} />
-            <input type="hidden" name="dataset_id" value={datasetId} />
+            <input type="hidden" name="preset_id" value={presetId} />
 
             <div class="form-section">
               <div class="form-field">
@@ -195,8 +195,8 @@ export const TemplateConfigPage: FC<Props> = ({
                 />
               </div>
               <div class="form-field">
-                <span class="filter-widget-label">Dataset</span>
-                <span style="font-size:13px">{datasetName}</span>
+                <span class="filter-widget-label">Preset</span>
+                <span style="font-size:13px">{presetName}</span>
               </div>
             </div>
 

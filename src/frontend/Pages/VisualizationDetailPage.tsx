@@ -7,8 +7,8 @@ const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd
 
 type Props = {
   visualization: Visualization;
-  datasetName: string;
-  datasetUrl: string;
+  presetName: string;
+  presetUrl: string;
   chartResult: ChartDataResult;
   chartJsConfig: ChartJsConfig;
   pointUrls: string[];
@@ -16,8 +16,8 @@ type Props = {
 
 export const VisualizationDetailPage: FC<Props> = ({
   visualization,
-  datasetName,
-  datasetUrl,
+  presetName,
+  presetUrl,
   chartResult,
   chartJsConfig,
   pointUrls,
@@ -48,8 +48,8 @@ export const VisualizationDetailPage: FC<Props> = ({
       {visualization.description && <p class="entity-description">{visualization.description}</p>}
 
       <div class="metadata-row">
-        <span class="metadata-label">Dataset</span>
-        <a href={datasetUrl}>{datasetName}</a>
+        <span class="metadata-label">Preset</span>
+        <a href={presetUrl}>{presetName}</a>
         <span class="metadata-label" style="margin-left:16px">
           Chart type
         </span>

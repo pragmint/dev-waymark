@@ -1,9 +1,9 @@
 import { Pool } from 'pg';
 import { logger } from '../../logger';
-import { DatasetSchema, DatasetWithFiltersSchema } from '../../schemas/dataset';
+import { PresetSchema, PresetWithFiltersSchema } from '../../schemas/preset';
 import { MetaFilterOpSchema } from '../../schemas/entity';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
-import type { Dataset, DatasetWithFilters } from '../../schemas/dataset';
+import type { Preset, PresetWithFilters } from '../../schemas/preset';
 import type { MetaFilter } from '../../schemas/entity';
 import type {
   Visualization,
@@ -60,11 +60,11 @@ export class PostgresAppStateRepository implements AppStateRepository {
     logger.info('[app-state] Rolled back migration', { name });
   }
 
-  // ── Datasets ──────────────────────────────────────────────────────────────
+  // ── Presets ──────────────────────────────────────────────────────────────
 
-  async saveDataset(name: string, filters: MetaFilter[]): Promise<number> {
+  async savePreset(name: string, filters: MetaFilter[]): Promise<number> {
     const result = await this.pool.query<{ id: number }>(
-      'INSERT INTO datasets (name) VALUES ($1) RETURNING id',
+      'INSERT INTO presets (name) VALUES ($1) RETURNING id',
       [name]
     );
     const id = result.rows[0].id;
@@ -72,7 +72,7 @@ export class PostgresAppStateRepository implements AppStateRepository {
     for (let i = 0; i < filters.length; i++) {
       const f = filters[i];
       await this.pool.query(
-        'INSERT INTO dataset_filters (dataset_id, key, op, value, filter_order) VALUES ($1, $2, $3, $4, $5)',
+        'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES ($1, $2, $3, $4, $5)',
         [id, f.key, f.op, f.value, i]
       );
     }
@@ -80,20 +80,20 @@ export class PostgresAppStateRepository implements AppStateRepository {
     return id;
   }
 
-  async getDataset(id: number): Promise<DatasetWithFilters | null> {
-    const datasetResult = await this.pool.query<{ id: number; name: string }>(
-      'SELECT id, name FROM datasets WHERE id = $1',
+  async getPreset(id: number): Promise<PresetWithFilters | null> {
+    const presetResult = await this.pool.query<{ id: number; name: string }>(
+      'SELECT id, name FROM presets WHERE id = $1',
       [id]
     );
-    if (datasetResult.rows.length === 0) return null;
+    if (presetResult.rows.length === 0) return null;
 
     const filterResult = await this.pool.query<{ key: string; op: string; value: string }>(
-      'SELECT key, op, value FROM dataset_filters WHERE dataset_id = $1 ORDER BY filter_order',
+      'SELECT key, op, value FROM preset_filters WHERE preset_id = $1 ORDER BY filter_order',
       [id]
     );
 
-    return DatasetWithFiltersSchema.parse({
-      ...DatasetSchema.parse(datasetResult.rows[0]),
+    return PresetWithFiltersSchema.parse({
+      ...PresetSchema.parse(presetResult.rows[0]),
       filters: filterResult.rows.map(r => ({
         key: r.key,
         op: MetaFilterOpSchema.parse(r.op),
@@ -102,15 +102,15 @@ export class PostgresAppStateRepository implements AppStateRepository {
     });
   }
 
-  async listDatasets(): Promise<Dataset[]> {
+  async listPresets(): Promise<Preset[]> {
     const result = await this.pool.query<{ id: number; name: string }>(
-      'SELECT id, name FROM datasets ORDER BY id'
+      'SELECT id, name FROM presets ORDER BY id'
     );
-    return result.rows.map(r => DatasetSchema.parse(r));
+    return result.rows.map(r => PresetSchema.parse(r));
   }
 
-  async deleteDataset(id: number): Promise<void> {
-    await this.pool.query('DELETE FROM datasets WHERE id = $1', [id]);
+  async deletePreset(id: number): Promise<void> {
+    await this.pool.query('DELETE FROM presets WHERE id = $1', [id]);
   }
 
   // ── Visualizations ────────────────────────────────────────────────────────
@@ -118,13 +118,13 @@ export class PostgresAppStateRepository implements AppStateRepository {
   async saveVisualization(
     name: string,
     description: string | null,
-    datasetId: number,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<number> {
     const now = new Date().toISOString();
     const result = await this.pool.query<{ id: number }>(
-      'INSERT INTO visualizations (name, description, dataset_id, config, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [name, description, datasetId, JSON.stringify(config), now, now]
+      'INSERT INTO visualizations (name, description, preset_id, config, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [name, description, presetId, JSON.stringify(config), now, now]
     );
     return result.rows[0].id;
   }
@@ -134,12 +134,12 @@ export class PostgresAppStateRepository implements AppStateRepository {
       id: number;
       name: string;
       description: string | null;
-      dataset_id: number;
+      preset_id: number;
       config: VisualizationConfig;
       created_at: string;
       updated_at: string;
     }>(
-      'SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations WHERE id = $1',
+      'SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations WHERE id = $1',
       [id]
     );
     if (result.rows.length === 0) return null;
@@ -148,7 +148,7 @@ export class PostgresAppStateRepository implements AppStateRepository {
       id: row.id,
       name: row.name,
       description: row.description,
-      datasetId: row.dataset_id,
+      presetId: row.preset_id,
       config: row.config,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -160,19 +160,19 @@ export class PostgresAppStateRepository implements AppStateRepository {
       id: number;
       name: string;
       description: string | null;
-      dataset_id: number;
+      preset_id: number;
       config: VisualizationConfig;
       created_at: string;
       updated_at: string;
     }>(
-      'SELECT id, name, description, dataset_id, config, created_at, updated_at FROM visualizations ORDER BY id'
+      'SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations ORDER BY id'
     );
     return result.rows.map(r =>
       VisualizationSummarySchema.parse({
         id: r.id,
         name: r.name,
         description: r.description,
-        datasetId: r.dataset_id,
+        presetId: r.preset_id,
         chartType: r.config.chartType,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
