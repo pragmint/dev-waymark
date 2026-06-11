@@ -7,7 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ensure all widget panels start hidden with all inputs disabled,
   // except panels in editing mode (server-rendered open).
   filterForm.querySelectorAll<HTMLElement>('.filter-widget-panel').forEach(panel => {
-    if (panel.dataset.filterEditing === 'true') return;
+    if (panel.dataset.filterEditing === 'true') {
+      wireModeTabsForPanel(panel);
+      return;
+    }
     panel.style.display = 'none';
     disableAllInputs(panel);
   });
@@ -21,36 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el instanceof HTMLSelectElement)
           Array.from(el.options).forEach(o => (o.selected = false));
       });
-  }
-
-  function openPanel(key: string) {
-    const escaped = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const panel = filterForm!.querySelector<HTMLElement>(
-      `.filter-widget-panel[data-filter-key="${escaped}"]`
-    );
-    if (!panel) return;
-
-    panel.style.display = '';
-
-    // If the panel has a mode system, only enable the active mode's inputs.
-    const modesEl = panel.querySelector<HTMLElement>('[data-active-mode]');
-    panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(el => {
-      if (modesEl) {
-        const modeContent = el.closest<HTMLElement>('[data-mode-content]');
-        if (modeContent && modeContent.dataset.modeContent !== modesEl.dataset.activeMode) {
-          return; // leave inactive mode inputs disabled
-        }
-      }
-      el.disabled = false;
-    });
-
-    panel.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled])')?.focus();
-    wireModeTabsForPanel(panel);
-  }
-
-  function closePanel(panel: HTMLElement) {
-    panel.style.display = 'none';
-    disableAllInputs(panel);
   }
 
   function wireModeTabsForPanel(panel: HTMLElement) {
@@ -90,6 +63,36 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
     });
+  }
+
+  function openPanel(key: string) {
+    const escaped = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const panel = filterForm!.querySelector<HTMLElement>(
+      `.filter-widget-panel[data-filter-key="${escaped}"]`
+    );
+    if (!panel) return;
+
+    panel.style.display = '';
+
+    // If the panel has a mode system, only enable the active mode's inputs.
+    const modesEl = panel.querySelector<HTMLElement>('[data-active-mode]');
+    panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(el => {
+      if (modesEl) {
+        const modeContent = el.closest<HTMLElement>('[data-mode-content]');
+        if (modeContent && modeContent.dataset.modeContent !== modesEl.dataset.activeMode) {
+          return; // leave inactive mode inputs disabled
+        }
+      }
+      el.disabled = false;
+    });
+
+    panel.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled])')?.focus();
+    wireModeTabsForPanel(panel);
+  }
+
+  function closePanel(panel: HTMLElement) {
+    panel.style.display = 'none';
+    disableAllInputs(panel);
   }
 
   // Cancel buttons inside widget panels

@@ -140,7 +140,7 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
             name={`mf__${f.key}__re`}
             class="filter-input"
             placeholder="regex…"
-            disabled
+            disabled={dis}
           />
         </div>
       </div>

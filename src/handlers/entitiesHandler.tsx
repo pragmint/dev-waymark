@@ -44,7 +44,15 @@ export async function entitiesHandler(c: Context) {
     limit: perPage,
     offset: (page - 1) * perPage,
   });
-  const availableFilters = await repo.getAvailableFilters(allIds);
+
+  // When editing a filter, get unfiltered available filters so all options are visible.
+  // Otherwise, use the filtered results to show only available options in context.
+  let availableFilterIds = allIds;
+  if (editingKey) {
+    const { allIds: unfiltered } = await repo.listPaged([], { limit: 1000000, offset: 0 });
+    availableFilterIds = unfiltered;
+  }
+  const availableFilters = await repo.getAvailableFilters(availableFilterIds);
 
   return c.html(
     <EntitiesPage
