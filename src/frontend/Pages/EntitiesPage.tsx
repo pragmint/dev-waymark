@@ -15,10 +15,6 @@ type EntitiesPageProps = {
   editingKey?: string;
 };
 
-// Keys that don't need an extra column: fixed metadata columns already shown, and entity_name
-// which is a pseudo-metadata key that maps to the Entity column
-const FIXED_COLUMN_KEYS = new Set(['entity_type', 'entity_created_at', 'entity_name']);
-
 // Build a URL preserving filters + add/edit keys, swapping in a new page number.
 function pageHref(
   page: number,
@@ -49,9 +45,10 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   addingKey,
   editingKey,
 }) => {
-  const extraKeys = [...new Set(activeFilters.map(f => f.key))].filter(
-    k => !FIXED_COLUMN_KEYS.has(k)
-  );
+  const hasEntityTypeFilter = activeFilters.some(f => f.key === 'entity_type');
+  const extraKeys = hasEntityTypeFilter
+    ? [...new Set(availableFilters.filter(f => f.entityType !== '').map(f => f.key))]
+    : [];
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
@@ -59,7 +56,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   const rangeEnd = Math.min(page * perPage, totalCount);
 
   return (
-    <Layout title="Entities">
+    <Layout title="Entities" extraScripts={['/tableScroller.js']}>
       <div class="page-header">
         <h1>Entities</h1>
         <span class="count">
@@ -97,37 +94,63 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
         editingKey={editingKey}
       />
 
-      {entities.length === 0 ? (
+      {!hasEntityTypeFilter ? (
+        <p class="empty">Select an entity type filter to view entities and their metadata.</p>
+      ) : entities.length === 0 ? (
         <p class="empty">No entities found. Run a pipeline to populate data.</p>
       ) : (
-        <table class="entity-table">
-          <thead>
-            <tr>
-              <th>Entity</th>
-              <th>Type</th>
-              {extraKeys.map(k => (
-                <th>{k}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {entities.map(e => (
-              <tr>
-                <td>
-                  <a href={`/entities/${e.id}`} class="entity-link">
-                    {getEntityTitle(e)}
-                  </a>
-                </td>
-                <td>
-                  <span class="badge">{e.type || '—'}</span>
-                </td>
-                {extraKeys.map(k => (
-                  <td>{getMetadataValue(e, k) ?? '—'}</td>
+        <div class="table-scroll-wrap" data-table-scroll-wrap>
+          <div class="table-scroll-rail table-scroll-rail--left">
+            <button
+              type="button"
+              class="table-scroll-btn"
+              data-table-scroll="left"
+              aria-label="Scroll columns left"
+            >
+              ‹
+            </button>
+          </div>
+          <div class="table-scroll-rail table-scroll-rail--right">
+            <button
+              type="button"
+              class="table-scroll-btn"
+              data-table-scroll="right"
+              aria-label="Scroll columns right"
+            >
+              ›
+            </button>
+          </div>
+          <div class="table-scroll" data-table-scroll-container>
+            <table class="entity-table">
+              <thead>
+                <tr>
+                  <th>Entity</th>
+                  <th>Type</th>
+                  {extraKeys.map(k => (
+                    <th>{k}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entities.map(e => (
+                  <tr>
+                    <td>
+                      <a href={`/entities/${e.id}`} class="entity-link">
+                        {getEntityTitle(e)}
+                      </a>
+                    </td>
+                    <td>
+                      <span class="badge">{e.type || '—'}</span>
+                    </td>
+                    {extraKeys.map(k => (
+                      <td>{getMetadataValue(e, k) ?? '—'}</td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {totalPages > 1 && (

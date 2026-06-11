@@ -376,6 +376,83 @@ body {
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 
+.table-scroll-wrap {
+  position: relative;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  scroll-behavior: smooth;
+
+  // Let the table expand past 100% when there are many columns so the
+  // wrapper scrolls instead of the page.
+  > .entity-table {
+    width: max-content;
+    min-width: 100%;
+
+    td,
+    th {
+      white-space: nowrap;
+    }
+  }
+}
+
+.table-scroll-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  pointer-events: none;
+  z-index: 2;
+
+  &--left {
+    left: 4px;
+  }
+
+  &--right {
+    right: 4px;
+  }
+}
+
+.table-scroll-btn {
+  position: sticky;
+  top: 16px;
+  height: 40px;
+  width: 32px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(1px);
+  border: 2.75px solid rgba(0, 0, 0, 0.08);
+  color: var(--color-text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius);
+  pointer-events: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+
+  &:hover {
+    background: var(--color-bg);
+    color: var(--color-primary);
+    border-color: var(--color-border);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+  }
+}
+
+// Show buttons only when the table actually overflows AND that edge has more to scroll.
+// :disabled is toggled by the client script when the container hits an edge.
+.table-scroll-wrap--has-overflow .table-scroll-btn:not(:disabled) {
+  display: flex;
+}
+
 .entity-table,
 .metadata-table {
   width: 100%;

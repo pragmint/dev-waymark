@@ -18,13 +18,8 @@ test('filter form and add-filter control are present', async ({ page }) => {
 });
 
 test('entity detail page loads and shows metadata section', async ({ page }) => {
-  await page.goto('/entities');
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket');
   const firstLink = page.locator('table.entity-table a.entity-link').first();
-  const count = await firstLink.count();
-  if (count === 0) {
-    test.skip();
-    return;
-  }
   await firstLink.click();
   await expect(page.locator('h2')).toHaveText('Metadata');
   await expect(page.locator('.back-link')).toBeVisible();

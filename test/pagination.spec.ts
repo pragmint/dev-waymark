@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('entities page paginates results and exposes prev/next', async ({ page }) => {
-  await page.goto('/entities?per_page=10');
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&per_page=10');
   await expect(page.locator('[data-pagination]')).toBeVisible();
   const firstPageCount = await page.locator('table.entity-table tbody tr').count();
   expect(firstPageCount).toBe(10);
@@ -11,7 +11,7 @@ test('entities page paginates results and exposes prev/next', async ({ page }) =
 });
 
 test('Next link advances to page 2 with a different result set', async ({ page }) => {
-  await page.goto('/entities?per_page=10');
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&per_page=10');
   const firstPageFirstLink = await page
     .locator('table.entity-table a.entity-link')
     .first()
@@ -30,7 +30,7 @@ test('Next link advances to page 2 with a different result set', async ({ page }
 });
 
 test('Prev link returns to the previous page', async ({ page }) => {
-  await page.goto('/entities?per_page=10&page=3');
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&per_page=10&page=3');
   await page.locator('a[data-pagination-prev]').click();
   await page.waitForURL(/page=2/);
   await expect(page.locator('[data-pagination-status]')).toHaveText(/Page 2 of \d+/);
