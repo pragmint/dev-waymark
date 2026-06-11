@@ -1,28 +1,65 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Setup helpers (seed endpoints — NOT exercising production POST handlers) ──
 
-async function createPreset(page: Page, name: string): Promise<number> {
-  await page.goto('/entities');
-  await page.click('#save-preset-btn');
-  await page.fill('input[name="name"]', name);
-  await page.locator('#save-preset-panel button[type="submit"]').click();
-  await expect(page).toHaveURL('/presets');
-
-  const row = page.locator('tr').filter({ hasText: name });
-  const deleteForm = row.locator('form[action*="/presets/"]');
-  const action = await deleteForm.getAttribute('action');
-  const match = action?.match(/\/presets\/(\d+)\/delete/);
-  if (!match) throw new Error(`Could not extract preset id from action: ${action}`);
-  return parseInt(match[1], 10);
+async function seedPreset(request: APIRequestContext, name: string): Promise<number> {
+  const res = await request.post('/test/presets', { data: { name } });
+  expect(res.ok()).toBeTruthy();
+  const { id } = await res.json();
+  return id;
 }
 
-async function deletePreset(page: Page, id: number): Promise<void> {
-  await page.goto('/presets');
-  await page.locator(`form[action="/presets/${id}/delete"] button[type="submit"]`).click();
+async function seedVisualization(
+  request: APIRequestContext,
+  presetId: number,
+  name: string,
+  templateId: string
+): Promise<number> {
+  const res = await request.post('/test/visualizations', {
+    data: { name, presetId, templateId },
+  });
+  expect(res.ok()).toBeTruthy();
+  const { id } = await res.json();
+  return id;
 }
 
-async function createVisualization(
+// ── UI helpers (exercise production code paths under test) ───────────────────
+
+async function fillTemplateSlots(page: Page, templateId: string): Promise<void> {
+  switch (templateId) {
+    case 'duration_trend':
+      await selectFirstOption(page, '#start_date_field');
+      await selectFirstOption(page, '#end_date_field');
+      break;
+    case 'category_breakdown':
+      await selectFirstOption(page, '#category_field');
+      break;
+    case 'phase_snapshot':
+      await selectFirstOption(page, '#category_field');
+      await selectFirstOption(page, '#date_field');
+      break;
+    case 'throughput_over_time':
+      await selectFirstOption(page, '#date_field');
+      break;
+    case 'field_trend':
+      await selectFirstOption(page, '#date_field');
+      await selectFirstOption(page, '#numeric_field');
+      break;
+    case 'category_comparison':
+      await selectFirstOption(page, '#category_field');
+      await selectFirstOption(page, '#numeric_field');
+      break;
+  }
+}
+
+async function selectFirstOption(page: Page, selector: string): Promise<void> {
+  const options = page.locator(`${selector} option`);
+  const optionValue = await options.nth(1).getAttribute('value');
+  if (!optionValue) throw new Error(`no selectable option for ${selector}`);
+  await page.selectOption(selector, optionValue);
+}
+
+async function createVisualizationViaUI(
   page: Page,
   presetId: number,
   name: string,
@@ -30,65 +67,12 @@ async function createVisualization(
 ): Promise<number> {
   await page.goto(`/visualizations/new/${templateId}?preset_id=${presetId}`);
   await page.fill('#name', name);
-
-  // Fill required slots based on template
   await fillTemplateSlots(page, templateId);
-
   await page.locator('#template-config-form button[type="submit"]').click();
   await expect(page).toHaveURL(/\/visualizations\/\d+$/);
-
-  const url = page.url();
-  const match = url.match(/\/visualizations\/(\d+)$/);
-  if (!match) throw new Error(`Could not extract viz id from URL: ${url}`);
+  const match = page.url().match(/\/visualizations\/(\d+)$/);
+  if (!match) throw new Error(`could not parse viz id from ${page.url()}`);
   return parseInt(match[1], 10);
-}
-
-async function fillTemplateSlots(page: Page, templateId: string): Promise<void> {
-  switch (templateId) {
-    case 'duration_trend': {
-      await selectFirstAvailableOption(page, '#start_date_field');
-      await selectFirstAvailableOption(page, '#end_date_field');
-      break;
-    }
-    case 'category_breakdown': {
-      await selectFirstAvailableOption(page, '#category_field');
-      break;
-    }
-    case 'phase_snapshot': {
-      await selectFirstAvailableOption(page, '#category_field');
-      await selectFirstAvailableOption(page, '#date_field');
-      break;
-    }
-    case 'throughput_over_time': {
-      await selectFirstAvailableOption(page, '#date_field');
-      break;
-    }
-    case 'field_trend': {
-      await selectFirstAvailableOption(page, '#date_field');
-      await selectFirstAvailableOption(page, '#numeric_field');
-      break;
-    }
-    case 'category_comparison': {
-      await selectFirstAvailableOption(page, '#category_field');
-      await selectFirstAvailableOption(page, '#numeric_field');
-      break;
-    }
-  }
-}
-
-async function selectFirstAvailableOption(page: Page, selector: string): Promise<void> {
-  const options = page.locator(`${selector} option`);
-  const count = await options.count();
-  if (count > 1) {
-    const val = await options.nth(1).getAttribute('value');
-    if (val) await page.selectOption(selector, val);
-  }
-}
-
-async function deleteVisualization(page: Page, id: number): Promise<void> {
-  await page.goto(`/visualizations/${id}`);
-  await page.locator(`form[action="/visualizations/${id}/delete"] button[type="submit"]`).click();
-  await expect(page).toHaveURL('/visualizations');
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -107,125 +91,85 @@ test('nav has a Visualizations link', async ({ page }) => {
 
 test('new visualization shows template picker', async ({ page }) => {
   await page.goto('/visualizations/new');
-  const hasCards = await page.locator('.template-card').count();
-  const hasNoPresets = await page.locator('text=No presets yet').count();
-  expect(hasCards + hasNoPresets).toBeGreaterThan(0);
+  const cardCount = await page.locator('.template-card').count();
+  const emptyStateCount = await page.locator('text=No presets yet').count();
+  expect(cardCount + emptyStateCount).toBeGreaterThan(0);
 });
 
-test('template picker shows all 6 templates', async ({ page }) => {
-  const dsName = `E2E DS Templates ${Date.now()}`;
-  const presetId = await createPreset(page, dsName);
+test('template picker shows all 6 templates', async ({ page, request }) => {
+  const presetId = await seedPreset(request, `E2E Preset Templates ${Date.now()}`);
 
   await page.goto(`/visualizations/new?preset_id=${presetId}`);
-  const cards = page.locator('.template-card');
-  await expect(cards).toHaveCount(6);
-
-  await deletePreset(page, presetId);
+  await expect(page.locator('.template-card')).toHaveCount(6);
 });
 
-test('template picker preset change updates card links', async ({ page }) => {
-  const dsName1 = `E2E DS Picker1 ${Date.now()}`;
-  const dsName2 = `E2E DS Picker2 ${Date.now()}`;
-  const ds1 = await createPreset(page, dsName1);
-  const ds2 = await createPreset(page, dsName2);
+test('template picker preset change updates card links', async ({ page, request }) => {
+  const firstPresetId = await seedPreset(request, `E2E Preset Picker1 ${Date.now()}`);
+  const secondPresetId = await seedPreset(request, `E2E Preset Picker2 ${Date.now()}`);
 
-  await page.goto(`/visualizations/new?preset_id=${ds1}`);
+  await page.goto(`/visualizations/new?preset_id=${firstPresetId}`);
   const firstCard = page.locator('.template-card').first();
-  const href1 = await firstCard.getAttribute('href');
-  expect(href1).toContain(`preset_id=${ds1}`);
+  expect(await firstCard.getAttribute('href')).toContain(`preset_id=${firstPresetId}`);
 
-  await page.selectOption('#preset-picker', String(ds2));
-  await expect(firstCard).toHaveAttribute('href', new RegExp(`preset_id=${ds2}`));
-
-  await deletePreset(page, ds1);
-  await deletePreset(page, ds2);
+  await page.selectOption('#preset-picker', String(secondPresetId));
+  await expect(firstCard).toHaveAttribute('href', new RegExp(`preset_id=${secondPresetId}`));
 });
 
-test('can create visualization with category_breakdown template', async ({ page }) => {
-  const dsName = `E2E DS CatBreak ${Date.now()}`;
+// Each template gets a full UI create test — exercises TemplateConfigPage form
+// rendering for that template's slot set, parseTemplateForm parsing for the
+// template's discriminator, resolveTemplate output, save, redirect, and detail
+// page render. A break in any template-specific branch shows up here.
+
+test('can create visualization with category_breakdown template', async ({ page, request }) => {
   const vizName = `E2E Viz CatBreak ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'category_breakdown');
-
+  const presetId = await seedPreset(request, `E2E Preset CatBreak ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'category_breakdown');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can create visualization with throughput_over_time template', async ({ page }) => {
-  const dsName = `E2E DS Throughput ${Date.now()}`;
+test('can create visualization with throughput_over_time template', async ({ page, request }) => {
   const vizName = `E2E Viz Throughput ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'throughput_over_time');
-
+  const presetId = await seedPreset(request, `E2E Preset Throughput ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'throughput_over_time');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can create visualization with duration_trend template', async ({ page }) => {
-  const dsName = `E2E DS Duration ${Date.now()}`;
+test('can create visualization with duration_trend template', async ({ page, request }) => {
   const vizName = `E2E Viz Duration ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'duration_trend');
-
+  const presetId = await seedPreset(request, `E2E Preset Duration ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'duration_trend');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can create visualization with phase_snapshot template', async ({ page }) => {
-  const dsName = `E2E DS Phase ${Date.now()}`;
+test('can create visualization with phase_snapshot template', async ({ page, request }) => {
   const vizName = `E2E Viz Phase ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'phase_snapshot');
-
+  const presetId = await seedPreset(request, `E2E Preset Phase ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'phase_snapshot');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can create visualization with field_trend template', async ({ page }) => {
-  const dsName = `E2E DS FieldTrend ${Date.now()}`;
+test('can create visualization with field_trend template', async ({ page, request }) => {
   const vizName = `E2E Viz FieldTrend ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'field_trend');
-
+  const presetId = await seedPreset(request, `E2E Preset FieldTrend ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'field_trend');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can create visualization with category_comparison template', async ({ page }) => {
-  const dsName = `E2E DS CatComp ${Date.now()}`;
+test('can create visualization with category_comparison template', async ({ page, request }) => {
   const vizName = `E2E Viz CatComp ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'category_comparison');
-
+  const presetId = await seedPreset(request, `E2E Preset CatComp ${Date.now()}`);
+  await createVisualizationViaUI(page, presetId, vizName, 'category_comparison');
   await expect(page.locator('h1')).toContainText(vizName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can edit a visualization', async ({ page }) => {
-  const dsName = `E2E DS Edit ${Date.now()}`;
+// Edit/delete/link tests use seed setup so the test stays focused on the
+// operation under test (the create flow is already covered above).
+
+test('can edit a visualization', async ({ page, request }) => {
   const vizName = `E2E Viz Edit ${Date.now()}`;
   const newName = `${vizName} Updated`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'category_breakdown');
+  const presetId = await seedPreset(request, `E2E Preset Edit ${Date.now()}`);
+  const vizId = await seedVisualization(request, presetId, vizName, 'category_breakdown');
 
   await page.goto(`/visualizations/${vizId}/edit`);
   await page.fill('#name', newName);
@@ -233,38 +177,29 @@ test('can edit a visualization', async ({ page }) => {
 
   await expect(page).toHaveURL(`/visualizations/${vizId}`);
   await expect(page.locator('h1')).toContainText(newName);
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });
 
-test('can delete a visualization', async ({ page }) => {
-  const dsName = `E2E DS Del ${Date.now()}`;
+test('can delete a visualization', async ({ page, request }) => {
   const vizName = `E2E Viz Del ${Date.now()}`;
+  const presetId = await seedPreset(request, `E2E Preset Del ${Date.now()}`);
+  const vizId = await seedVisualization(request, presetId, vizName, 'category_breakdown');
 
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'category_breakdown');
-
-  await deleteVisualization(page, vizId);
+  await page.goto(`/visualizations/${vizId}`);
+  await page
+    .locator(`form[action="/visualizations/${vizId}/delete"] button[type="submit"]`)
+    .click();
 
   await expect(page).toHaveURL('/visualizations');
   await expect(page.locator('body')).not.toContainText(vizName);
-
-  await deletePreset(page, presetId);
 });
 
-test('detail page preset link goes to entities', async ({ page }) => {
-  const dsName = `E2E DS Link ${Date.now()}`;
+test('detail page preset link goes to entities', async ({ page, request }) => {
   const vizName = `E2E Viz Link ${Date.now()}`;
-
-  const presetId = await createPreset(page, dsName);
-  const vizId = await createVisualization(page, presetId, vizName, 'category_breakdown');
+  const presetId = await seedPreset(request, `E2E Preset Link ${Date.now()}`);
+  const vizId = await seedVisualization(request, presetId, vizName, 'category_breakdown');
 
   await page.goto(`/visualizations/${vizId}`);
   const presetLink = page.locator('a[href*="/entities"]').first();
   const href = await presetLink.getAttribute('href');
   expect(href).toContain('/entities');
-
-  await deleteVisualization(page, vizId);
-  await deletePreset(page, presetId);
 });

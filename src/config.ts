@@ -5,6 +5,7 @@ const AppDbAdapterSchema = z.enum(['sqlite', 'postgres']);
 
 const ConfigSchema = z.object({
   port: z.number(),
+  testMode: z.boolean(),
   sourceDb: z.object({
     adapter: SourceDbAdapterSchema,
     url: z.string().min(1),
@@ -49,8 +50,11 @@ export function loadConfig(): Config {
   const rawAppAdapter = process.env.DEV_WAYMARK_APP_DB_ADAPTER ?? 'sqlite';
   const appUrl = process.env.DEV_WAYMARK_APP_DB_URL ?? 'sqlite:///dev-waymark-app.sqlite';
 
+  const testMode = process.env.DEV_WAYMARK_TEST_MODE === '1';
+
   return ConfigSchema.parse({
     port,
+    testMode,
     sourceDb: { adapter: rawSourceAdapter, url: sourceUrl, name: sourceName },
     appDb: { adapter: rawAppAdapter, url: appUrl },
   });

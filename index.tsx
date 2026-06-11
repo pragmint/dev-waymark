@@ -27,10 +27,14 @@ import {
   chartDataPreviewHandler,
   presetFieldsHandler,
 } from './src/handlers/chartDataHandler';
+import {
+  testSeedPresetHandler,
+  testSeedVisualizationHandler,
+} from './src/handlers/testSeedHandler';
 
 const config = loadConfig();
 
-const sourceAdapter = await createSourceAdapter(config.sourceDb);
+const sourceAdapter = await createSourceAdapter(config.sourceDb, { testMode: config.testMode });
 await sourceAdapter.validateConnection();
 initSourceAdapter(sourceAdapter);
 
@@ -61,6 +65,11 @@ app.post('/visualizations/:id/delete', visualizationsDeleteHandler);
 app.get('/api/chart-data/:id', chartDataByIdHandler);
 app.post('/api/chart-data/preview', chartDataPreviewHandler);
 app.get('/api/preset-fields/:id', presetFieldsHandler);
+
+if (config.testMode) {
+  app.post('/test/presets', testSeedPresetHandler);
+  app.post('/test/visualizations', testSeedVisualizationHandler);
+}
 
 export default {
   port: config.port,

@@ -20,6 +20,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       DEV_WAYMARK_APP_DB_URL: 'sqlite:///:memory:',
+      DEV_WAYMARK_TEST_MODE: '1',
     },
   },
 });

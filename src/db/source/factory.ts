@@ -8,6 +8,7 @@ import { SqliteSourceAdapter } from './sqlite';
 import { PostgresSourceAdapter } from './postgres';
 import { RedshiftSourceAdapter } from './redshift';
 import { seedGoldenData } from './goldenSeed';
+import { seedE2EData } from './e2eSeed';
 
 // Snapshot of the seeded in-memory dataset. Stored as raw sqlite bytes plus a
 // plain-text sidecar holding a content hash of the seed source + schema DDL —
@@ -72,14 +73,24 @@ async function loadInMemorySeed(): Promise<SqliteSourceAdapter> {
   return buildSeedCache(hash);
 }
 
-export async function createSourceAdapter(config: Config['sourceDb']): Promise<SourceDataAdapter> {
+async function loadE2ESeed(): Promise<SqliteSourceAdapter> {
+  // ~30 rows — seeds in milliseconds, no disk cache needed.
+  const adapter = new SqliteSourceAdapter(':memory:', true);
+  await seedE2EData(adapter);
+  return adapter;
+}
+
+export async function createSourceAdapter(
+  config: Config['sourceDb'],
+  options: { testMode?: boolean } = {}
+): Promise<SourceDataAdapter> {
   switch (config.adapter) {
     case 'sqlite': {
       const path = parseSqliteUrl(config.url);
       // Apply the source schema automatically only for in-memory databases.
       // Configured file-based or external databases are assumed to have the
       // schema already — Dev Waymark never migrates a source database.
-      if (path === ':memory:') return loadInMemorySeed();
+      if (path === ':memory:') return options.testMode ? loadE2ESeed() : loadInMemorySeed();
       return new SqliteSourceAdapter(path, false);
     }
     case 'postgres':
