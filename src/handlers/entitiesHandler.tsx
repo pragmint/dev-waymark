@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { getEntityRepo } from '../db/source/index';
+import type { PagedEntities } from '../db/entityRepository';
 import { MetaFilterOpSchema } from '../schemas/entity';
 import type { MetaFilter } from '../schemas/entity';
 import { EntitiesPage } from '../frontend/Pages/EntitiesPage';
@@ -40,18 +41,30 @@ export async function entitiesHandler(c: Context) {
   // When editing a filter, exclude it from the query so results are unfiltered by that key
   const queryFilters = editingKey ? allFilters.filter(f => f.key !== editingKey) : allFilters;
 
-  const { pageEntities, allIds, total } = await repo.listPaged(queryFilters, {
-    limit: perPage,
-    offset: (page - 1) * perPage,
-  });
+  // Don't query results until an entity type filter is selected
+  const hasEntityTypeFilter = queryFilters.some(f => f.key === 'entity_type');
+  let pagedResult: PagedEntities;
 
-  // When editing a filter, get unfiltered available filters so all options are visible.
-  // Otherwise, use the filtered results to show only available options in context.
-  let availableFilterIds = allIds;
-  if (editingKey) {
+  if (hasEntityTypeFilter) {
+    pagedResult = await repo.listPaged(queryFilters, {
+      limit: perPage,
+      offset: (page - 1) * perPage,
+    });
+
+    // When editing a filter, get unfiltered available filters so all options are visible.
+    if (editingKey) {
+      const { allIds: unfiltered } = await repo.listPaged([], { limit: 1000000, offset: 0 });
+      pagedResult.allIds = unfiltered;
+    }
+  } else {
+    // Get available filters from all entities when no entity type filter is selected
     const { allIds: unfiltered } = await repo.listPaged([], { limit: 1000000, offset: 0 });
-    availableFilterIds = unfiltered;
+    pagedResult = { pageEntities: [], allIds: unfiltered, total: 0 };
   }
+
+  const { pageEntities, allIds, total } = pagedResult;
+  const availableFilterIds = allIds;
+
   const availableFilters = await repo.getAvailableFilters(availableFilterIds);
 
   return c.html(
