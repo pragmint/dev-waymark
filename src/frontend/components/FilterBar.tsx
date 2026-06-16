@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 import type { MetaFilter, AvailableFilter } from '../../schemas/entity';
 import type { Preset } from '../../schemas/preset';
-import { buildEntityUrl } from '../../domain/filterUrl';
+import { buildEntityUrl, metaFiltersEqual } from '../../domain/filterUrl';
 
 type FilterBarProps = {
   activeFilters: MetaFilter[];
@@ -217,6 +217,59 @@ function renderWidget(f: AvailableFilter, isOpen: boolean, currentFilters: MetaF
   );
 }
 
+type ChipDraftState = 'unchanged' | 'added' | 'modified';
+
+// Compare the active filter rows for `key` against the saved preset rows for
+// the same key. Returns 'added' when the key is new to the preset, 'modified'
+// when the values/ops differ, and 'unchanged' otherwise.
+function chipDraftState(
+  key: string,
+  activeFilters: MetaFilter[],
+  savedFilters: MetaFilter[] | null
+): ChipDraftState {
+  if (savedFilters == null) return 'unchanged';
+  const savedForKey = savedFilters.filter(f => f.key === key);
+  if (savedForKey.length === 0) return 'added';
+  const activeForKey = activeFilters.filter(f => f.key === key);
+  return metaFiltersEqual(activeForKey, savedForKey) ? 'unchanged' : 'modified';
+}
+
+// Keys present in the saved preset but not in the current active filters.
+// entity_type is excluded because it's rendered as the Type dropdown rather
+// than as a chip.
+function removedPresetKeys(
+  activeFilters: MetaFilter[],
+  savedFilters: MetaFilter[] | null
+): Map<string, MetaFilter[]> {
+  const removed = new Map<string, MetaFilter[]>();
+  if (savedFilters == null) return removed;
+  const activeKeys = new Set(activeFilters.map(f => f.key));
+  for (const f of savedFilters) {
+    if (f.key === 'entity_type') continue;
+    if (activeKeys.has(f.key)) continue;
+    if (!removed.has(f.key)) removed.set(f.key, []);
+    removed.get(f.key)!.push(f);
+  }
+  return removed;
+}
+
+// URL that re-adds a removed preset key back to the current active filters,
+// preserving the pinned preset.
+function restoreFilterUrl(
+  activeFilters: MetaFilter[],
+  restoreFilters: MetaFilter[],
+  presetId: number | null
+): string {
+  const params = withPreset(new URLSearchParams(), presetId);
+  for (const f of activeFilters) {
+    params.append(`mf__${f.key}__${f.op}`, f.value);
+  }
+  for (const f of restoreFilters) {
+    params.append(`mf__${f.key}__${f.op}`, f.value);
+  }
+  return `/entities?${params.toString()}`;
+}
+
 function cancelEditUrl(activeFilters: MetaFilter[], presetId: number | null): string {
   const params = withPreset(new URLSearchParams(), presetId);
   for (const f of activeFilters) {
@@ -234,6 +287,7 @@ export const FilterBar: FC<FilterBarProps> = ({
   entityTypes,
   presets,
   selectedPresetId,
+  selectedPresetFilters,
   selectedEntityType,
   isDraft,
 }) => {
@@ -436,15 +490,24 @@ export const FilterBar: FC<FilterBarProps> = ({
       <div class="filter-chips-row">
         {Array.from(grouped.entries()).map(([key, filters]) => {
           const isEditing = editingKey === key;
+          const draft = chipDraftState(key, activeFilters, selectedPresetFilters);
+          const draftClass =
+            draft === 'unchanged' ? '' : ` filter-chip--draft filter-chip--draft-${draft}`;
           return (
             <div
-              class={`filter-chip${isEditing ? ' filter-chip--editing' : ''}`}
+              class={`filter-chip${isEditing ? ' filter-chip--editing' : ''}${draftClass}`}
               data-filter-edit-key={key}
+              title={
+                draft === 'added'
+                  ? 'Unsaved: filter not in preset'
+                  : draft === 'modified'
+                    ? 'Unsaved: filter differs from preset'
+                    : undefined
+              }
             >
               <a
                 href={editFilterUrl(activeFilters, key, selectedPresetId)}
                 class="filter-chip-content"
-                title={`Edit ${key} filter`}
               >
                 <span class="filter-chip-key">{formatFieldLabel(key)}:</span>{' '}
                 <span class="filter-chip-val">{chipLabel(filters)}</span>
@@ -460,6 +523,25 @@ export const FilterBar: FC<FilterBarProps> = ({
             </div>
           );
         })}
+
+        {Array.from(removedPresetKeys(activeFilters, selectedPresetFilters).entries()).map(
+          ([key, filters]) => (
+            <a
+              href={restoreFilterUrl(activeFilters, filters, selectedPresetId)}
+              class="filter-chip filter-chip--draft filter-chip--draft-removed"
+              data-filter-removed-key={key}
+              title={`Unsaved: filter removed from preset — click to restore`}
+            >
+              <span class="filter-chip-content">
+                <span class="filter-chip-key">{formatFieldLabel(key)}:</span>{' '}
+                <span class="filter-chip-val">{chipLabel(filters)}</span>
+              </span>
+              <span class="filter-chip-x" aria-hidden="true">
+                ↺
+              </span>
+            </a>
+          )
+        )}
 
         {inactive.length > 0 && (
           <div class="filter-add-wrapper" data-filter-add-wrapper>
