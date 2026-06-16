@@ -109,8 +109,73 @@ export class PostgresAppStateRepository implements AppStateRepository {
     return result.rows.map(r => PresetSchema.parse(r));
   }
 
+  async listPresetsWithFilters(): Promise<PresetWithFilters[]> {
+    const presetResult = await this.pool.query<{ id: number; name: string }>(
+      'SELECT id, name FROM presets ORDER BY id'
+    );
+    if (presetResult.rows.length === 0) return [];
+
+    const filterResult = await this.pool.query<{
+      preset_id: number;
+      key: string;
+      op: string;
+      value: string;
+    }>('SELECT preset_id, key, op, value FROM preset_filters ORDER BY preset_id, filter_order');
+
+    const byPreset = new Map<number, MetaFilter[]>();
+    for (const r of filterResult.rows) {
+      let bucket = byPreset.get(r.preset_id);
+      if (!bucket) {
+        bucket = [];
+        byPreset.set(r.preset_id, bucket);
+      }
+      bucket.push({
+        key: r.key,
+        op: MetaFilterOpSchema.parse(r.op),
+        value: r.value,
+      });
+    }
+
+    return presetResult.rows.map(p =>
+      PresetWithFiltersSchema.parse({
+        ...PresetSchema.parse(p),
+        filters: byPreset.get(p.id) ?? [],
+      })
+    );
+  }
+
+  async updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query('UPDATE presets SET name = $1 WHERE id = $2', [name, id]);
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      await client.query('DELETE FROM preset_filters WHERE preset_id = $1', [id]);
+      for (let i = 0; i < filters.length; i++) {
+        const f = filters[i];
+        await client.query(
+          'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES ($1, $2, $3, $4, $5)',
+          [id, f.key, f.op, f.value, i]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async deletePreset(id: number): Promise<void> {
     await this.pool.query('DELETE FROM presets WHERE id = $1', [id]);
+  }
+
+  async deleteAllPresets(): Promise<void> {
+    await this.pool.query('DELETE FROM presets');
   }
 
   // ── Visualizations ────────────────────────────────────────────────────────

@@ -37,8 +37,23 @@ export interface AppStateRepository {
   /** List all presets (without filters). */
   listPresets(): Promise<Preset[]>;
 
+  /**
+   * List all presets with their filters in one round trip. Used when the
+   * caller needs to compare current filters against every preset.
+   */
+  listPresetsWithFilters(): Promise<PresetWithFilters[]>;
+
+  /**
+   * Update a preset's name and replace its filters atomically. No-op if the
+   * id does not exist.
+   */
+  updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void>;
+
   /** Delete a preset and its filters. No-op if the id does not exist. */
   deletePreset(id: number): Promise<void>;
+
+  /** Test-mode only: delete every preset. */
+  deleteAllPresets(): Promise<void>;
 
   // ── Visualizations ────────────────────────────────────────────────────────
 

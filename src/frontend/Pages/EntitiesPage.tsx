@@ -2,6 +2,7 @@ import type { FC } from 'hono/jsx';
 import type { MetaFilter, AvailableFilter, EntityWithMetadata } from '../../schemas/entity';
 import { Layout } from '../components/Layout';
 import { FilterBar } from '../components/FilterBar';
+import type { PresetWithUrl } from '../components/FilterBar';
 import { getEntityTitle, getMetadataValue } from '../../domain/entityQueries';
 
 type EntitiesPageProps = {
@@ -13,17 +14,26 @@ type EntitiesPageProps = {
   availableFilters: AvailableFilter[];
   addingKey?: string;
   editingKey?: string;
+  entityTypes: string[];
+  presets: PresetWithUrl[];
+  selectedPresetId: number | null;
+  selectedPresetFilters: MetaFilter[] | null;
+  selectedEntityType: string | null;
+  isDraft: boolean;
 };
 
-// Build a URL preserving filters + add/edit keys, swapping in a new page number.
+// Build a URL preserving filters + add/edit keys + the active preset, swapping
+// in a new page number.
 function pageHref(
   page: number,
   perPage: number,
   activeFilters: MetaFilter[],
+  selectedPresetId: number | null,
   addingKey?: string,
   editingKey?: string
 ): string {
   const params = new URLSearchParams();
+  if (selectedPresetId != null) params.set('preset', String(selectedPresetId));
   for (const f of activeFilters) {
     params.append(`mf__${f.key}__${f.op}`, f.value);
   }
@@ -44,16 +54,20 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   availableFilters,
   addingKey,
   editingKey,
+  entityTypes,
+  presets,
+  selectedPresetId,
+  selectedPresetFilters,
+  selectedEntityType,
+  isDraft,
 }) => {
-  const hasEntityTypeFilter = activeFilters.some(f => f.key === 'entity_type');
-  const extraKeys = hasEntityTypeFilter
-    ? [...new Set(availableFilters.filter(f => f.entityType !== '').map(f => f.key))]
-    : [];
+  const extraKeys = [...new Set(availableFilters.filter(f => f.entityType !== '').map(f => f.key))];
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
   const rangeStart = totalCount === 0 ? 0 : (page - 1) * perPage + 1;
   const rangeEnd = Math.min(page * perPage, totalCount);
+  const noEntityTypes = entityTypes.length === 0;
 
   return (
     <Layout title="Entities" extraScripts={['/tableScroller.js']}>
@@ -64,27 +78,6 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             ? '0 results'
             : `${rangeStart}–${rangeEnd} of ${totalCount} result${totalCount !== 1 ? 's' : ''}`}
         </span>
-        <div class="page-header-actions">
-          <button type="button" id="save-preset-btn" class="filter-chip">
-            Save preset
-          </button>
-        </div>
-      </div>
-
-      <div id="save-preset-panel" class="save-preset-panel" style="display:none">
-        <form method="post" action="/presets" class="save-preset-form">
-          {activeFilters.map(f => (
-            <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
-          ))}
-          <span class="filter-widget-label">Name</span>
-          <input type="text" name="name" class="filter-input" placeholder="Preset name…" required />
-          <button type="submit" class="filter-btn">
-            Save
-          </button>
-          <button type="button" id="save-preset-cancel" class="btn-text">
-            Cancel
-          </button>
-        </form>
       </div>
 
       <FilterBar
@@ -92,12 +85,18 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
         availableFilters={availableFilters}
         addingKey={addingKey}
         editingKey={editingKey}
+        entityTypes={entityTypes}
+        presets={presets}
+        selectedPresetId={selectedPresetId}
+        selectedPresetFilters={selectedPresetFilters}
+        selectedEntityType={selectedEntityType}
+        isDraft={isDraft}
       />
 
-      {!hasEntityTypeFilter ? (
-        <p class="empty">Select an entity type filter to view entities and their metadata.</p>
+      {noEntityTypes ? (
+        <p class="empty">No entity types found. Run a pipeline to populate data.</p>
       ) : entities.length === 0 ? (
-        <p class="empty">No entities found. Run a pipeline to populate data.</p>
+        <p class="empty">No entities found. Adjust your filters or run a pipeline.</p>
       ) : (
         <div class="table-scroll-wrap" data-table-scroll-wrap>
           <div class="table-scroll-rail table-scroll-rail--left">
@@ -159,7 +158,14 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             <a
               class="pagination-link"
               data-pagination-prev
-              href={pageHref(page - 1, perPage, activeFilters, addingKey, editingKey)}
+              href={pageHref(
+                page - 1,
+                perPage,
+                activeFilters,
+                selectedPresetId,
+                addingKey,
+                editingKey
+              )}
             >
               ← Prev
             </a>
@@ -175,7 +181,14 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             <a
               class="pagination-link"
               data-pagination-next
-              href={pageHref(page + 1, perPage, activeFilters, addingKey, editingKey)}
+              href={pageHref(
+                page + 1,
+                perPage,
+                activeFilters,
+                selectedPresetId,
+                addingKey,
+                editingKey
+              )}
             >
               Next →
             </a>

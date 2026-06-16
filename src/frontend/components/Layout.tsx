@@ -21,9 +21,6 @@ export const Layout: FC<{ title: string; children?: Child; extraScripts?: string
           <a href="/entities" class="nav-link">
             Entities
           </a>
-          <a href="/presets" class="nav-link">
-            Saved Presets
-          </a>
           <a href="/visualizations" class="nav-link">
             Visualizations
           </a>

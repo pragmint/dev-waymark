@@ -86,7 +86,7 @@ export const ChartBuilderPage: FC<Props> = ({
         </div>
         <div class="form-section">
           <p>
-            No presets yet. <a href="/presets">Create one</a>.
+            No presets yet. <a href="/entities">Create one</a> from the Entities page.
           </p>
         </div>
       </Layout>

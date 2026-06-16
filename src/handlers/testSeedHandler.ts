@@ -31,6 +31,11 @@ export async function testSeedPresetHandler(c: Context) {
   return c.json({ id });
 }
 
+export async function testClearPresetsHandler(c: Context) {
+  await getAppStateRepo().deleteAllPresets();
+  return c.json({ ok: true });
+}
+
 export async function testSeedVisualizationHandler(c: Context) {
   const body = await c.req.json().catch(() => null);
   const parsed = SeedVisualizationBodySchema.safeParse(body);

@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test('redirects root to /entities', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL('/entities');
+  // Entities page always has an entity_type filter selected (handler redirects
+  // to the first available type when none is given).
+  await expect(page).toHaveURL(/\/entities(\?|$)/);
 });
 
 test('entities page has correct title and heading', async ({ page }) => {
@@ -30,67 +32,82 @@ test('unknown entity id returns 404', async ({ page }) => {
   expect(response?.status()).toBe(404);
 });
 
-test('filter chip: clicking content opens edit panel, clicking X removes filter', async ({
-  page,
-}) => {
-  await page.goto('/entities');
+test('filter chip: click to edit, cancel, then × to remove', async ({ page }) => {
+  // Apply a ticket_type=Story filter directly via URL so this test doesn't
+  // depend on widget UI for setup.
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&mf__ticket_type__eq=Story');
 
-  // Use entity_type which has discrete values (multi-select)
-  const addSelect = page.locator('[data-filter-add-select]');
-  const entityTypeOption = addSelect.locator('option[value="entity_type"]');
-  if ((await entityTypeOption.count()) === 0) {
-    test.skip();
-    return;
-  }
-
-  // Add a filter by selecting entity_type from the dropdown
-  await addSelect.selectOption('entity_type');
-  const widgetPanel = page.locator('.filter-widget-panel[data-filter-key="entity_type"]');
-  await expect(widgetPanel).toBeVisible();
-
-  // Select the first value and apply
-  const multiSelect = widgetPanel.locator('select[multiple]');
-  const firstValue = await multiSelect.locator('option').first().getAttribute('value');
-  if (!firstValue) {
-    test.skip();
-    return;
-  }
-  await multiSelect.selectOption(firstValue);
-  await widgetPanel.locator('.filter-widget-apply').click();
-  await page.waitForURL(/mf__entity_type__eq=/);
-
-  // Remember the filtered result count
-  const filteredCount = await page.locator('table.entity-table tbody tr').count();
-
-  // Verify the chip is visible and NOT in editing state
-  const chip = page.locator('.filter-chip[data-filter-edit-key="entity_type"]');
+  const chip = page.locator('.filter-chip[data-filter-edit-key="ticket_type"]');
   await expect(chip).toBeVisible();
   await expect(chip).not.toHaveClass(/filter-chip--editing/);
 
-  // Test 1: Click the chip content — should navigate to edit mode
+  // Click chip content → enters edit mode.
   await chip.locator('.filter-chip-content').click();
-  await page.waitForURL(/edit_filter=entity_type/);
+  await page.waitForURL(/edit_filter=ticket_type/);
+  await expect(chip).toHaveClass(/filter-chip--editing/);
 
-  // Chip should be in editing state
-  const editingChip = page.locator('.filter-chip[data-filter-edit-key="entity_type"]');
-  await expect(editingChip).toHaveClass(/filter-chip--editing/);
-
-  // Widget panel should be open
+  const widgetPanel = page.locator('.filter-widget-panel[data-filter-key="ticket_type"]');
   await expect(widgetPanel).toBeVisible();
 
-  // Results should be unfiltered (more or equal rows than when filtered)
-  const unfilteredCount = await page.locator('table.entity-table tbody tr').count();
-  expect(unfilteredCount).toBeGreaterThanOrEqual(filteredCount);
-
-  // Cancel should restore the original filtered state
+  // Cancel returns to the filtered view.
   await widgetPanel.locator('.filter-widget-cancel').click();
-  await page.waitForURL(/mf__entity_type__eq=/);
-  await expect(editingChip).not.toHaveClass(/filter-chip--editing/);
+  await page.waitForURL(/mf__ticket_type__eq=Story/);
+  await expect(chip).not.toHaveClass(/filter-chip--editing/);
 
-  // Test 2: Click the X button should remove the filter
+  // × removes the filter.
   await chip.locator('.filter-chip-x').click();
-  await page.waitForURL(/\/entities\/?$/);
-
-  // Verify the chip is gone
+  await expect(page).not.toHaveURL(/mf__ticket_type__eq/);
   await expect(chip).not.toBeAttached();
+});
+
+test('editing a date filter prefills the date pickers with saved values', async ({ page }) => {
+  // Seed has jira_created_at as a date field on jira_ticket entities.
+  await page.goto(
+    '/entities?mf__entity_type__eq=jira_ticket' +
+      '&mf__jira_created_at__gte=2024-01-05' +
+      '&mf__jira_created_at__lte=2024-01-15'
+  );
+
+  const chip = page.locator('.filter-chip[data-filter-edit-key="jira_created_at"]');
+  await expect(chip).toBeVisible();
+
+  // Click chip → edit mode opens the date panel.
+  await chip.locator('.filter-chip-content').click();
+  await page.waitForURL(/edit_filter=jira_created_at/);
+
+  const panel = page.locator('.filter-widget-panel[data-filter-key="jira_created_at"]');
+  await expect(panel).toBeVisible();
+
+  // Both date inputs come back prefilled with the values from the URL.
+  await expect(panel.locator(`input[name="mf__jira_created_at__gte"]`)).toHaveValue('2024-01-05');
+  await expect(panel.locator(`input[name="mf__jira_created_at__lte"]`)).toHaveValue('2024-01-15');
+});
+
+test('editing a multi-select chip preselects the saved values', async ({ page }) => {
+  await page.goto(
+    '/entities?mf__entity_type__eq=jira_ticket' +
+      '&mf__ticket_type__eq=Story' +
+      '&mf__ticket_type__eq=Bug'
+  );
+
+  const chip = page.locator('.filter-chip[data-filter-edit-key="ticket_type"]');
+  await chip.locator('.filter-chip-content').click();
+  await page.waitForURL(/edit_filter=ticket_type/);
+
+  const panel = page.locator('.filter-widget-panel[data-filter-key="ticket_type"]');
+  const selected = await panel.locator('select[multiple] option:checked').allTextContents();
+  expect(selected.sort()).toEqual(['Bug', 'Story']);
+});
+
+test('editing a regex filter prefills the regex input and opens that mode', async ({ page }) => {
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&mf__ticket_type__re=Story%7CBug');
+
+  const chip = page.locator('.filter-chip[data-filter-edit-key="ticket_type"]');
+  await chip.locator('.filter-chip-content').click();
+  await page.waitForURL(/edit_filter=ticket_type/);
+
+  const panel = page.locator('.filter-widget-panel[data-filter-key="ticket_type"]');
+  // Regex mode is active server-side because the saved op is `re`.
+  await expect(panel.locator('[data-active-mode]')).toHaveAttribute('data-active-mode', 'regex');
+  await expect(panel.locator(`input[name="mf__ticket_type__re"]`)).toHaveValue('Story|Bug');
 });

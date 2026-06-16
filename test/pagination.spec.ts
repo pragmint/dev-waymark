@@ -38,7 +38,8 @@ test('Prev link returns to the previous page', async ({ page }) => {
 
 test('page param preserves filters across navigation', async ({ page }) => {
   await page.goto('/entities?mf__entity_type__eq=jira_ticket&per_page=10');
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_type"]')).toBeVisible();
+  // entity_type is now reflected by the Type dropdown, not a chip.
+  await expect(page.locator('[data-type-select]')).toHaveValue('jira_ticket');
 
   // Capture the total count (the "of N results" suffix is invariant across pages)
   const countText = (await page.locator('.page-header .count').textContent()) ?? '';
@@ -50,12 +51,13 @@ test('page param preserves filters across navigation', async ({ page }) => {
   await expect(page).toHaveURL(/page=2/);
   await expect(page).toHaveURL(/mf__entity_type__eq=jira_ticket/);
 
-  // Filter chip survives the page change and the total is the same
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_type"]')).toBeVisible();
+  // Type selection survives the page change and the total is the same
+  await expect(page.locator('[data-type-select]')).toHaveValue('jira_ticket');
   await expect(page.locator('.page-header .count')).toContainText(`of ${total} result`);
 });
 
 test('result count header shows the displayed range, not the total only', async ({ page }) => {
-  await page.goto('/entities?per_page=10');
+  // Use jira_ticket explicitly — the seed has 25 of them, enough to fill a per_page=10 page.
+  await page.goto('/entities?mf__entity_type__eq=jira_ticket&per_page=10');
   await expect(page.locator('.page-header .count')).toContainText(/1–10 of \d+ results/);
 });

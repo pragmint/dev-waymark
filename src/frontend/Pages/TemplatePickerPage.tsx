@@ -16,7 +16,7 @@ export const TemplatePickerPage: FC<Props> = ({ presets, selectedPresetId }) => 
           <h1>New Visualization</h1>
         </div>
         <p class="empty">
-          No presets yet. <a href="/presets">Create one</a>.
+          No presets yet. <a href="/entities">Create one</a> from the Entities page.
         </p>
       </Layout>
     );

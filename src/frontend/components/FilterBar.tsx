@@ -1,12 +1,22 @@
 import type { FC } from 'hono/jsx';
 import type { MetaFilter, AvailableFilter } from '../../schemas/entity';
+import type { Preset } from '../../schemas/preset';
+import { buildEntityUrl } from '../../domain/filterUrl';
 
 type FilterBarProps = {
   activeFilters: MetaFilter[];
   availableFilters: AvailableFilter[];
   addingKey?: string;
   editingKey?: string;
+  entityTypes: string[];
+  presets: PresetWithUrl[];
+  selectedPresetId: number | null;
+  selectedPresetFilters: MetaFilter[] | null;
+  selectedEntityType: string | null;
+  isDraft: boolean;
 };
+
+export type PresetWithUrl = Preset & { url: string };
 
 function formatValueType(type: string): string {
   const typeMap: Record<string, string> = {
@@ -26,8 +36,17 @@ function formatFieldLabel(key: string): string {
     .join(' ');
 }
 
-function removeFilterUrl(activeFilters: MetaFilter[], removeKey: string): string {
-  const params = new URLSearchParams();
+function withPreset(params: URLSearchParams, presetId: number | null): URLSearchParams {
+  if (presetId != null) params.set('preset', String(presetId));
+  return params;
+}
+
+function removeFilterUrl(
+  activeFilters: MetaFilter[],
+  removeKey: string,
+  presetId: number | null
+): string {
+  const params = withPreset(new URLSearchParams(), presetId);
   for (const f of activeFilters) {
     if (f.key === removeKey) continue;
     params.append(`mf__${f.key}__${f.op}`, f.value);
@@ -36,8 +55,12 @@ function removeFilterUrl(activeFilters: MetaFilter[], removeKey: string): string
   return `/entities${qs ? '?' + qs : ''}`;
 }
 
-function editFilterUrl(activeFilters: MetaFilter[], editKey: string): string {
-  const params = new URLSearchParams();
+function editFilterUrl(
+  activeFilters: MetaFilter[],
+  editKey: string,
+  presetId: number | null
+): string {
+  const params = withPreset(new URLSearchParams(), presetId);
   for (const f of activeFilters) {
     params.append(`mf__${f.key}__${f.op}`, f.value);
   }
@@ -60,15 +83,28 @@ function chipLabel(filters: MetaFilter[]): string {
   return filters[0]?.value ?? '';
 }
 
-function renderWidget(f: AvailableFilter, isOpen: boolean) {
+function renderWidget(f: AvailableFilter, isOpen: boolean, currentFilters: MetaFilter[]) {
   const dis = !isOpen;
+  const findVal = (op: MetaFilter['op']) => currentFilters.find(cf => cf.op === op)?.value ?? '';
 
   if (f.value_type === 'date') {
     return (
       <>
-        <input type="date" name={`mf__${f.key}__gte`} class="filter-input" disabled={dis} />
+        <input
+          type="date"
+          name={`mf__${f.key}__gte`}
+          class="filter-input"
+          value={findVal('gte')}
+          disabled={dis}
+        />
         <span class="filter-sep">–</span>
-        <input type="date" name={`mf__${f.key}__lte`} class="filter-input" disabled={dis} />
+        <input
+          type="date"
+          name={`mf__${f.key}__lte`}
+          class="filter-input"
+          value={findVal('lte')}
+          disabled={dis}
+        />
       </>
     );
   }
@@ -81,6 +117,7 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
           name={`mf__${f.key}__gte`}
           class="filter-input filter-input-sm"
           placeholder="min"
+          value={findVal('gte')}
           disabled={dis}
         />
         <span class="filter-sep">–</span>
@@ -89,6 +126,7 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
           name={`mf__${f.key}__lte`}
           class="filter-input filter-input-sm"
           placeholder="max"
+          value={findVal('lte')}
           disabled={dis}
         />
       </>
@@ -96,32 +134,48 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
   }
 
   if (f.value_type === 'boolean') {
+    const eqValue = findVal('eq');
     return (
       <select name={`mf__${f.key}__eq`} class="filter-select" disabled={dis}>
-        <option value="">Any</option>
-        <option value="true">True</option>
-        <option value="false">False</option>
+        <option value="" selected={eqValue === ''}>
+          Any
+        </option>
+        <option value="true" selected={eqValue === 'true'}>
+          True
+        </option>
+        <option value="false" selected={eqValue === 'false'}>
+          False
+        </option>
       </select>
     );
   }
 
-  // string type with discrete values: multi-select (default) + regex toggle
+  // string type with discrete values: multi-select (default) + regex toggle.
+  // When editing, the saved values determine which mode opens first.
   if (f.distinctValues && f.distinctValues.length > 0) {
+    const eqValues = currentFilters.filter(cf => cf.op === 'eq').map(cf => cf.value);
+    const reValue = findVal('re');
+    const activeMode = reValue ? 'regex' : 'multi';
+
     return (
-      <div class="filter-string-modes" data-active-mode="multi">
+      <div class="filter-string-modes" data-active-mode={activeMode}>
         <div class="filter-mode-tabs">
           <button
             type="button"
-            class="filter-mode-tab filter-mode-tab--active"
+            class={`filter-mode-tab${activeMode === 'multi' ? ' filter-mode-tab--active' : ''}`}
             data-mode-tab="multi"
           >
             Values
           </button>
-          <button type="button" class="filter-mode-tab" data-mode-tab="regex">
+          <button
+            type="button"
+            class={`filter-mode-tab${activeMode === 'regex' ? ' filter-mode-tab--active' : ''}`}
+            data-mode-tab="regex"
+          >
             Regex
           </button>
         </div>
-        <div data-mode-content="multi">
+        <div data-mode-content="multi" style={activeMode === 'multi' ? '' : 'display:none'}>
           <select
             multiple
             name={`mf__${f.key}__eq`}
@@ -130,16 +184,19 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
             disabled={dis}
           >
             {f.distinctValues.map(v => (
-              <option value={v}>{v}</option>
+              <option value={v} selected={eqValues.includes(v)}>
+                {v}
+              </option>
             ))}
           </select>
         </div>
-        <div data-mode-content="regex" style="display:none">
+        <div data-mode-content="regex" style={activeMode === 'regex' ? '' : 'display:none'}>
           <input
             type="text"
             name={`mf__${f.key}__re`}
             class="filter-input"
             placeholder="regex…"
+            value={reValue}
             disabled={dis}
           />
         </div>
@@ -154,13 +211,14 @@ function renderWidget(f: AvailableFilter, isOpen: boolean) {
       name={`mf__${f.key}__re`}
       class="filter-input"
       placeholder="regex…"
+      value={findVal('re')}
       disabled={dis}
     />
   );
 }
 
-function cancelEditUrl(activeFilters: MetaFilter[]): string {
-  const params = new URLSearchParams();
+function cancelEditUrl(activeFilters: MetaFilter[], presetId: number | null): string {
+  const params = withPreset(new URLSearchParams(), presetId);
   for (const f of activeFilters) {
     params.append(`mf__${f.key}__${f.op}`, f.value);
   }
@@ -173,22 +231,207 @@ export const FilterBar: FC<FilterBarProps> = ({
   availableFilters,
   addingKey,
   editingKey,
+  entityTypes,
+  presets,
+  selectedPresetId,
+  selectedEntityType,
+  isDraft,
 }) => {
-  // Group active filters by key for chip display
+  // Group active filters by key for chip display. The chips row excludes
+  // entity_type (promoted to the Type dropdown); the save-preset preview
+  // includes everything because a preset captures every active filter.
   const grouped = new Map<string, MetaFilter[]>();
+  const groupedAll = new Map<string, MetaFilter[]>();
   for (const f of activeFilters) {
+    if (!groupedAll.has(f.key)) groupedAll.set(f.key, []);
+    groupedAll.get(f.key)!.push(f);
+    if (f.key === 'entity_type') continue;
     if (!grouped.has(f.key)) grouped.set(f.key, []);
     grouped.get(f.key)!.push(f);
   }
 
   const activeKeys = new Set(activeFilters.map(f => f.key));
-  const inactive = availableFilters.filter(f => !activeKeys.has(f.key));
+  // entity_type is rendered as the Type dropdown — don't list it in "Add filter".
+  const inactive = availableFilters.filter(f => !activeKeys.has(f.key) && f.key !== 'entity_type');
 
   // The key whose panel should be open (editing takes priority)
   const openKey = editingKey || addingKey;
 
+  const selectedPreset = presets.find(p => p.id === selectedPresetId) ?? null;
+  const currentUrl = buildEntityUrl(activeFilters, selectedPresetId);
+  // URL that drops all filters except the current entity type and drops the
+  // preset param too. Used as the value of the "None" option so selecting it
+  // returns to the bare type view (no preset, no extra filters).
+  const bareTypeUrl = selectedEntityType
+    ? `/entities?mf__entity_type__eq=${encodeURIComponent(selectedEntityType)}`
+    : '/entities';
+
   return (
     <div class="filter-bar">
+      {/* Row: Type + Preset controls */}
+      <div class="filter-meta-row">
+        <form action="/entities" method="get" class="filter-meta-form">
+          <label class="filter-widget-label" for="entity-type-select">
+            Type
+          </label>
+          <select
+            id="entity-type-select"
+            name="mf__entity_type__eq"
+            class="filter-select"
+            data-type-select
+          >
+            {entityTypes.length === 0 && <option value="">(no entity types)</option>}
+            {entityTypes.map(t => (
+              <option value={t} selected={selectedEntityType === t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <button type="submit" class="filter-btn js-fallback" data-js-fallback>
+            Go
+          </button>
+        </form>
+
+        <div class="filter-meta-divider" aria-hidden="true" />
+
+        <label class="filter-widget-label" for="preset-combo-input">
+          Preset
+        </label>
+
+        {selectedPreset ? (
+          <form
+            method="post"
+            action={`/entities/presets/${selectedPreset.id}`}
+            class="filter-inline-form preset-combo-form"
+            data-preset-save-changes
+            data-is-draft={isDraft ? 'true' : 'false'}
+          >
+            {activeFilters.map(f => (
+              <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
+            ))}
+            <div class="preset-combo" data-preset-combo>
+              <input
+                id="preset-combo-input"
+                type="text"
+                name="name"
+                class="preset-combo-input"
+                value={selectedPreset.name}
+                data-original-name={selectedPreset.name}
+                data-preset-name-input
+                autocomplete="off"
+                required
+              />
+              <button
+                type="button"
+                class="preset-combo-toggle"
+                data-preset-combo-toggle
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Pick a different preset"
+              >
+                ▾
+              </button>
+              <ul class="preset-combo-list" hidden data-preset-combo-list role="listbox">
+                <li>
+                  <a href={bareTypeUrl} role="option">
+                    None
+                  </a>
+                </li>
+                {presets
+                  .filter(p => p.id !== selectedPresetId)
+                  .map(p => (
+                    <li>
+                      <a href={p.url} role="option">
+                        {p.name}
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+            <button type="submit" class="filter-btn filter-btn-attention" data-preset-save-submit>
+              <span aria-hidden="true" class="filter-btn-dot">
+                ●
+              </span>{' '}
+              Save changes
+            </button>
+            <a
+              href={selectedPreset.url}
+              class="filter-clear"
+              data-preset-revert
+              title={`Revert to saved state for "${selectedPreset.name}"`}
+            >
+              Revert
+            </a>
+          </form>
+        ) : (
+          <select
+            id="preset-combo-input"
+            class="filter-select"
+            data-preset-select
+            data-current-url={currentUrl}
+          >
+            <option value={bareTypeUrl}>None</option>
+            {presets.map(p => (
+              <option value={p.url} data-preset-id={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {selectedPreset && (
+          <form
+            method="post"
+            action={`/entities/presets/${selectedPreset.id}/delete`}
+            class="filter-inline-form"
+            data-preset-delete-form
+            data-preset-name={selectedPreset.name}
+          >
+            <input type="hidden" name="return_to" value={currentUrl} />
+            <button
+              type="submit"
+              class="filter-icon-btn"
+              title={`Delete "${selectedPreset.name}"`}
+              aria-label={`Delete preset ${selectedPreset.name}`}
+            >
+              🗑
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Save preset panel — shows a read-only preview of the filters being
+          saved so users can see what's about to be captured. To change the
+          filters, cancel and adjust them via the chips above. */}
+      <div id="save-preset-panel" class="filter-inline-panel" style="display:none">
+        <form method="post" action="/entities/presets" class="filter-inline-form">
+          {activeFilters.map(f => (
+            <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
+          ))}
+          <div class="save-preset-preview">
+            <span class="filter-widget-label">Filters to save</span>
+            <div class="save-preset-chips">
+              {Array.from(groupedAll.entries()).map(([key, filters]) => (
+                <span class="filter-chip filter-chip--readonly">
+                  <span class="filter-chip-content">
+                    <span class="filter-chip-key">{formatFieldLabel(key)}:</span>{' '}
+                    <span class="filter-chip-val">{chipLabel(filters)}</span>
+                  </span>
+                </span>
+              ))}
+            </div>
+            <span class="save-preset-hint">Cancel to adjust filters first.</span>
+          </div>
+          <input type="text" name="name" class="filter-input" placeholder="Preset name…" required />
+          <button type="submit" class="filter-btn">
+            Save
+          </button>
+          <button type="button" id="save-preset-cancel" class="filter-clear">
+            Cancel
+          </button>
+        </form>
+      </div>
+
       {/* Row 1: active chips + add-filter control + clear */}
       <div class="filter-chips-row">
         {Array.from(grouped.entries()).map(([key, filters]) => {
@@ -199,7 +442,7 @@ export const FilterBar: FC<FilterBarProps> = ({
               data-filter-edit-key={key}
             >
               <a
-                href={editFilterUrl(activeFilters, key)}
+                href={editFilterUrl(activeFilters, key, selectedPresetId)}
                 class="filter-chip-content"
                 title={`Edit ${key} filter`}
               >
@@ -207,7 +450,7 @@ export const FilterBar: FC<FilterBarProps> = ({
                 <span class="filter-chip-val">{chipLabel(filters)}</span>
               </a>
               <a
-                href={removeFilterUrl(activeFilters, key)}
+                href={removeFilterUrl(activeFilters, key, selectedPresetId)}
                 class="filter-chip-x"
                 title={`Remove ${key} filter`}
                 aria-label={`Remove ${key} filter`}
@@ -222,6 +465,9 @@ export const FilterBar: FC<FilterBarProps> = ({
           <div class="filter-add-wrapper" data-filter-add-wrapper>
             {/* No-JS: select + submit navigates to ?add_filter=KEY to open widget panel */}
             <form action="/entities" method="get" class="filter-add-form" data-filter-add-form>
+              {selectedPresetId != null && (
+                <input type="hidden" name="preset" value={String(selectedPresetId)} />
+              )}
               {activeFilters.map(f => (
                 <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
               ))}
@@ -280,8 +526,17 @@ export const FilterBar: FC<FilterBarProps> = ({
           </div>
         )}
 
-        {activeFilters.length > 0 && (
-          <a href="/entities" class="filter-clear">
+        {selectedPresetId === null && (
+          <button type="button" id="save-preset-btn" class="filter-btn filter-btn-secondary">
+            Save…
+          </button>
+        )}
+
+        {grouped.size > 0 && selectedEntityType && (
+          <a
+            href={`/entities?mf__entity_type__eq=${encodeURIComponent(selectedEntityType)}`}
+            class="filter-clear"
+          >
             Clear all
           </a>
         )}
@@ -289,6 +544,9 @@ export const FilterBar: FC<FilterBarProps> = ({
 
       {/* Widget panels inside one form */}
       <form action="/entities" method="get" class="filter-form" data-filter-form>
+        {selectedPresetId != null && (
+          <input type="hidden" name="preset" value={String(selectedPresetId)} />
+        )}
         {/* Preserve active filters as hidden inputs, excluding the key being edited */}
         {activeFilters
           .filter(f => f.key !== editingKey)
@@ -296,10 +554,11 @@ export const FilterBar: FC<FilterBarProps> = ({
             <input type="hidden" name={`mf__${f.key}__${f.op}`} value={f.value} />
           ))}
 
-        {/* One widget panel per unique key (deduplicated by key) */}
+        {/* One widget panel per unique key (deduplicated by key). Skip entity_type — promoted to Type dropdown. */}
         {Array.from(
           new Map(
             availableFilters
+              .filter(f => f.key !== 'entity_type')
               .sort((a, b) => a.entityType.localeCompare(b.entityType))
               .map(f => [f.key, f])
           ).values()
@@ -315,12 +574,19 @@ export const FilterBar: FC<FilterBarProps> = ({
               style={isOpen ? '' : 'display:none'}
             >
               <span class="filter-widget-label">{formatFieldLabel(f.key)}</span>
-              {renderWidget(f, isOpen)}
+              {renderWidget(
+                f,
+                isOpen,
+                isEditPanel ? activeFilters.filter(af => af.key === f.key) : []
+              )}
               <button type="submit" class="filter-btn filter-widget-apply">
                 Apply
               </button>
               {isEditPanel ? (
-                <a href={cancelEditUrl(activeFilters)} class="filter-clear filter-widget-cancel">
+                <a
+                  href={cancelEditUrl(activeFilters, selectedPresetId)}
+                  class="filter-clear filter-widget-cancel"
+                >
                   Cancel
                 </a>
               ) : (

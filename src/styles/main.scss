@@ -130,6 +130,228 @@ body {
   }
 }
 
+.filter-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+
+  .filter-widget-label {
+    min-width: 0;
+  }
+}
+
+.filter-meta-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-meta-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.filter-meta-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-text);
+    border-color: var(--color-primary);
+  }
+}
+
+.filter-btn-secondary {
+  background: var(--color-bg);
+  color: var(--color-primary);
+
+  &:hover {
+    background: var(--color-badge-bg);
+  }
+}
+
+.filter-inline-panel {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.filter-inline-form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-preset-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.save-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-chip--readonly {
+  cursor: default;
+
+  &:hover {
+    background: var(--color-badge-bg);
+    border-color: var(--color-border);
+  }
+
+  .filter-chip-content {
+    padding: 0 10px;
+    cursor: default;
+
+    &:hover {
+      text-decoration: none;
+    }
+  }
+}
+
+.save-preset-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.filter-btn-attention {
+  background: #f0ad4e;
+  border-color: #e08e0b;
+  color: #fff;
+
+  &:hover {
+    background: #ec971f;
+  }
+}
+
+.filter-btn-dot {
+  font-size: 8px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+// ── Preset combobox ───────────────────────────────────────────────────────────
+
+.preset-combo-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-combo {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+
+  &:focus-within {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -1px;
+  }
+}
+
+.preset-combo-input {
+  border: none;
+  background: transparent;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  min-width: 160px;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.preset-combo-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.preset-combo-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  max-height: 240px;
+  overflow-y: auto;
+
+  li {
+    margin: 0;
+  }
+
+  a {
+    display: block;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--color-text);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--color-badge-bg);
+    }
+  }
+}
+
+// Hide the Save changes button + Revert link until the form is in draft state.
+.preset-combo-form[data-is-draft='false'] [data-preset-save-submit],
+.preset-combo-form[data-is-draft='false'] [data-preset-revert] {
+  display: none;
+}
+
 .filter-chip {
   display: inline-flex;
   align-items: center;

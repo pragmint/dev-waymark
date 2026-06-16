@@ -117,8 +117,64 @@ export class SqliteAppStateRepository implements AppStateRepository {
     return rows.map(r => PresetSchema.parse(r));
   }
 
+  async listPresetsWithFilters(): Promise<PresetWithFilters[]> {
+    const presetRows = this.db.query('SELECT id, name FROM presets ORDER BY id').all() as {
+      id: number;
+      name: string;
+    }[];
+    if (presetRows.length === 0) return [];
+
+    const filterRows = this.db
+      .query(
+        'SELECT preset_id, key, op, value FROM preset_filters ORDER BY preset_id, filter_order'
+      )
+      .all() as { preset_id: number; key: string; op: string; value: string }[];
+
+    const byPreset = new Map<number, MetaFilter[]>();
+    for (const r of filterRows) {
+      let bucket = byPreset.get(r.preset_id);
+      if (!bucket) {
+        bucket = [];
+        byPreset.set(r.preset_id, bucket);
+      }
+      bucket.push({
+        key: r.key,
+        op: MetaFilterOpSchema.parse(r.op),
+        value: r.value,
+      });
+    }
+
+    return presetRows.map(p =>
+      PresetWithFiltersSchema.parse({
+        ...PresetSchema.parse(p),
+        filters: byPreset.get(p.id) ?? [],
+      })
+    );
+  }
+
+  async updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void> {
+    const txn = this.db.transaction(() => {
+      const result = this.db.query('UPDATE presets SET name = ? WHERE id = ?').run(name, id);
+      if (result.changes === 0) return;
+      this.db.query('DELETE FROM preset_filters WHERE preset_id = ?').run(id);
+      for (let i = 0; i < filters.length; i++) {
+        const f = filters[i];
+        this.db
+          .query(
+            'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES (?, ?, ?, ?, ?)'
+          )
+          .run(id, f.key, f.op, f.value, i);
+      }
+    });
+    txn();
+  }
+
   async deletePreset(id: number): Promise<void> {
     this.db.query('DELETE FROM presets WHERE id = ?').run(id);
+  }
+
+  async deleteAllPresets(): Promise<void> {
+    this.db.query('DELETE FROM presets').run();
   }
 
   // ── Visualizations ────────────────────────────────────────────────────────

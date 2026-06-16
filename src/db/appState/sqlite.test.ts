@@ -120,6 +120,41 @@ describe('SqliteAppStateRepository — presets', () => {
     await expect(repo.deletePreset(9999)).resolves.toBeUndefined();
   });
 
+  it('listPresetsWithFilters returns presets with their filters', async () => {
+    await repo.savePreset('Alpha', [
+      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
+      { key: 'status', op: 'eq', value: 'open' },
+    ]);
+    await repo.savePreset('Beta', []);
+
+    const list = await repo.listPresetsWithFilters();
+    expect(list).toHaveLength(2);
+    expect(list[0].name).toBe('Alpha');
+    expect(list[0].filters).toHaveLength(2);
+    expect(list[1].name).toBe('Beta');
+    expect(list[1].filters).toHaveLength(0);
+  });
+
+  it('updatePreset replaces name and filters atomically', async () => {
+    const id = await repo.savePreset('original', [
+      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
+      { key: 'status', op: 'eq', value: 'open' },
+    ]);
+    await repo.updatePreset(id, 'renamed', [{ key: 'entity_type', op: 'eq', value: 'github_pr' }]);
+    const after = await repo.getPreset(id);
+    expect(after!.name).toBe('renamed');
+    expect(after!.filters).toEqual([{ key: 'entity_type', op: 'eq', value: 'github_pr' }]);
+    const orphaned = repo
+      .getDb()
+      .query('SELECT * FROM preset_filters WHERE preset_id = ?')
+      .all(id) as unknown[];
+    expect(orphaned).toHaveLength(1);
+  });
+
+  it('updatePreset is a no-op for unknown id', async () => {
+    await expect(repo.updatePreset(9999, 'x', [])).resolves.toBeUndefined();
+  });
+
   it('supports all filter ops', async () => {
     const filters = [
       { key: 'name', op: 'eq' as const, value: 'foo' },

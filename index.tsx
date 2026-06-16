@@ -8,10 +8,10 @@ import { initAppStateRepo } from './src/db/appState/index';
 import { entitiesHandler } from './src/handlers/entitiesHandler';
 import { entityDetailHandler } from './src/handlers/entityDetailHandler';
 import {
-  presetsListHandler,
-  presetsSaveHandler,
-  presetsDeleteHandler,
-} from './src/handlers/presetsHandler';
+  entityPresetsSaveHandler,
+  entityPresetsUpdateHandler,
+  entityPresetsDeleteHandler,
+} from './src/handlers/entityPresetsHandler';
 import {
   visualizationsListHandler,
   visualizationsNewHandler,
@@ -29,6 +29,7 @@ import {
 } from './src/handlers/chartDataHandler';
 import {
   testSeedPresetHandler,
+  testClearPresetsHandler,
   testSeedVisualizationHandler,
 } from './src/handlers/testSeedHandler';
 
@@ -48,10 +49,10 @@ app.use('/*', serveStatic({ root: './public' }));
 
 app.get('/', c => c.redirect('/entities'));
 app.get('/entities', entitiesHandler);
+app.post('/entities/presets', entityPresetsSaveHandler);
+app.post('/entities/presets/:id', entityPresetsUpdateHandler);
+app.post('/entities/presets/:id/delete', entityPresetsDeleteHandler);
 app.get('/entities/:id', entityDetailHandler);
-app.get('/presets', presetsListHandler);
-app.post('/presets', presetsSaveHandler);
-app.post('/presets/:id/delete', presetsDeleteHandler);
 
 app.get('/visualizations', visualizationsListHandler);
 app.get('/visualizations/new', visualizationsNewHandler);
@@ -68,6 +69,7 @@ app.get('/api/preset-fields/:id', presetFieldsHandler);
 
 if (config.testMode) {
   app.post('/test/presets', testSeedPresetHandler);
+  app.post('/test/presets/clear', testClearPresetsHandler);
   app.post('/test/visualizations', testSeedVisualizationHandler);
 }
 
