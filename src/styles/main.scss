@@ -18,6 +18,10 @@
   --font-mono: ui-monospace, 'Cascadia Code', monospace;
   --radius: 6px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  // Canonical control height — every control that sits in a horizontal row
+  // (chips, buttons, selects, inputs, icon buttons) uses this so neighboring
+  // controls share a baseline. Don't introduce ad-hoc heights for row items.
+  --control-height: 32px;
 }
 
 body {
@@ -27,6 +31,15 @@ body {
   color: var(--color-text);
   background: var(--color-bg);
   line-height: 1.5;
+}
+
+// Chrome's UA stylesheet sets `<form> { margin-block-end: 1em }`, so a form
+// nested inside a flex row centers its margin-box (content + 14px below)
+// instead of its content — pushing its content visibly above the row's
+// midline while sibling controls align to it. Strip the default margin so
+// inline forms (Type/Preset row, Add filter row) align with their neighbors.
+form {
+  margin: 0;
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -74,7 +87,8 @@ body {
 
 .page-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
 
@@ -152,7 +166,7 @@ body {
 
 .filter-meta-divider {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
   margin: 0 4px;
 }
@@ -166,8 +180,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--control-height);
+  height: var(--control-height);
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -356,7 +370,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0;
-  height: 28px;
+  height: var(--control-height);
   background: var(--color-badge-bg);
   border: 1px solid var(--color-border);
   border-radius: 100px;
@@ -404,8 +418,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--control-height);
+  height: var(--control-height);
   color: var(--color-muted);
   font-size: 16px;
   line-height: 1;
@@ -447,6 +461,13 @@ body {
   &:last-child {
     border-bottom: none;
   }
+
+  // When the panel contains a tall widget (e.g. the string-modes multi-select
+  // + tabs column), align everything to the top so the Apply/Cancel buttons
+  // don't float in the vertical middle of a 200px-tall list.
+  &:has(.filter-string-modes) {
+    align-items: flex-start;
+  }
 }
 
 .filter-widget-label {
@@ -477,7 +498,7 @@ body {
 
 .filter-select,
 .filter-input {
-  height: 32px;
+  height: var(--control-height);
   padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -485,11 +506,35 @@ body {
   font-family: var(--font-sans);
   background: var(--color-bg);
   color: var(--color-text);
+  box-sizing: border-box;
 
   &:focus {
     outline: 2px solid var(--color-primary);
     outline-offset: -1px;
   }
+}
+
+// Native <select> elements render taller than their declared height on macOS
+// Chrome/Safari because the platform chevron ignores explicit sizing. Strip
+// the native appearance and paint our own chevron so the rendered height
+// matches --control-height exactly, keeping selects aligned with chips and
+// buttons in the same flex row.
+.filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%236c757d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M1 1l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
+// Multi-select renders as a list, not a dropdown — keep the native chevron
+// off but don't reserve right-padding for one.
+.filter-multi-select {
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .filter-input-sm {
@@ -508,13 +553,13 @@ body {
 }
 
 .filter-mode-tab {
-  height: 24px;
+  height: 28px;
   padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-bg);
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 
   &:hover {
@@ -555,7 +600,6 @@ body {
 
 .filter-add-select {
   font-size: 12px;
-  height: 28px;
   padding: 0 8px;
 }
 
@@ -576,20 +620,22 @@ body {
 }
 
 .filter-widget-cancel {
-  height: 28px;
-  padding: 0 8px;
+  padding: 0 10px;
   font-size: 16px;
-  line-height: 1;
 }
 
 .filter-clear {
-  height: 32px;
-  line-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
   padding: 0 10px;
   font-size: 13px;
   color: var(--color-muted);
   text-decoration: none;
   white-space: nowrap;
+  background: none;
+  border: none;
+  cursor: pointer;
 
   &:hover {
     color: var(--color-text);
@@ -820,6 +866,28 @@ body {
   }
 }
 
+// ── Visualization detail ─────────────────────────────────────────────────────
+
+.entity-description {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.metadata-label {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
 // ── Save dataset panel ─────────────────────────────────────────────────────────
 
 .save-dataset-panel {
@@ -835,6 +903,21 @@ body {
     gap: 8px;
     padding: 10px 12px;
     background: var(--color-bg);
+  }
+}
+
+// The save-preset panel's form has a tall "preview" column on its left
+// (label + chip grid + hint) next to the name input + Save + Cancel. Align
+// to the top so the action controls don't float in the middle of the column;
+// the margin-top offsets the controls down past the column label so they
+// align with the chip row's vertical center.
+#save-preset-panel form {
+  align-items: flex-start;
+
+  .filter-input,
+  .filter-btn,
+  .filter-clear {
+    margin-top: 20px;
   }
 }
 
@@ -956,4 +1039,94 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+// ── Chart builder / template config two-pane layout ──────────────────────────
+
+.builder-layout {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.builder-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.builder-preview {
+  width: 440px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+}
+
+// ── Responsive breakpoints ───────────────────────────────────────────────────
+
+// Tablet / small-laptop: collapse the two-pane builder layout to a single
+// column. The form benefits from the full content width, the preview moves
+// below and is no longer sticky.
+@media (max-width: 900px) {
+  .builder-layout {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .builder-preview {
+    width: 100%;
+    position: static;
+  }
+}
+
+// Tablet / mobile: tighten outer padding, allow the entity-fields label
+// column to shrink, and let the nav wrap if needed.
+@media (max-width: 720px) {
+  .main {
+    padding: 20px 16px;
+  }
+
+  .nav {
+    gap: 16px;
+    padding: 0 16px;
+  }
+
+  .entity-fields {
+    grid-template-columns: 110px 1fr;
+  }
+
+  .filter-meta-row,
+  .filter-chips-row {
+    padding: 8px 10px;
+  }
+}
+
+// Mobile: stack the entity-fields rows entirely and shrink the page header.
+@media (max-width: 480px) {
+  .main {
+    padding: 16px 12px;
+  }
+
+  .nav {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 18px;
+  }
+
+  .page-header-actions {
+    margin-left: 0;
+  }
+
+  .entity-fields {
+    grid-template-columns: 1fr;
+
+    dt {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+  }
 }

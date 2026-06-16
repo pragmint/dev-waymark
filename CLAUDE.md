@@ -56,6 +56,12 @@ Data is stored in a SQLite database (`dev-waymark.sqlite`) and accessed exclusiv
 
 - **Date parsing**: Use `parseDate()` from `src/domain/parseDate.ts` for all server-side date parsing. Do not reimplement inline.
 
+## CSS conventions
+
+- **Control height**: Use `height: var(--control-height)` (32px) for any control that sits in a horizontal flex row (chips, buttons, selects, inputs, icon buttons). Don't introduce ad-hoc heights — neighboring controls at 28px vs 32px sit on different baselines and read as broken.
+- **No inline layout styles**: For non-trivial layout (multi-column, sticky, sized panes), add a class to `src/styles/main.scss` rather than using inline `style="display:flex;..."`. Inline layout is invisible to media queries and can't be made responsive.
+- **Mobile breakpoints**: New layout work must hold at 720px (tablet) and 480px (phone). Existing responsive blocks live at the bottom of `main.scss`.
+
 ## Reference Files
 
 - [Zod Schema Conventions](.claude/info/zod-schema-conventions.md) — Type export rules, the passthrough/transform exception, and examples.

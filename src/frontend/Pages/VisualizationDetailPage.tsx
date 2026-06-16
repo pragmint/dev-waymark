@@ -50,9 +50,7 @@ export const VisualizationDetailPage: FC<Props> = ({
       <div class="metadata-row">
         <span class="metadata-label">Preset</span>
         <a href={presetUrl}>{presetName}</a>
-        <span class="metadata-label" style="margin-left:16px">
-          Chart type
-        </span>
+        <span class="metadata-label">Chart type</span>
         <span class="badge">{visualization.config.chartType}</span>
       </div>
 

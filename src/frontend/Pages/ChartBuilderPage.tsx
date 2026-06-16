@@ -109,9 +109,9 @@ export const ChartBuilderPage: FC<Props> = ({
         </div>
       )}
 
-      <div style="display:flex;gap:32px;align-items:flex-start">
+      <div class="builder-layout">
         {/* Left: form */}
-        <div style="flex:1;min-width:0">
+        <div class="builder-form">
           <form method="post" action={formAction} id="viz-builder-form">
             {/* ── Section 1: Name & Preset ── */}
             <div class="form-section">
@@ -560,7 +560,7 @@ export const ChartBuilderPage: FC<Props> = ({
         </div>
 
         {/* Right: preview pane */}
-        <div style="width:440px;flex-shrink:0;position:sticky;top:24px">
+        <div class="builder-preview">
           <h2 class="form-section-title">Preview</h2>
           <div id="preview-status" style="font-size:0.85rem;color:#6b7280;min-height:18px" />
           <div id="preview-warnings" />
