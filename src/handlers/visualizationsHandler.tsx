@@ -38,8 +38,7 @@ export async function visualizationsNewHandler(c: Context) {
   const presets = await repo.listPresets();
   const presetIdRaw = c.req.query('preset_id');
   const parsedId = presetIdRaw ? parseInt(presetIdRaw, 10) : null;
-  const selectedPresetId =
-    parsedId != null && !isNaN(parsedId) ? parsedId : presets.length > 0 ? presets[0].id : null;
+  const selectedPresetId = parsedId != null && !isNaN(parsedId) ? parsedId : null;
 
   return c.html(<TemplatePickerPage presets={presets} selectedPresetId={selectedPresetId} />);
 }

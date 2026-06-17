@@ -988,12 +988,19 @@ form {
   color: var(--color-text);
   transition:
     border-color 0.15s,
-    box-shadow 0.15s;
+    box-shadow 0.15s,
+    opacity 0.15s;
 
   &:hover {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
   }
+}
+
+.template-card--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
 }
 
 // ── Warnings ─────────────────────────────────────────────────────────────────

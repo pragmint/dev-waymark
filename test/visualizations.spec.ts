@@ -115,6 +115,57 @@ test('template picker preset change updates card links', async ({ page, request 
   await expect(firstCard).toHaveAttribute('href', new RegExp(`preset_id=${secondPresetId}`));
 });
 
+test('template picker starts with no preset selected when preset_id is absent', async ({
+  page,
+  request,
+}) => {
+  await seedPreset(request, `E2E Preset Unselected ${Date.now()}`);
+
+  await page.goto('/visualizations/new');
+
+  await expect(page.locator('#preset-picker')).toHaveValue('');
+
+  const cards = page.locator('.template-card');
+  await expect(cards.first()).toHaveClass(/template-card--disabled/);
+  await expect(cards.first()).toHaveAttribute('aria-disabled', 'true');
+  await expect(cards.first()).toHaveAttribute('href', '#');
+});
+
+test('template picker enables cards once a preset is chosen, and re-disables on placeholder', async ({
+  page,
+  request,
+}) => {
+  const presetId = await seedPreset(request, `E2E Preset Toggle ${Date.now()}`);
+
+  await page.goto('/visualizations/new');
+  const firstCard = page.locator('.template-card').first();
+  await expect(firstCard).toHaveClass(/template-card--disabled/);
+
+  await page.selectOption('#preset-picker', String(presetId));
+  await expect(firstCard).not.toHaveClass(/template-card--disabled/);
+  await expect(firstCard).toHaveAttribute('aria-disabled', 'false');
+  await expect(firstCard).toHaveAttribute('href', new RegExp(`preset_id=${presetId}`));
+
+  await page.selectOption('#preset-picker', '');
+  await expect(firstCard).toHaveClass(/template-card--disabled/);
+  await expect(firstCard).toHaveAttribute('aria-disabled', 'true');
+  await expect(firstCard).toHaveAttribute('href', '#');
+});
+
+test('disabled template card is not clickable (pointer-events: none)', async ({
+  page,
+  request,
+}) => {
+  await seedPreset(request, `E2E Preset PointerEvents ${Date.now()}`);
+
+  await page.goto('/visualizations/new');
+  const firstCard = page.locator('.template-card').first();
+  await expect(firstCard).toHaveClass(/template-card--disabled/);
+
+  const pointerEvents = await firstCard.evaluate(el => getComputedStyle(el).pointerEvents);
+  expect(pointerEvents).toBe('none');
+});
+
 // Each template gets a full UI create test — exercises TemplateConfigPage form
 // rendering for that template's slot set, parseTemplateForm parsing for the
 // template's discriminator, resolveTemplate output, save, redirect, and detail

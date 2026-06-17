@@ -1,3 +1,5 @@
+import { templateCardState } from '../../domain/templateCardState';
+
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
@@ -86,11 +88,15 @@ function initTemplatePicker(): void {
   if (!picker || !grid) return;
 
   picker.addEventListener('change', () => {
-    const dsId = picker.value;
+    const presetId = picker.value;
+    grid.setAttribute('aria-disabled', presetId === '' ? 'true' : 'false');
     const links = grid.querySelectorAll<HTMLAnchorElement>('a[data-template-id]');
     for (const link of links) {
-      const templateId = link.getAttribute('data-template-id');
-      link.href = `/visualizations/new/${templateId}?preset_id=${dsId}`;
+      const templateId = link.getAttribute('data-template-id') ?? '';
+      const state = templateCardState(templateId, presetId);
+      link.href = state.href;
+      link.classList.toggle('template-card--disabled', state.disabled);
+      link.setAttribute('aria-disabled', state.disabled ? 'true' : 'false');
     }
   });
 }
