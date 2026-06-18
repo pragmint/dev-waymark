@@ -34,6 +34,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-cyclomatic-complexity": "^1.0.0",
     "eslint-plugin-prettier": "^5.0.0",
+    "glob": "^11.1.0",
     "prettier": "^3.0.0",
     "sass": "^1.70.0",
     "typescript": "^5.0.0"
