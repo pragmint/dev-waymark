@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { runSql } from '../sqliteUtils';
 import { logger } from '../../logger';
-import { PresetSchema, PresetWithFiltersSchema } from '../../schemas/preset';
-import { MetaFilterOpSchema } from '../../schemas/entity';
+import { PresetSchema, PresetWithTreeSchema } from '../../schemas/preset';
+import { FilterTreeSchema, emptyTree } from '../../schemas/filterTree';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
-import type { Preset, PresetWithFilters } from '../../schemas/preset';
-import type { MetaFilter } from '../../schemas/entity';
+import type { Preset, PresetWithTree } from '../../schemas/preset';
+import type { FilterTree } from '../../schemas/filterTree';
 import type {
   Visualization,
   VisualizationConfig,
@@ -13,6 +13,15 @@ import type {
 } from '../../schemas/visualization';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
+
+function decodeFilterTree(raw: string | null): FilterTree {
+  if (!raw) return emptyTree();
+  try {
+    return FilterTreeSchema.parse(JSON.parse(raw));
+  } catch {
+    return emptyTree();
+  }
+}
 
 function runMigrations(db: Database): void {
   runSql(
@@ -76,39 +85,28 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   // ── Presets ──────────────────────────────────────────────────────────────
 
-  async savePreset(name: string, filters: MetaFilter[]): Promise<number> {
+  async savePreset(name: string, tree: FilterTree): Promise<number> {
     const result = this.db
-      .query<{ id: number }, [string]>('INSERT INTO presets (name) VALUES (?) RETURNING id')
-      .get(name);
-    const id = result!.id;
-
-    for (let i = 0; i < filters.length; i++) {
-      const f = filters[i];
-      this.db
-        .query(
-          'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES (?, ?, ?, ?, ?)'
-        )
-        .run(id, f.key, f.op, f.value, i);
-    }
-
-    return id;
+      .query<
+        { id: number },
+        [string, string]
+      >('INSERT INTO presets (name, filter_tree) VALUES (?, ?) RETURNING id')
+      .get(name, JSON.stringify(tree));
+    return result!.id;
   }
 
-  async getPreset(id: number): Promise<PresetWithFilters | null> {
-    const row = this.db.query('SELECT id, name FROM presets WHERE id = ?').get(id);
+  async getPreset(id: number): Promise<PresetWithTree | null> {
+    const row = this.db
+      .query<
+        { id: number; name: string; filter_tree: string | null },
+        [number]
+      >('SELECT id, name, filter_tree FROM presets WHERE id = ?')
+      .get(id);
     if (!row) return null;
 
-    const filterRows = this.db
-      .query('SELECT key, op, value FROM preset_filters WHERE preset_id = ? ORDER BY filter_order')
-      .all(id) as { key: string; op: string; value: string }[];
-
-    return PresetWithFiltersSchema.parse({
-      ...PresetSchema.parse(row),
-      filters: filterRows.map(r => ({
-        key: r.key,
-        op: MetaFilterOpSchema.parse(r.op),
-        value: r.value,
-      })),
+    return PresetWithTreeSchema.parse({
+      ...PresetSchema.parse({ id: row.id, name: row.name }),
+      tree: decodeFilterTree(row.filter_tree),
     });
   }
 
@@ -117,56 +115,25 @@ export class SqliteAppStateRepository implements AppStateRepository {
     return rows.map(r => PresetSchema.parse(r));
   }
 
-  async listPresetsWithFilters(): Promise<PresetWithFilters[]> {
-    const presetRows = this.db.query('SELECT id, name FROM presets ORDER BY id').all() as {
+  async listPresetsWithTree(): Promise<PresetWithTree[]> {
+    const rows = this.db.query('SELECT id, name, filter_tree FROM presets ORDER BY id').all() as {
       id: number;
       name: string;
+      filter_tree: string | null;
     }[];
-    if (presetRows.length === 0) return [];
 
-    const filterRows = this.db
-      .query(
-        'SELECT preset_id, key, op, value FROM preset_filters ORDER BY preset_id, filter_order'
-      )
-      .all() as { preset_id: number; key: string; op: string; value: string }[];
-
-    const byPreset = new Map<number, MetaFilter[]>();
-    for (const r of filterRows) {
-      let bucket = byPreset.get(r.preset_id);
-      if (!bucket) {
-        bucket = [];
-        byPreset.set(r.preset_id, bucket);
-      }
-      bucket.push({
-        key: r.key,
-        op: MetaFilterOpSchema.parse(r.op),
-        value: r.value,
-      });
-    }
-
-    return presetRows.map(p =>
-      PresetWithFiltersSchema.parse({
-        ...PresetSchema.parse(p),
-        filters: byPreset.get(p.id) ?? [],
+    return rows.map(r =>
+      PresetWithTreeSchema.parse({
+        ...PresetSchema.parse({ id: r.id, name: r.name }),
+        tree: decodeFilterTree(r.filter_tree),
       })
     );
   }
 
-  async updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void> {
-    const txn = this.db.transaction(() => {
-      const result = this.db.query('UPDATE presets SET name = ? WHERE id = ?').run(name, id);
-      if (result.changes === 0) return;
-      this.db.query('DELETE FROM preset_filters WHERE preset_id = ?').run(id);
-      for (let i = 0; i < filters.length; i++) {
-        const f = filters[i];
-        this.db
-          .query(
-            'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES (?, ?, ?, ?, ?)'
-          )
-          .run(id, f.key, f.op, f.value, i);
-      }
-    });
-    txn();
+  async updatePreset(id: number, name: string, tree: FilterTree): Promise<void> {
+    this.db
+      .query('UPDATE presets SET name = ?, filter_tree = ? WHERE id = ?')
+      .run(name, JSON.stringify(tree), id);
   }
 
   async deletePreset(id: number): Promise<void> {

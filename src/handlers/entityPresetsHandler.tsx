@@ -1,6 +1,12 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
-import { buildEntityUrl, parseFiltersFromForm } from '../domain/filterUrl';
+import { buildEntityUrl, decodeTree } from '../domain/filterUrl';
+
+function readTreeFromForm(formData: FormData) {
+  const raw = formData.get('tree');
+  if (typeof raw !== 'string' || !raw) return null;
+  return decodeTree(raw);
+}
 
 export async function entityPresetsSaveHandler(c: Context) {
   const repo = getAppStateRepo();
@@ -9,11 +15,11 @@ export async function entityPresetsSaveHandler(c: Context) {
   const name = (formData.get('name') as string | null)?.trim() ?? '';
   if (!name) return c.redirect('/entities');
 
-  const filters = parseFiltersFromForm(formData);
-  if (filters.length === 0) return c.redirect('/entities');
+  const tree = readTreeFromForm(formData);
+  if (!tree || tree.children.length === 0) return c.redirect('/entities');
 
-  const id = await repo.savePreset(name, filters);
-  return c.redirect(buildEntityUrl(filters, id));
+  const id = await repo.savePreset(name, tree);
+  return c.redirect(buildEntityUrl(tree, id));
 }
 
 export async function entityPresetsUpdateHandler(c: Context) {
@@ -25,14 +31,14 @@ export async function entityPresetsUpdateHandler(c: Context) {
   const name = (formData.get('name') as string | null)?.trim() ?? '';
   if (!name) return c.redirect('/entities');
 
-  const filters = parseFiltersFromForm(formData);
-  if (filters.length === 0) return c.redirect('/entities');
+  const tree = readTreeFromForm(formData);
+  if (!tree || tree.children.length === 0) return c.redirect('/entities');
 
   const existing = await repo.getPreset(id);
   if (!existing) return c.redirect('/entities');
 
-  await repo.updatePreset(id, name, filters);
-  return c.redirect(buildEntityUrl(filters, id));
+  await repo.updatePreset(id, name, tree);
+  return c.redirect(buildEntityUrl(tree, id));
 }
 
 export async function entityPresetsDeleteHandler(c: Context) {

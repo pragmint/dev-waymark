@@ -1,5 +1,5 @@
-import type { Preset, PresetWithFilters } from '../../schemas/preset';
-import type { MetaFilter } from '../../schemas/entity';
+import type { Preset, PresetWithTree } from '../../schemas/preset';
+import type { FilterTree } from '../../schemas/filterTree';
 import type {
   Visualization,
   VisualizationConfig,
@@ -29,27 +29,27 @@ export interface AppStateRepository {
   // ── Presets ──────────────────────────────────────────────────────────────
 
   /** Create a new preset. Returns the new preset's id. */
-  savePreset(name: string, filters: MetaFilter[]): Promise<number>;
+  savePreset(name: string, tree: FilterTree): Promise<number>;
 
-  /** Fetch a preset and its filters by id. Returns null if not found. */
-  getPreset(id: number): Promise<PresetWithFilters | null>;
+  /** Fetch a preset and its filter tree by id. Returns null if not found. */
+  getPreset(id: number): Promise<PresetWithTree | null>;
 
-  /** List all presets (without filters). */
+  /** List all presets (without their filter trees). */
   listPresets(): Promise<Preset[]>;
 
   /**
-   * List all presets with their filters in one round trip. Used when the
+   * List all presets with their filter trees in one round trip. Used when the
    * caller needs to compare current filters against every preset.
    */
-  listPresetsWithFilters(): Promise<PresetWithFilters[]>;
+  listPresetsWithTree(): Promise<PresetWithTree[]>;
 
   /**
-   * Update a preset's name and replace its filters atomically. No-op if the
+   * Update a preset's name and replace its filter tree atomically. No-op if the
    * id does not exist.
    */
-  updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void>;
+  updatePreset(id: number, name: string, tree: FilterTree): Promise<void>;
 
-  /** Delete a preset and its filters. No-op if the id does not exist. */
+  /** Delete a preset and its filter tree. No-op if the id does not exist. */
   deletePreset(id: number): Promise<void>;
 
   /** Test-mode only: delete every preset. */

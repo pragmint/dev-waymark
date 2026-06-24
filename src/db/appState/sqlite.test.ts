@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import { SqliteAppStateRepository } from './sqlite';
 import { migrations } from './migrations/index';
+import { emptyTree, makeGroup, makeLeaf } from '../../schemas/filterTree';
 
 describe('SqliteAppStateRepository — migration', () => {
   it('migrate creates _app_migrations tracking table', async () => {
@@ -14,16 +15,27 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.close();
   });
 
-  it('migrate applies the presets migration', async () => {
+  it('migrate creates presets table with filter_tree column', async () => {
     const repo = new SqliteAppStateRepository(':memory:');
     await repo.migrate();
     const db = repo.getDb();
     const tables = db
-      .query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('presets','preset_filters') ORDER BY name"
-      )
+      .query("SELECT name FROM sqlite_master WHERE type='table' AND name='presets'")
       .all() as { name: string }[];
-    expect(tables.map(t => t.name)).toEqual(['preset_filters', 'presets']);
+    expect(tables.map(t => t.name)).toEqual(['presets']);
+    const cols = db.query('PRAGMA table_info(presets)').all() as { name: string }[];
+    expect(cols.map(c => c.name)).toContain('filter_tree');
+    await repo.close();
+  });
+
+  it('migrate drops the legacy preset_filters table', async () => {
+    const repo = new SqliteAppStateRepository(':memory:');
+    await repo.migrate();
+    const tables = repo
+      .getDb()
+      .query("SELECT name FROM sqlite_master WHERE type='table' AND name='preset_filters'")
+      .all();
+    expect(tables).toHaveLength(0);
     await repo.close();
   });
 
@@ -32,6 +44,7 @@ describe('SqliteAppStateRepository — migration', () => {
     await repo.migrate();
     const rows = repo.getDb().query<{ name: string }, []>('SELECT name FROM _app_migrations').all();
     expect(rows.map(r => r.name)).toContain('migration-20260518T000000Z');
+    expect(rows.map(r => r.name)).toContain('migration-20260618T000000Z');
     await repo.close();
   });
 
@@ -54,118 +67,123 @@ describe('SqliteAppStateRepository — presets', () => {
   });
 
   it('savePreset returns a numeric id', async () => {
-    const id = await repo.savePreset('My preset', []);
+    const id = await repo.savePreset('My preset', emptyTree());
     expect(typeof id).toBe('number');
     expect(id).toBeGreaterThan(0);
   });
 
-  it('getPreset returns the saved preset', async () => {
-    const id = await repo.savePreset('Sprint velocity', [
-      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
-      { key: 'ticket_type', op: 'eq', value: 'story' },
+  it('getPreset returns the saved preset and its tree', async () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'jira_ticket'),
+      makeLeaf('ticket_type', 'eq', 'story'),
     ]);
+    const id = await repo.savePreset('Sprint velocity', tree);
     const preset = await repo.getPreset(id);
     expect(preset).not.toBeNull();
     expect(preset!.name).toBe('Sprint velocity');
-    expect(preset!.filters).toHaveLength(2);
-    expect(preset!.filters[0]).toEqual({ key: 'entity_type', op: 'eq', value: 'jira_ticket' });
-    expect(preset!.filters[1]).toEqual({ key: 'ticket_type', op: 'eq', value: 'story' });
+    expect(preset!.tree.children).toHaveLength(2);
+    expect(preset!.tree.op).toBe('AND');
   });
 
-  it('getPreset preserves filter sort order', async () => {
-    const id = await repo.savePreset('ordered', [
-      { key: 'c', op: 'eq', value: '3' },
-      { key: 'a', op: 'eq', value: '1' },
-      { key: 'b', op: 'eq', value: '2' },
+  it('round-trips a nested tree', async () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'Service'),
+      makeGroup('OR', [
+        makeLeaf('owner', 'eq', ['Dave', 'Sam']),
+        makeLeaf('active_prs', 'gte', '1'),
+      ]),
     ]);
-    const preset = await repo.getPreset(id);
-    expect(preset!.filters.map(f => f.key)).toEqual(['c', 'a', 'b']);
+    const id = await repo.savePreset('complex', tree);
+    const after = await repo.getPreset(id);
+    expect(after!.tree).toEqual(tree);
   });
 
   it('getPreset returns null for unknown id', async () => {
     expect(await repo.getPreset(9999)).toBeNull();
   });
 
-  it('savePreset with no filters stores empty filter list', async () => {
-    const id = await repo.savePreset('empty', []);
+  it('savePreset with empty tree stores empty children', async () => {
+    const id = await repo.savePreset('empty', emptyTree());
     const preset = await repo.getPreset(id);
-    expect(preset!.filters).toHaveLength(0);
+    expect(preset!.tree.children).toHaveLength(0);
   });
 
-  it('listPresets returns all saved presets without filters', async () => {
-    await repo.savePreset('Alpha', [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }]);
-    await repo.savePreset('Beta', []);
+  it('listPresets returns all saved presets without trees', async () => {
+    await repo.savePreset(
+      'Alpha',
+      makeGroup('AND', [makeLeaf('entity_type', 'eq', 'jira_ticket')])
+    );
+    await repo.savePreset('Beta', emptyTree());
     const list = await repo.listPresets();
     expect(list).toHaveLength(2);
     expect(list.map(d => d.name)).toEqual(['Alpha', 'Beta']);
-    // listPresets does not include filters
-    expect(Object.keys(list[0])).not.toContain('filters');
+    expect(Object.keys(list[0])).not.toContain('tree');
   });
 
-  it('deletePreset removes the preset and its filters', async () => {
-    const id = await repo.savePreset('to-delete', [
-      { key: 'entity_type', op: 'eq', value: 'github_pr' },
-    ]);
+  it('deletePreset removes the preset', async () => {
+    const id = await repo.savePreset(
+      'to-delete',
+      makeGroup('AND', [makeLeaf('entity_type', 'eq', 'github_pr')])
+    );
     await repo.deletePreset(id);
     expect(await repo.getPreset(id)).toBeNull();
-    // filters should be cascade-deleted
-    const filterRows = repo
-      .getDb()
-      .query('SELECT * FROM preset_filters WHERE preset_id = ?')
-      .all(id);
-    expect(filterRows).toHaveLength(0);
   });
 
   it('deletePreset is a no-op for unknown id', async () => {
     await expect(repo.deletePreset(9999)).resolves.toBeUndefined();
   });
 
-  it('listPresetsWithFilters returns presets with their filters', async () => {
-    await repo.savePreset('Alpha', [
-      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
-      { key: 'status', op: 'eq', value: 'open' },
-    ]);
-    await repo.savePreset('Beta', []);
+  it('listPresetsWithTree returns presets with their trees', async () => {
+    await repo.savePreset(
+      'Alpha',
+      makeGroup('AND', [
+        makeLeaf('entity_type', 'eq', 'jira_ticket'),
+        makeLeaf('status', 'eq', 'open'),
+      ])
+    );
+    await repo.savePreset('Beta', emptyTree());
 
-    const list = await repo.listPresetsWithFilters();
+    const list = await repo.listPresetsWithTree();
     expect(list).toHaveLength(2);
     expect(list[0].name).toBe('Alpha');
-    expect(list[0].filters).toHaveLength(2);
+    expect(list[0].tree.children).toHaveLength(2);
     expect(list[1].name).toBe('Beta');
-    expect(list[1].filters).toHaveLength(0);
+    expect(list[1].tree.children).toHaveLength(0);
   });
 
-  it('updatePreset replaces name and filters atomically', async () => {
-    const id = await repo.savePreset('original', [
-      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
-      { key: 'status', op: 'eq', value: 'open' },
-    ]);
-    await repo.updatePreset(id, 'renamed', [{ key: 'entity_type', op: 'eq', value: 'github_pr' }]);
+  it('updatePreset replaces name and tree', async () => {
+    const id = await repo.savePreset(
+      'original',
+      makeGroup('AND', [
+        makeLeaf('entity_type', 'eq', 'jira_ticket'),
+        makeLeaf('status', 'eq', 'open'),
+      ])
+    );
+    await repo.updatePreset(
+      id,
+      'renamed',
+      makeGroup('AND', [makeLeaf('entity_type', 'eq', 'github_pr')])
+    );
     const after = await repo.getPreset(id);
     expect(after!.name).toBe('renamed');
-    expect(after!.filters).toEqual([{ key: 'entity_type', op: 'eq', value: 'github_pr' }]);
-    const orphaned = repo
-      .getDb()
-      .query('SELECT * FROM preset_filters WHERE preset_id = ?')
-      .all(id) as unknown[];
-    expect(orphaned).toHaveLength(1);
+    expect(after!.tree.children).toHaveLength(1);
   });
 
   it('updatePreset is a no-op for unknown id', async () => {
-    await expect(repo.updatePreset(9999, 'x', [])).resolves.toBeUndefined();
+    await expect(repo.updatePreset(9999, 'x', emptyTree())).resolves.toBeUndefined();
   });
 
-  it('supports all filter ops', async () => {
-    const filters = [
-      { key: 'name', op: 'eq' as const, value: 'foo' },
-      { key: 'desc', op: 'contains' as const, value: 'bar' },
-      { key: 'wip', op: 'gte' as const, value: '10' },
-      { key: 'wip', op: 'lte' as const, value: '50' },
-      { key: 'name', op: 're' as const, value: '^ENG' },
-    ];
-    const id = await repo.savePreset('all ops', filters);
+  it('supports all filter ops in a tree', async () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('name', 'eq', 'foo'),
+      makeLeaf('desc', 'contains', 'bar'),
+      makeLeaf('wip', 'gte', '10'),
+      makeLeaf('wip', 'lte', '50'),
+      makeLeaf('name', 're', '^ENG'),
+    ]);
+    const id = await repo.savePreset('all ops', tree);
     const preset = await repo.getPreset(id);
-    expect(preset!.filters).toEqual(filters);
+    expect(preset!.tree.children).toHaveLength(5);
   });
 });
 

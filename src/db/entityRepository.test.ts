@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import { SqliteSourceAdapter } from './source/sqlite';
 import { createEntityRepository } from './entityRepository';
+import { emptyTree, makeGroup, makeLeaf } from '../schemas/filterTree';
 import type { Entity, Metadata } from '../schemas/entity';
 
 // Tests use in-memory SQLite with schema applied — same as the no-config default.
@@ -55,12 +56,12 @@ describe('entityRepository', () => {
   it('lists all entities', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'A-1' }), []);
     await repo.upsert(makeEntity({ id: 2, name: 'B-1' }), []);
-    expect(await repo.list([])).toHaveLength(2);
+    expect(await repo.list(emptyTree())).toHaveLength(2);
   });
 
   it('list includes metadata for each entity', async () => {
     await repo.upsert(makeEntity(), [makeMetadata(1)]);
-    const results = await repo.list([]);
+    const results = await repo.list(emptyTree());
     expect(results[0].metadata).toHaveLength(1);
     expect(results[0].metadata[0].key).toBe('status');
   });
@@ -72,7 +73,7 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 2, name: 'L-1' }), [
       makeMetadata(2, { key: 'ticket_type', value: 'Bug' }),
     ]);
-    const results = await repo.list([{ key: 'ticket_type', op: 'eq', value: 'Story' }]);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('ticket_type', 'eq', 'Story')]));
     expect(results).toHaveLength(1);
     expect(results[0].metadata.find(m => m.key === 'ticket_type')?.value).toBe('Story');
   });
@@ -84,7 +85,9 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 2, name: 'J-2' }), [
       makeMetadata(2, { key: 'description', value: 'other' }),
     ]);
-    const results = await repo.list([{ key: 'description', op: 'contains', value: 'bartle' }]);
+    const results = await repo.list(
+      makeGroup('AND', [makeLeaf('description', 'contains', 'bartle')])
+    );
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(1);
   });
@@ -96,7 +99,7 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
       makeMetadata(2, { key: 'total-wip', value: '20', value_type: 'number' }),
     ]);
-    const results = await repo.list([{ key: 'total-wip', op: 'gte', value: '30' }]);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('total-wip', 'gte', '30')]));
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(1);
   });
@@ -108,7 +111,7 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
       makeMetadata(2, { key: 'total-wip', value: '20', value_type: 'number' }),
     ]);
-    const results = await repo.list([{ key: 'total-wip', op: 'lte', value: '25' }]);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('total-wip', 'lte', '25')]));
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(2);
   });
@@ -128,10 +131,12 @@ describe('entityRepository', () => {
         value_type: 'date',
       }),
     ]);
-    const results = await repo.list([
-      { key: 'started-date', op: 'gte', value: '2026-02-09T00:00:00Z' },
-      { key: 'started-date', op: 'lte', value: '2026-02-11T23:59:59Z' },
-    ]);
+    const results = await repo.list(
+      makeGroup('AND', [
+        makeLeaf('started-date', 'gte', '2026-02-09T00:00:00Z'),
+        makeLeaf('started-date', 'lte', '2026-02-11T23:59:59Z'),
+      ])
+    );
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(1);
   });
@@ -141,13 +146,13 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ name: 'ENG-1-updated', type: 'updated-type' }), [
       makeMetadata(1, { value: 'closed' }),
     ]);
-    const results = await repo.list([]);
+    const results = await repo.list(emptyTree());
     expect(results).toHaveLength(1);
     expect(results[0].type).toBe('updated-type');
     expect(results[0].metadata.find(m => m.key === 'status')?.value).toBe('closed');
   });
 
-  it('filters entities by multiple eq values on same key (OR / IN)', async () => {
+  it('filters entities by multi-value eq (IN clause)', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'J-1' }), [
       makeMetadata(1, { key: 'ticket_type', value: 'Story' }),
     ]);
@@ -157,13 +162,51 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 3, name: 'G-1' }), [
       makeMetadata(3, { key: 'ticket_type', value: 'Task' }),
     ]);
-    const results = await repo.list([
-      { key: 'ticket_type', op: 'eq', value: 'Story' },
-      { key: 'ticket_type', op: 'eq', value: 'Bug' },
-    ]);
+    const results = await repo.list(
+      makeGroup('AND', [makeLeaf('ticket_type', 'eq', ['Story', 'Bug'])])
+    );
     expect(results).toHaveLength(2);
     const types = results.map(r => r.metadata.find(m => m.key === 'ticket_type')?.value).sort();
     expect(types).toEqual(['Bug', 'Story']);
+  });
+
+  it('combines filters with OR at a group', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'owner', value: 'Dave' }),
+      makeMetadata(1, { key: 'priority', value: 'low' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'owner', value: 'Sam' }),
+      makeMetadata(2, { key: 'priority', value: 'high' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 3, name: 'C' }), [
+      makeMetadata(3, { key: 'owner', value: 'Alex' }),
+      makeMetadata(3, { key: 'priority', value: 'low' }),
+    ]);
+    const tree = makeGroup('OR', [
+      makeLeaf('owner', 'eq', 'Dave'),
+      makeLeaf('priority', 'eq', 'high'),
+    ]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id).sort()).toEqual([1, 2]);
+  });
+
+  it('combines AND with nested OR groups', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'svc' }), [
+      makeMetadata(1, { key: 'owner', value: 'Dave' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'svc' }), [
+      makeMetadata(2, { key: 'owner', value: 'Sam' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 3, name: 'C', type: 'lib' }), [
+      makeMetadata(3, { key: 'owner', value: 'Dave' }),
+    ]);
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'svc'),
+      makeGroup('OR', [makeLeaf('owner', 'eq', 'Dave'), makeLeaf('owner', 'eq', 'Sam')]),
+    ]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id).sort()).toEqual([1, 2]);
   });
 
   it('filters entities by regex', async () => {
@@ -176,7 +219,7 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 3, name: 'C' }), [
       makeMetadata(3, { key: 'description', value: 'unrelated' }),
     ]);
-    const results = await repo.list([{ key: 'description', op: 're', value: 'bartle' }]);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('description', 're', 'bartle')]));
     expect(results).toHaveLength(2);
     expect(results.map(r => r.id).sort()).toEqual([1, 2]);
   });
@@ -185,9 +228,29 @@ describe('entityRepository', () => {
     await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
       makeMetadata(1, { key: 'description', value: 'hello' }),
     ]);
-    // Invalid regex pattern — should match nothing rather than throw
-    const results = await repo.list([{ key: 'description', op: 're', value: '[invalid' }]);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('description', 're', '[invalid')]));
     expect(results).toHaveLength(0);
+  });
+
+  it('combines regex with OR against a non-regex filter', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'description', value: 'bartle-bee' }),
+      makeMetadata(1, { key: 'priority', value: 'low' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'description', value: 'unrelated' }),
+      makeMetadata(2, { key: 'priority', value: 'high' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 3, name: 'C' }), [
+      makeMetadata(3, { key: 'description', value: 'unrelated' }),
+      makeMetadata(3, { key: 'priority', value: 'low' }),
+    ]);
+    const tree = makeGroup('OR', [
+      makeLeaf('description', 're', 'bartle'),
+      makeLeaf('priority', 'eq', 'high'),
+    ]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id).sort()).toEqual([1, 2]);
   });
 
   describe('listPaged', () => {
@@ -195,7 +258,7 @@ describe('entityRepository', () => {
       for (let id = 1; id <= 10; id++) {
         await repo.upsert(makeEntity({ id, name: `E-${id}`, type: 'jira_ticket' }), []);
       }
-      const result = await repo.listPaged([], { limit: 3, offset: 0 });
+      const result = await repo.listPaged(emptyTree(), { limit: 3, offset: 0 });
       expect(result.total).toBe(10);
       expect(result.allIds).toHaveLength(10);
       expect(result.pageEntities).toHaveLength(3);
@@ -207,7 +270,7 @@ describe('entityRepository', () => {
       for (let id = 1; id <= 10; id++) {
         await repo.upsert(makeEntity({ id, name: `E-${id}`, type: 'jira_ticket' }), []);
       }
-      const result = await repo.listPaged([], { limit: 3, offset: 3 });
+      const result = await repo.listPaged(emptyTree(), { limit: 3, offset: 3 });
       expect(result.pageEntities.map(e => e.id)).toEqual([7, 6, 5]);
     });
 
@@ -215,7 +278,7 @@ describe('entityRepository', () => {
       for (let id = 1; id <= 3; id++) {
         await repo.upsert(makeEntity({ id, name: `E-${id}` }), []);
       }
-      const result = await repo.listPaged([], { limit: 10, offset: 50 });
+      const result = await repo.listPaged(emptyTree(), { limit: 10, offset: 50 });
       expect(result.pageEntities).toHaveLength(0);
       expect(result.total).toBe(3);
     });
@@ -230,10 +293,10 @@ describe('entityRepository', () => {
       await repo.upsert(makeEntity({ id: 3, name: 'C', type: 'jira_ticket' }), [
         makeMetadata(3, { key: 'ticket_type', value: 'Bug' }),
       ]);
-      const result = await repo.listPaged([{ key: 'ticket_type', op: 'eq', value: 'Story' }], {
-        limit: 1,
-        offset: 0,
-      });
+      const result = await repo.listPaged(
+        makeGroup('AND', [makeLeaf('ticket_type', 'eq', 'Story')]),
+        { limit: 1, offset: 0 }
+      );
       expect(result.pageEntities).toHaveLength(1);
       expect(result.allIds.sort()).toEqual([1, 2]);
       expect(result.total).toBe(2);
@@ -245,7 +308,7 @@ describe('entityRepository', () => {
           makeMetadata(id, { key: 'tag', value: id % 2 === 0 ? 'even' : 'odd' }),
         ]);
       }
-      const result = await repo.listPaged([{ key: 'tag', op: 're', value: '^even$' }], {
+      const result = await repo.listPaged(makeGroup('AND', [makeLeaf('tag', 're', '^even$')]), {
         limit: 10,
         offset: 0,
       });
@@ -264,7 +327,7 @@ describe('entityRepository', () => {
         makeMetadata(2, { key: 'ticket_type', value: 'Bug', value_type: 'string' }),
         makeMetadata(2, { key: 'description', value: 'foo', value_type: 'string' }),
       ]);
-      const entities = await repo.list([]);
+      const entities = await repo.list(emptyTree());
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
       const keys = available.map(f => f.key).sort();
       expect(keys).toContain('ticket_type');
@@ -294,11 +357,12 @@ describe('entityRepository', () => {
         makeMetadata(3, { key: 'total-wip', value: '20', value_type: 'number' }),
       ]);
 
-      // Filter to only entity A (started-date within Feb 9–11)
-      const entities = await repo.list([
-        { key: 'started-date', op: 'gte', value: '2026-02-09T00:00:00Z' },
-        { key: 'started-date', op: 'lte', value: '2026-02-11T23:59:59Z' },
-      ]);
+      const entities = await repo.list(
+        makeGroup('AND', [
+          makeLeaf('started-date', 'gte', '2026-02-09T00:00:00Z'),
+          makeLeaf('started-date', 'lte', '2026-02-11T23:59:59Z'),
+        ])
+      );
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
 
       const keys = available.map(f => f.key);
@@ -317,7 +381,7 @@ describe('entityRepository', () => {
         makeMetadata(2, { key: 'priority', value: 'high', value_type: 'string' }),
       ]);
 
-      const entities = await repo.list([{ key: 'description', op: 're', value: 'bartle' }]);
+      const entities = await repo.list(makeGroup('AND', [makeLeaf('description', 're', 'bartle')]));
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
 
       const keys = available.map(f => f.key);
@@ -333,7 +397,7 @@ describe('entityRepository', () => {
       await repo.upsert(makeEntity({ id: 2, name: 'L-1' }), [
         makeMetadata(2, { key: 'ticket_type', value: 'Bug', value_type: 'string' }),
       ]);
-      const entities = await repo.list([]);
+      const entities = await repo.list(emptyTree());
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
       const typeFilter = available.find(f => f.key === 'ticket_type');
       expect(typeFilter?.distinctValues).toEqual(['Bug', 'Story']);
@@ -345,7 +409,7 @@ describe('entityRepository', () => {
         makeMetadata(1, { key: 'date-field', value: '2026-01-01', value_type: 'date' }),
         makeMetadata(1, { key: 'bool-field', value: 'true', value_type: 'boolean' }),
       ]);
-      const entities = await repo.list([]);
+      const entities = await repo.list(emptyTree());
       const available = await repo.getAvailableFilters(entities.map(e => e.id));
       expect(available.find(f => f.key === 'num-field')?.value_type).toBe('number');
       expect(available.find(f => f.key === 'date-field')?.value_type).toBe('date');

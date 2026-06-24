@@ -1,4 +1,6 @@
-import type { EntityWithMetadata, MetaFilter } from '../schemas/entity';
+import type { EntityWithMetadata } from '../schemas/entity';
+import { makeLeaf } from '../schemas/filterTree';
+import type { FilterNode } from '../schemas/filterTree';
 import type {
   VisualizationConfig,
   AggregationFunction,
@@ -156,20 +158,20 @@ function bucketRange(label: string, bucket: TimeBucket): { gte: string; lte: str
   }
 }
 
-// Filters that, combined with the preset's existing filters, isolate the
-// entities aggregated into a single chart data point. Used to power
-// click-through from chart points to the entities list.
-export function buildPointEntityFilters(label: string, config: VisualizationConfig): MetaFilter[] {
+// Filter nodes that, combined with the preset's filter tree under an AND,
+// isolate the entities aggregated into a single chart data point. Used to
+// power click-through from chart points to the entities list.
+export function buildPointEntityFilters(label: string, config: VisualizationConfig): FilterNode[] {
   if (config.xAxis?.timeBucket) {
     const range = bucketRange(label, config.xAxis.timeBucket);
     if (!range) return [];
     return [
-      { key: config.xAxis.metadataKey, op: 'gte', value: range.gte },
-      { key: config.xAxis.metadataKey, op: 'lte', value: range.lte },
+      makeLeaf(config.xAxis.metadataKey, 'gte', range.gte),
+      makeLeaf(config.xAxis.metadataKey, 'lte', range.lte),
     ];
   }
   if (config.category) {
-    return [{ key: config.category.metadataKey, op: 'eq', value: label }];
+    return [makeLeaf(config.category.metadataKey, 'eq', label)];
   }
   return [];
 }

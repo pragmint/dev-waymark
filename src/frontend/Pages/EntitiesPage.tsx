@@ -1,8 +1,10 @@
 import type { FC } from 'hono/jsx';
-import type { MetaFilter, AvailableFilter, EntityWithMetadata } from '../../schemas/entity';
+import type { AvailableFilter, EntityWithMetadata } from '../../schemas/entity';
+import type { FilterTree } from '../../schemas/filterTree';
 import { Layout } from '../components/Layout';
 import { FilterBar } from '../components/FilterBar';
 import type { PresetWithUrl } from '../components/FilterBar';
+import { buildEntityUrl } from '../../domain/filterUrl';
 import { getEntityTitle, getMetadataValue } from '../../domain/entityQueries';
 
 type EntitiesPageProps = {
@@ -10,38 +12,28 @@ type EntitiesPageProps = {
   totalCount: number;
   page: number;
   perPage: number;
-  activeFilters: MetaFilter[];
+  activeTree: FilterTree;
   availableFilters: AvailableFilter[];
-  addingKey?: string;
-  editingKey?: string;
   entityTypes: string[];
   presets: PresetWithUrl[];
   selectedPresetId: number | null;
-  selectedPresetFilters: MetaFilter[] | null;
+  selectedPresetTree: FilterTree | null;
   selectedEntityType: string | null;
   isDraft: boolean;
 };
 
-// Build a URL preserving filters + add/edit keys + the active preset, swapping
-// in a new page number.
+// Build a URL preserving the tree + active preset, swapping in a new page number.
 function pageHref(
   page: number,
   perPage: number,
-  activeFilters: MetaFilter[],
-  selectedPresetId: number | null,
-  addingKey?: string,
-  editingKey?: string
+  activeTree: FilterTree,
+  selectedPresetId: number | null
 ): string {
-  const params = new URLSearchParams();
-  if (selectedPresetId != null) params.set('preset', String(selectedPresetId));
-  for (const f of activeFilters) {
-    params.append(`mf__${f.key}__${f.op}`, f.value);
-  }
-  if (addingKey) params.set('add_filter', addingKey);
-  if (editingKey) params.set('edit_filter', editingKey);
-  if (page > 1) params.set('page', String(page));
-  if (perPage !== 50) params.set('per_page', String(perPage));
-  const qs = params.toString();
+  const base = buildEntityUrl(activeTree, selectedPresetId);
+  const url = new URL(base, 'http://x');
+  if (page > 1) url.searchParams.set('page', String(page));
+  if (perPage !== 50) url.searchParams.set('per_page', String(perPage));
+  const qs = url.searchParams.toString();
   return qs ? `/entities?${qs}` : '/entities';
 }
 
@@ -50,14 +42,12 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   totalCount,
   page,
   perPage,
-  activeFilters,
+  activeTree,
   availableFilters,
-  addingKey,
-  editingKey,
   entityTypes,
   presets,
   selectedPresetId,
-  selectedPresetFilters,
+  selectedPresetTree,
   selectedEntityType,
   isDraft,
 }) => {
@@ -81,14 +71,12 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
       </div>
 
       <FilterBar
-        activeFilters={activeFilters}
+        activeTree={activeTree}
         availableFilters={availableFilters}
-        addingKey={addingKey}
-        editingKey={editingKey}
         entityTypes={entityTypes}
         presets={presets}
         selectedPresetId={selectedPresetId}
-        selectedPresetFilters={selectedPresetFilters}
+        selectedPresetTree={selectedPresetTree}
         selectedEntityType={selectedEntityType}
         isDraft={isDraft}
       />
@@ -158,14 +146,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             <a
               class="pagination-link"
               data-pagination-prev
-              href={pageHref(
-                page - 1,
-                perPage,
-                activeFilters,
-                selectedPresetId,
-                addingKey,
-                editingKey
-              )}
+              href={pageHref(page - 1, perPage, activeTree, selectedPresetId)}
             >
               ← Prev
             </a>
@@ -181,14 +162,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             <a
               class="pagination-link"
               data-pagination-next
-              href={pageHref(
-                page + 1,
-                perPage,
-                activeFilters,
-                selectedPresetId,
-                addingKey,
-                editingKey
-              )}
+              href={pageHref(page + 1, perPage, activeTree, selectedPresetId)}
             >
               Next →
             </a>

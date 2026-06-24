@@ -1,10 +1,10 @@
 import { Pool } from 'pg';
 import { logger } from '../../logger';
-import { PresetSchema, PresetWithFiltersSchema } from '../../schemas/preset';
-import { MetaFilterOpSchema } from '../../schemas/entity';
+import { PresetSchema, PresetWithTreeSchema } from '../../schemas/preset';
+import { FilterTreeSchema, emptyTree } from '../../schemas/filterTree';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
-import type { Preset, PresetWithFilters } from '../../schemas/preset';
-import type { MetaFilter } from '../../schemas/entity';
+import type { Preset, PresetWithTree } from '../../schemas/preset';
+import type { FilterTree } from '../../schemas/filterTree';
 import type {
   Visualization,
   VisualizationConfig,
@@ -12,6 +12,15 @@ import type {
 } from '../../schemas/visualization';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
+
+function decodeFilterTree(raw: string | null): FilterTree {
+  if (!raw) return emptyTree();
+  try {
+    return FilterTreeSchema.parse(JSON.parse(raw));
+  } catch {
+    return emptyTree();
+  }
+}
 
 async function runMigrations(pool: Pool): Promise<void> {
   await pool.query(`
@@ -62,43 +71,26 @@ export class PostgresAppStateRepository implements AppStateRepository {
 
   // ── Presets ──────────────────────────────────────────────────────────────
 
-  async savePreset(name: string, filters: MetaFilter[]): Promise<number> {
+  async savePreset(name: string, tree: FilterTree): Promise<number> {
     const result = await this.pool.query<{ id: number }>(
-      'INSERT INTO presets (name) VALUES ($1) RETURNING id',
-      [name]
+      'INSERT INTO presets (name, filter_tree) VALUES ($1, $2) RETURNING id',
+      [name, JSON.stringify(tree)]
     );
-    const id = result.rows[0].id;
-
-    for (let i = 0; i < filters.length; i++) {
-      const f = filters[i];
-      await this.pool.query(
-        'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES ($1, $2, $3, $4, $5)',
-        [id, f.key, f.op, f.value, i]
-      );
-    }
-
-    return id;
+    return result.rows[0].id;
   }
 
-  async getPreset(id: number): Promise<PresetWithFilters | null> {
-    const presetResult = await this.pool.query<{ id: number; name: string }>(
-      'SELECT id, name FROM presets WHERE id = $1',
-      [id]
-    );
-    if (presetResult.rows.length === 0) return null;
+  async getPreset(id: number): Promise<PresetWithTree | null> {
+    const result = await this.pool.query<{
+      id: number;
+      name: string;
+      filter_tree: string | null;
+    }>('SELECT id, name, filter_tree FROM presets WHERE id = $1', [id]);
+    if (result.rows.length === 0) return null;
 
-    const filterResult = await this.pool.query<{ key: string; op: string; value: string }>(
-      'SELECT key, op, value FROM preset_filters WHERE preset_id = $1 ORDER BY filter_order',
-      [id]
-    );
-
-    return PresetWithFiltersSchema.parse({
-      ...PresetSchema.parse(presetResult.rows[0]),
-      filters: filterResult.rows.map(r => ({
-        key: r.key,
-        op: MetaFilterOpSchema.parse(r.op),
-        value: r.value,
-      })),
+    const row = result.rows[0];
+    return PresetWithTreeSchema.parse({
+      ...PresetSchema.parse({ id: row.id, name: row.name }),
+      tree: decodeFilterTree(row.filter_tree),
     });
   }
 
@@ -109,65 +101,27 @@ export class PostgresAppStateRepository implements AppStateRepository {
     return result.rows.map(r => PresetSchema.parse(r));
   }
 
-  async listPresetsWithFilters(): Promise<PresetWithFilters[]> {
-    const presetResult = await this.pool.query<{ id: number; name: string }>(
-      'SELECT id, name FROM presets ORDER BY id'
-    );
-    if (presetResult.rows.length === 0) return [];
+  async listPresetsWithTree(): Promise<PresetWithTree[]> {
+    const result = await this.pool.query<{
+      id: number;
+      name: string;
+      filter_tree: string | null;
+    }>('SELECT id, name, filter_tree FROM presets ORDER BY id');
 
-    const filterResult = await this.pool.query<{
-      preset_id: number;
-      key: string;
-      op: string;
-      value: string;
-    }>('SELECT preset_id, key, op, value FROM preset_filters ORDER BY preset_id, filter_order');
-
-    const byPreset = new Map<number, MetaFilter[]>();
-    for (const r of filterResult.rows) {
-      let bucket = byPreset.get(r.preset_id);
-      if (!bucket) {
-        bucket = [];
-        byPreset.set(r.preset_id, bucket);
-      }
-      bucket.push({
-        key: r.key,
-        op: MetaFilterOpSchema.parse(r.op),
-        value: r.value,
-      });
-    }
-
-    return presetResult.rows.map(p =>
-      PresetWithFiltersSchema.parse({
-        ...PresetSchema.parse(p),
-        filters: byPreset.get(p.id) ?? [],
+    return result.rows.map(r =>
+      PresetWithTreeSchema.parse({
+        ...PresetSchema.parse({ id: r.id, name: r.name }),
+        tree: decodeFilterTree(r.filter_tree),
       })
     );
   }
 
-  async updatePreset(id: number, name: string, filters: MetaFilter[]): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await client.query('UPDATE presets SET name = $1 WHERE id = $2', [name, id]);
-      if (result.rowCount === 0) {
-        await client.query('ROLLBACK');
-        return;
-      }
-      await client.query('DELETE FROM preset_filters WHERE preset_id = $1', [id]);
-      for (let i = 0; i < filters.length; i++) {
-        const f = filters[i];
-        await client.query(
-          'INSERT INTO preset_filters (preset_id, key, op, value, filter_order) VALUES ($1, $2, $3, $4, $5)',
-          [id, f.key, f.op, f.value, i]
-        );
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+  async updatePreset(id: number, name: string, tree: FilterTree): Promise<void> {
+    await this.pool.query('UPDATE presets SET name = $1, filter_tree = $2 WHERE id = $3', [
+      name,
+      JSON.stringify(tree),
+      id,
+    ]);
   }
 
   async deletePreset(id: number): Promise<void> {

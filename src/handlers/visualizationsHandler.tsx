@@ -13,16 +13,21 @@ import { VisualizationsPage } from '../frontend/Pages/VisualizationsPage';
 import { TemplatePickerPage } from '../frontend/Pages/TemplatePickerPage';
 import { TemplateConfigPage } from '../frontend/Pages/TemplateConfigPage';
 import { VisualizationDetailPage } from '../frontend/Pages/VisualizationDetailPage';
-import type { AvailableFilter, MetaFilter } from '../schemas/entity';
+import type { AvailableFilter } from '../schemas/entity';
 import type { TemplateId } from '../schemas/visualizationTemplate';
+import type { FilterNode, FilterTree } from '../schemas/filterTree';
+import { buildEntityUrl } from '../domain/filterUrl';
 
-function entitiesUrl(filters: MetaFilter[]): string {
-  const params = new URLSearchParams();
-  for (const f of filters) {
-    params.append(`mf__${f.key}__${f.op}`, f.value);
-  }
-  const qs = params.toString();
-  return qs ? `/entities?${qs}` : '/entities';
+// Wraps the preset's tree (the saved structure stays intact) plus extra leaves
+// under a fresh root AND group, so click-through URLs narrow the entity list
+// to the chart point without flattening the preset's own logic.
+function combineWithExtras(presetTree: FilterTree, extras: FilterNode[]): FilterTree {
+  if (extras.length === 0) return presetTree;
+  return { type: 'group', id: 'root', op: 'AND', children: [presetTree, ...extras] };
+}
+
+function entitiesUrl(tree: FilterTree): string {
+  return buildEntityUrl(tree);
 }
 
 export async function visualizationsListHandler(c: Context) {
@@ -58,7 +63,7 @@ export async function visualizationsTemplateHandler(c: Context) {
   if (!preset) return c.redirect('/visualizations/new');
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
   const entityIds = entities.map(e => e.id);
   let availableFilters: AvailableFilter[] = [];
   if (entityIds.length > 0) {
@@ -111,7 +116,7 @@ export async function visualizationsSaveHandler(c: Context) {
     const entityRepo = getEntityRepo();
     let availableFilters: AvailableFilter[] = [];
     if (preset) {
-      const entities = await entityRepo.list(preset.filters);
+      const entities = await entityRepo.list(preset.tree);
       const entityIds = entities.map(e => e.id);
       if (entityIds.length > 0) {
         availableFilters = await entityRepo.getAvailableFilters(entityIds);
@@ -146,14 +151,14 @@ export async function visualizationsDetailHandler(c: Context) {
   if (!preset) return c.notFound();
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
 
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
-  const presetUrl = entitiesUrl(preset.filters);
+  const presetUrl = entitiesUrl(preset.tree);
   const pointUrls = chartResult.labels.map(label =>
-    entitiesUrl([...preset.filters, ...buildPointEntityFilters(label, viz.config)])
+    entitiesUrl(combineWithExtras(preset.tree, buildPointEntityFilters(label, viz.config)))
   );
 
   return c.html(
@@ -186,7 +191,7 @@ export async function visualizationsEditHandler(c: Context) {
   let availableFilters: AvailableFilter[] = [];
   if (preset) {
     const entityRepo = getEntityRepo();
-    const entities = await entityRepo.list(preset.filters);
+    const entities = await entityRepo.list(preset.tree);
     const entityIds = entities.map(e => e.id);
     if (entityIds.length > 0) {
       availableFilters = await entityRepo.getAvailableFilters(entityIds);

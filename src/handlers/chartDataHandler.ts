@@ -19,7 +19,7 @@ export async function presetFieldsHandler(c: Context) {
   if (!preset) return c.json({ error: 'Not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
   const entityIds = entities.map(e => e.id);
 
   if (entityIds.length === 0) return c.json([]);
@@ -41,7 +41,7 @@ export async function chartDataByIdHandler(c: Context) {
   if (!preset) return c.json({ error: 'Preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
 
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
@@ -77,7 +77,7 @@ export async function chartDataPreviewHandler(c: Context) {
   if (!preset) return c.json({ error: 'Preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
 
   const chartResult = buildChartData(entities, config);
   const chartJsConfig = buildChartJsConfig(chartResult, config);

@@ -274,7 +274,8 @@ form {
 
 // ── Preset combobox ───────────────────────────────────────────────────────────
 
-.preset-combo-form {
+.preset-combo-form,
+.preset-combo-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -362,7 +363,9 @@ form {
 
 // Hide the Save changes button + Revert link until the form is in draft state.
 .preset-combo-form[data-is-draft='false'] [data-preset-save-submit],
-.preset-combo-form[data-is-draft='false'] [data-preset-revert] {
+.preset-combo-form[data-is-draft='false'] [data-preset-revert],
+.preset-combo-wrap[data-is-draft='false'] [data-preset-save-submit],
+.preset-combo-wrap[data-is-draft='false'] [data-preset-revert] {
   display: none;
 }
 
@@ -1102,8 +1105,14 @@ form {
   }
 
   .filter-meta-row,
-  .filter-chips-row {
+  .filter-chips-row,
+  .filter-tree-container,
+  .filter-action-row {
     padding: 8px 10px;
+  }
+
+  .filter-group {
+    padding: 6px;
   }
 }
 
@@ -1136,4 +1145,259 @@ form {
       padding-bottom: 0;
     }
   }
+}
+
+// ── Filter tree (nested groups + operator badges + DnD) ──────────────────────
+
+.filter-tree-container {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filter-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.02);
+  position: relative;
+}
+
+.filter-group--root {
+  display: flex;
+  width: 100%;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.filter-group-empty {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.filter-group-ungroup {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+    border-color: var(--color-primary);
+  }
+}
+
+.filter-op-badge {
+  height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+}
+
+.filter-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.filter-btn-apply {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+}
+
+// Drag-and-drop affordances
+.filter-chip[draggable='true'],
+.filter-group[draggable='true'] {
+  cursor: grab;
+}
+
+body.filter-dragging,
+body.filter-dragging * {
+  cursor: grabbing !important;
+}
+
+.filter-chip-grip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px 0 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: -2px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+// Group grip mirrors the chip grip — visual cue that the group itself can
+// be dragged. Sits at the leading edge of the group container.
+.filter-group-grip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: -2px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+.filter-node--dragging {
+  opacity: 0.4;
+}
+
+// Insertion-line drop zones between sibling nodes. Idle: an invisible 8px-wide
+// strip that flex-aligns to the chip height. Active: a 2px primary-color bar.
+.filter-drop-line {
+  display: inline-block;
+  width: 8px;
+  height: var(--control-height);
+  position: relative;
+  vertical-align: middle;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    border-radius: 1px;
+    transition: background 60ms ease-in;
+  }
+
+  &.filter-drop-active::after {
+    background: var(--color-primary);
+  }
+}
+
+// Drop targets fall back to an outline only when the target is a chip or group
+// (drop-lines render their own active state via the ::after bar above).
+.filter-chip.filter-drop-active,
+.filter-group.filter-drop-active {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
+// Floating hint that names the outcome of dropping here ("Move next to X",
+// "Append to group", "Move here"). Sits below or inside the active target.
+.filter-drop-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  padding: 2px 6px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+// Chip needs to be a positioning context for the absolute hint above it.
+.filter-chip,
+.filter-drop-line {
+  position: relative;
+}
+
+// Selection state for chips marked via shift-click. Subtle primary tint so it
+// reads as "you have this targeted" without overpowering the regular chip.
+.filter-chip--selected {
+  border-color: var(--color-primary);
+  background: rgba(13, 110, 253, 0.08);
+}
+
+.filter-selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(13, 110, 253, 0.05);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.filter-selection-count {
+  font-size: 12px;
+  color: var(--color-muted);
+
+  strong {
+    color: var(--color-text);
+    font-weight: 600;
+  }
+}
+
+// Labeled ungroup pill — replaces the old tiny × at the group's corner.
+.filter-group-ungroup--labeled {
+  position: absolute;
+  top: -10px;
+  right: 6px;
+  width: auto;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 100px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+}
+
+// Greyed-out results while uncommitted filter changes exist
+.filter-results-stale .entity-table,
+.filter-results-stale .table-scroll-wrap,
+.filter-results-stale .pagination {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(0.4);
 }

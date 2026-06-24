@@ -1,142 +1,118 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildEntityUrl,
-  parseFiltersFromForm,
-  metaFiltersEqual,
+  encodeTree,
+  decodeTree,
+  parseTreeFromUrl,
+  treesEqual,
   findMatchingPresetId,
 } from './filterUrl';
-import type { MetaFilter } from '../schemas/entity';
-import type { PresetWithFilters } from '../schemas/preset';
+import { emptyTree, makeGroup, makeLeaf } from '../schemas/filterTree';
 
 describe('buildEntityUrl', () => {
-  it('returns /entities for no filters', () => {
-    expect(buildEntityUrl([])).toBe('/entities');
+  it('returns /entities for an empty tree', () => {
+    expect(buildEntityUrl(emptyTree())).toBe('/entities');
   });
 
-  it('builds a query string for one filter', () => {
-    expect(buildEntityUrl([{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }])).toBe(
-      '/entities?mf__entity_type__eq=jira_ticket'
-    );
+  it('includes f= as a hex payload (no percent escapes)', () => {
+    const tree = makeGroup('AND', [makeLeaf('entity_type', 'eq', 'jira_ticket')]);
+    const url = buildEntityUrl(tree);
+    expect(url.startsWith('/entities?f=')).toBe(true);
+    const f = url.split('f=')[1];
+    expect(f).toMatch(/^[0-9a-f]+$/);
   });
 
-  it('encodes special characters in values', () => {
-    expect(buildEntityUrl([{ key: 'name', op: 'contains', value: 'foo bar&baz' }])).toContain(
-      'foo+bar%26baz'
-    );
+  it('preserves preset id alongside the tree', () => {
+    const tree = makeGroup('AND', [makeLeaf('a', 'eq', '1')]);
+    const url = buildEntityUrl(tree, 7);
+    expect(url).toContain('preset=7');
+    expect(url).toContain('f=');
   });
 
-  it('preserves filter order in the output', () => {
-    const url = buildEntityUrl([
-      { key: 'a', op: 'eq', value: '1' },
-      { key: 'b', op: 'eq', value: '2' },
-    ]);
-    expect(url.indexOf('mf__a__eq=1')).toBeLessThan(url.indexOf('mf__b__eq=2'));
-  });
-});
-
-describe('parseFiltersFromForm', () => {
-  it('extracts mf__key__op fields', () => {
-    const form = new FormData();
-    form.append('mf__entity_type__eq', 'jira_ticket');
-    form.append('mf__status__eq', 'open');
-    form.append('name', 'My Preset');
-    expect(parseFiltersFromForm(form)).toEqual([
-      { key: 'entity_type', op: 'eq', value: 'jira_ticket' },
-      { key: 'status', op: 'eq', value: 'open' },
-    ]);
-  });
-
-  it('skips empty values', () => {
-    const form = new FormData();
-    form.append('mf__entity_type__eq', '');
-    form.append('mf__status__eq', 'open');
-    expect(parseFiltersFromForm(form)).toEqual([{ key: 'status', op: 'eq', value: 'open' }]);
-  });
-
-  it('skips unknown ops', () => {
-    const form = new FormData();
-    form.append('mf__entity_type__BAD', 'x');
-    form.append('mf__status__eq', 'open');
-    expect(parseFiltersFromForm(form)).toEqual([{ key: 'status', op: 'eq', value: 'open' }]);
+  it('returns just preset= when tree is empty but preset is set', () => {
+    expect(buildEntityUrl(emptyTree(), 4)).toBe('/entities?preset=4');
   });
 });
 
-describe('metaFiltersEqual', () => {
-  const a: MetaFilter = { key: 'entity_type', op: 'eq', value: 'jira_ticket' };
-  const b: MetaFilter = { key: 'status', op: 'eq', value: 'open' };
-
-  it('returns true for identical lists', () => {
-    expect(metaFiltersEqual([a, b], [a, b])).toBe(true);
+describe('encodeTree / decodeTree', () => {
+  it('round-trips a non-trivial tree', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'Service'),
+      makeGroup('OR', [
+        makeLeaf('owner', 'eq', ['Dave', 'Sam']),
+        makeLeaf('active_prs', 'gte', '1'),
+      ]),
+    ]);
+    const decoded = decodeTree(encodeTree(tree));
+    expect(decoded).not.toBeNull();
+    expect(treesEqual(decoded!, tree)).toBe(true);
   });
 
-  it('is order-insensitive', () => {
-    expect(metaFiltersEqual([a, b], [b, a])).toBe(true);
+  it('returns null on garbage input', () => {
+    expect(decodeTree('{not json')).toBeNull();
+    expect(decodeTree('zzzz')).toBeNull();
+  });
+});
+
+describe('parseTreeFromUrl', () => {
+  it('returns emptyTree when f is absent', () => {
+    const url = new URL('https://x/entities');
+    expect(parseTreeFromUrl(url)).toEqual(emptyTree());
   });
 
-  it('returns false for different lengths', () => {
-    expect(metaFiltersEqual([a, b], [a])).toBe(false);
+  it('returns emptyTree on malformed f param', () => {
+    const url = new URL('https://x/entities?f=not-hex');
+    expect(parseTreeFromUrl(url)).toEqual(emptyTree());
   });
 
-  it('returns false for different values', () => {
-    expect(metaFiltersEqual([a], [{ key: 'entity_type', op: 'eq', value: 'github_pr' }])).toBe(
-      false
-    );
+  it('parses a valid tree from f', () => {
+    const tree = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
+    const url = new URL(`https://x/entities?f=${encodeTree(tree)}`);
+    const parsed = parseTreeFromUrl(url);
+    expect(treesEqual(parsed, tree)).toBe(true);
+  });
+});
+
+describe('treesEqual', () => {
+  it('returns true for structurally identical trees regardless of node ids', () => {
+    const a = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
+    const b = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
+    expect(treesEqual(a, b)).toBe(true);
   });
 
-  it('returns true for two empty lists', () => {
-    expect(metaFiltersEqual([], [])).toBe(true);
+  it('is order-sensitive on group children', () => {
+    const a = makeGroup('AND', [makeLeaf('a', 'eq', '1'), makeLeaf('b', 'eq', '2')]);
+    const b = makeGroup('AND', [makeLeaf('b', 'eq', '2'), makeLeaf('a', 'eq', '1')]);
+    expect(treesEqual(a, b)).toBe(false);
   });
 
-  it('treats duplicate values correctly', () => {
-    const dup: MetaFilter = { key: 'tag', op: 'eq', value: 'x' };
-    expect(metaFiltersEqual([dup, dup], [dup])).toBe(false);
-    expect(metaFiltersEqual([dup, dup], [dup, dup])).toBe(true);
+  it('distinguishes AND from OR', () => {
+    const a = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
+    const b = makeGroup('OR', [makeLeaf('k', 'eq', 'v')]);
+    expect(treesEqual(a, b)).toBe(false);
+  });
+
+  it('returns true for two empty trees', () => {
+    expect(treesEqual(emptyTree(), emptyTree())).toBe(true);
   });
 });
 
 describe('findMatchingPresetId', () => {
-  const preset1: PresetWithFilters = {
-    id: 1,
-    name: 'Tickets',
-    filters: [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }],
-  };
-  const preset2: PresetWithFilters = {
-    id: 2,
-    name: 'Open PRs',
-    filters: [
-      { key: 'entity_type', op: 'eq', value: 'github_pr' },
-      { key: 'status', op: 'eq', value: 'open' },
-    ],
-  };
-
-  it('returns id of the matching preset', () => {
+  it('returns the id of the matching preset', () => {
+    const t1 = makeGroup('AND', [makeLeaf('entity_type', 'eq', 'jira_ticket')]);
+    const t2 = makeGroup('AND', [makeLeaf('entity_type', 'eq', 'github_pr')]);
     expect(
-      findMatchingPresetId(
-        [{ key: 'entity_type', op: 'eq', value: 'jira_ticket' }],
-        [preset1, preset2]
-      )
+      findMatchingPresetId(t1, [
+        { id: 1, tree: t1 },
+        { id: 2, tree: t2 },
+      ])
     ).toBe(1);
   });
 
-  it('matches regardless of order', () => {
-    expect(
-      findMatchingPresetId(
-        [
-          { key: 'status', op: 'eq', value: 'open' },
-          { key: 'entity_type', op: 'eq', value: 'github_pr' },
-        ],
-        [preset1, preset2]
-      )
-    ).toBe(2);
-  });
-
   it('returns null when nothing matches', () => {
+    const t = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
     expect(
-      findMatchingPresetId([{ key: 'entity_type', op: 'eq', value: 'other' }], [preset1, preset2])
+      findMatchingPresetId(t, [{ id: 1, tree: makeGroup('AND', [makeLeaf('k', 'eq', 'other')]) }])
     ).toBeNull();
-  });
-
-  it('returns null for empty filters when no empty preset exists', () => {
-    expect(findMatchingPresetId([], [preset1, preset2])).toBeNull();
   });
 });

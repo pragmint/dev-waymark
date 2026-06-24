@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MetaFilterSchema } from './entity';
+import { FilterTreeSchema } from './filterTree';
 
 export const PresetSchema = z.object({
   id: z.number(),
@@ -8,8 +8,8 @@ export const PresetSchema = z.object({
 
 export type Preset = z.infer<typeof PresetSchema>;
 
-export const PresetWithFiltersSchema = PresetSchema.extend({
-  filters: z.array(MetaFilterSchema),
+export const PresetWithTreeSchema = PresetSchema.extend({
+  tree: FilterTreeSchema,
 });
 
-export type PresetWithFilters = z.infer<typeof PresetWithFiltersSchema>;
+export type PresetWithTree = z.infer<typeof PresetWithTreeSchema>;

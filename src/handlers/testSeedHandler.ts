@@ -3,15 +3,15 @@ import { z } from 'zod';
 import { getAppStateRepo } from '../db/appState/index';
 import { getEntityRepo } from '../db/source/index';
 import { TemplateIdSchema, type TemplateId } from '../schemas/visualizationTemplate';
-import { MetaFilterSchema } from '../schemas/entity';
 import type { AvailableFilter, MetadataValueType } from '../schemas/entity';
+import { FilterTreeSchema, emptyTree } from '../schemas/filterTree';
 import { resolveTemplate } from '../domain/templateResolver';
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
 const SeedPresetBodySchema = z.object({
   name: z.string().min(1),
-  filters: z.array(MetaFilterSchema).optional(),
+  tree: FilterTreeSchema.optional(),
 });
 
 const SeedVisualizationBodySchema = z.object({
@@ -27,7 +27,7 @@ export async function testSeedPresetHandler(c: Context) {
   const parsed = SeedPresetBodySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid body' }, 400);
 
-  const id = await getAppStateRepo().savePreset(parsed.data.name, parsed.data.filters ?? []);
+  const id = await getAppStateRepo().savePreset(parsed.data.name, parsed.data.tree ?? emptyTree());
   return c.json({ id });
 }
 
@@ -47,7 +47,7 @@ export async function testSeedVisualizationHandler(c: Context) {
   if (!preset) return c.json({ error: 'preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.filters);
+  const entities = await entityRepo.list(preset.tree);
   const fields = entities.length
     ? await entityRepo.getAvailableFilters(entities.map(e => e.id))
     : [];

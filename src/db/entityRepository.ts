@@ -5,152 +5,110 @@ import type {
   Metadata,
   MetadataValueType,
   EntityWithMetadata,
-  MetaFilter,
   AvailableFilter,
 } from '../schemas/entity';
+import { isGroup, isLeaf, treeHasRegex } from '../schemas/filterTree';
+import type { FilterLeaf, FilterNode, FilterTree } from '../schemas/filterTree';
+import { evaluateFilterTree } from '../domain/filterTreeEval';
 
 type WhereResult = { where: string; params: SqlParam[] };
-type BuildState = { conditions: string[]; params: SqlParam[] };
 
 type EntityFieldConfig = {
   column: string;
   value_type: MetadataValueType;
-  getValue: (entity: EntityWithMetadata) => string;
   withDistinctValues?: boolean;
 };
 
 // Virtual filter keys that map directly to columns on the entities table.
 // Extend this map to expose additional entity fields as filterable.
 const ENTITY_FIELDS: Record<string, EntityFieldConfig> = {
-  entity_name: { column: 'name', value_type: 'string', getValue: e => e.name },
-  entity_type: {
-    column: 'type',
-    value_type: 'string',
-    getValue: e => e.type,
-    withDistinctValues: true,
-  },
-  entity_created_at: { column: 'created_at', value_type: 'date', getValue: e => e.created_at },
+  entity_name: { column: 'name', value_type: 'string' },
+  entity_type: { column: 'type', value_type: 'string', withDistinctValues: true },
+  entity_created_at: { column: 'created_at', value_type: 'date' },
 };
 
-function addEntityFieldEqConditions(state: BuildState, column: string, values: string[]) {
-  const { conditions, params } = state;
-  if (values.length === 1) {
-    params.push(values[0]);
-    conditions.push(`e.${column} = ?`);
-  } else {
-    const placeholders = values.map(() => '?').join(', ');
-    values.forEach(v => params.push(v));
-    conditions.push(`e.${column} IN (${placeholders})`);
-  }
-}
+type SqlFragment = { sql: string; params: SqlParam[] };
 
-function addEqConditions(state: BuildState, key: string, values: string[]) {
-  const { conditions, params } = state;
-  if (values.length === 1) {
-    params.push(key, values[0]);
-    conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value = ?)`
-    );
-  } else {
-    const placeholders = values.map(() => '?').join(', ');
-    params.push(key);
-    values.forEach(v => params.push(v));
-    conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value IN (${placeholders}))`
-    );
-  }
-}
-
-function addRangeOrContainsCondition(state: BuildState, f: MetaFilter) {
-  const { conditions, params } = state;
-
-  const entityField = ENTITY_FIELDS[f.key];
+function eqSql(leaf: FilterLeaf, entityField: EntityFieldConfig | undefined): SqlFragment {
+  const values = Array.isArray(leaf.value) ? leaf.value : [leaf.value];
+  if (values.length === 0) return { sql: '1=0', params: [] };
+  const placeholders = values.map(() => '?').join(', ');
   if (entityField) {
-    if (f.op === 'contains') {
-      params.push(`%${f.value}%`);
-      conditions.push(`e.${entityField.column} LIKE ?`);
-    }
-    // gte/lte on entity fields: not meaningful, skip
-    return;
+    const sql =
+      values.length === 1
+        ? `e.${entityField.column} = ?`
+        : `e.${entityField.column} IN (${placeholders})`;
+    return { sql, params: values };
   }
-
-  if (f.op === 'contains') {
-    params.push(f.key, `%${f.value}%`);
-    conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value LIKE ?)`
-    );
-  } else if (f.op === 'gte') {
-    params.push(f.key, f.value, f.value);
-    conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
-        `(value_type = 'number' AND CAST(value AS REAL) >= CAST(? AS REAL) OR value_type != 'number' AND value >= ?))`
-    );
-  } else if (f.op === 'lte') {
-    params.push(f.key, f.value, f.value);
-    conditions.push(
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
-        `(value_type = 'number' AND CAST(value AS REAL) <= CAST(? AS REAL) OR value_type != 'number' AND value <= ?))`
-    );
-  }
+  const sql =
+    values.length === 1
+      ? `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value = ?)`
+      : `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value IN (${placeholders}))`;
+  return { sql, params: [leaf.key, ...values] };
 }
 
-// Builds the SQL WHERE clause for all non-regex filters.
-// `re` filters are handled in application code after the query.
-function buildWhereClause(metaFilters: MetaFilter[]): WhereResult {
-  const state: BuildState = { conditions: [], params: [] };
-
-  // Group eq filters by key so multiple selections become a single IN clause (OR within key).
-  const eqByKey = new Map<string, string[]>();
-  const otherFilters: MetaFilter[] = [];
-  for (const f of metaFilters) {
-    if (f.op === 'eq') {
-      if (!eqByKey.has(f.key)) eqByKey.set(f.key, []);
-      eqByKey.get(f.key)!.push(f.value);
-    } else if (f.op !== 're') {
-      otherFilters.push(f);
-    }
+function containsSql(
+  leaf: FilterLeaf,
+  value: string,
+  entityField: EntityFieldConfig | undefined
+): SqlFragment {
+  if (entityField) {
+    return { sql: `e.${entityField.column} LIKE ?`, params: [`%${value}%`] };
   }
-
-  for (const [key, values] of eqByKey) {
-    const entityField = ENTITY_FIELDS[key];
-    if (entityField) {
-      addEntityFieldEqConditions(state, entityField.column, values);
-    } else {
-      addEqConditions(state, key, values);
-    }
-  }
-  for (const f of otherFilters) {
-    addRangeOrContainsCondition(state, f);
-  }
-
   return {
-    where: state.conditions.length > 0 ? `WHERE ${state.conditions.join(' AND ')}` : '',
-    params: state.params,
+    sql: `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value LIKE ?)`,
+    params: [leaf.key, `%${value}%`],
   };
 }
 
-// Apply regex (re) filters in application code after the SQL query.
-function applyReFilters(
-  entities: EntityWithMetadata[],
-  metaFilters: MetaFilter[]
-): EntityWithMetadata[] {
-  const reFilters = metaFilters.filter(f => f.op === 're');
-  if (reFilters.length === 0) return entities;
+function rangeSql(
+  leaf: FilterLeaf,
+  value: string,
+  entityField: EntityFieldConfig | undefined,
+  cmp: '>=' | '<='
+): SqlFragment {
+  if (entityField) {
+    return { sql: `e.${entityField.column} ${cmp} ?`, params: [value] };
+  }
+  return {
+    sql:
+      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
+      `(value_type = 'number' AND CAST(value AS REAL) ${cmp} CAST(? AS REAL) OR value_type != 'number' AND value ${cmp} ?))`,
+    params: [leaf.key, value, value],
+  };
+}
 
-  return entities.filter(entity =>
-    reFilters.every(f => {
-      const entityField = ENTITY_FIELDS[f.key];
-      const val = entityField
-        ? entityField.getValue(entity)
-        : entity.metadata.find(m => m.key === f.key)?.value;
-      if (!val) return false;
-      try {
-        return new RegExp(f.value).test(val);
-      } catch {
-        return false;
-      }
-    })
-  );
+function leafSql(leaf: FilterLeaf): SqlFragment {
+  // Regex leaves are evaluated in JS after the query — SQL returns a superset.
+  if (leaf.op === 're') return { sql: '1=1', params: [] };
+  const entityField = ENTITY_FIELDS[leaf.key];
+  if (leaf.op === 'eq') return eqSql(leaf, entityField);
+  const value = Array.isArray(leaf.value) ? (leaf.value[0] ?? '') : leaf.value;
+  if (leaf.op === 'contains') return containsSql(leaf, value, entityField);
+  if (leaf.op === 'gte') return rangeSql(leaf, value, entityField, '>=');
+  if (leaf.op === 'lte') return rangeSql(leaf, value, entityField, '<=');
+  return { sql: '1=1', params: [] };
+}
+
+function nodeSql(node: FilterNode): SqlFragment {
+  if (isLeaf(node)) return leafSql(node);
+  if (!isGroup(node)) return { sql: '1=1', params: [] };
+  if (node.children.length === 0) return { sql: '1=1', params: [] };
+
+  const childResults = node.children.map(nodeSql);
+  if (childResults.length === 1) return childResults[0];
+
+  const joiner = node.op === 'AND' ? ' AND ' : ' OR ';
+  const sql = `(${childResults.map(r => r.sql).join(joiner)})`;
+  const params = childResults.flatMap(r => r.params);
+  return { sql, params };
+}
+
+function buildWhereFromTree(tree: FilterTree): WhereResult {
+  if (tree.children.length === 0) return { where: '', params: [] };
+  const { sql, params } = nodeSql(tree);
+  if (sql === '1=1') return { where: '', params: [] };
+  return { where: `WHERE ${sql}`, params };
 }
 
 async function attachMetadata(
@@ -190,34 +148,36 @@ export type EntityRepository = ReturnType<typeof createEntityRepository>;
 
 export function createEntityRepository(adapter: SourceDataAdapter) {
   return {
-    async list(metaFilters: MetaFilter[]): Promise<EntityWithMetadata[]> {
-      const { where, params } = buildWhereClause(metaFilters);
+    async list(tree: FilterTree): Promise<EntityWithMetadata[]> {
+      const { where, params } = buildWhereFromTree(tree);
       const rows = await adapter.query(
         `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
         params
       );
       const entities = rows.map(row => EntitySchema.parse(row));
       const withMeta = await attachMetadata(adapter, entities);
-      return applyReFilters(withMeta, metaFilters);
+      if (!treeHasRegex(tree)) return withMeta;
+      return withMeta.filter(e => evaluateFilterTree(tree, e));
     },
 
     // Paginated variant: returns one page of entities (with metadata) plus the
     // full set of matching IDs (so getAvailableFilters can narrow against the
     // entire filtered population, not just the current page) and a total count.
-    async listPaged(metaFilters: MetaFilter[], page: PageOptions): Promise<PagedEntities> {
-      const { where, params } = buildWhereClause(metaFilters);
+    async listPaged(tree: FilterTree, page: PageOptions): Promise<PagedEntities> {
+      const { where, params } = buildWhereFromTree(tree);
+      const needsPostFilter = treeHasRegex(tree);
 
-      // Regex filters apply in app code, so we must materialise the full filtered
-      // set before slicing. This path keeps correctness for `re` filters at the
-      // cost of paying the metadata fetch — the win is no HTML render of 10k+ rows.
-      if (metaFilters.some(f => f.op === 're')) {
+      // When the tree has regex leaves we returned a SQL superset; materialise the full
+      // filtered set in JS before slicing so getAvailableFilters narrows against the real
+      // population. The win over rendering 10k+ rows still applies.
+      if (needsPostFilter) {
         const rows = await adapter.query(
           `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
           params
         );
         const entities = rows.map(row => EntitySchema.parse(row));
         const withMeta = await attachMetadata(adapter, entities);
-        const filtered = applyReFilters(withMeta, metaFilters);
+        const filtered = withMeta.filter(e => evaluateFilterTree(tree, e));
         return {
           pageEntities: filtered.slice(page.offset, page.offset + page.limit),
           allIds: filtered.map(e => e.id),

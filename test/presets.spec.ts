@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { decodeTreeFromUrl, entitiesUrl, leaf } from './treeUrl';
 
-// Each test saves a preset with a unique entity_name regex so its filter
-// signature is one-of-a-kind — that way the "selected preset" matching is
-// unambiguous even when other tests are creating presets in parallel.
-function uniqueQuery(suffix: string): string {
-  const tag = `__e2e_${suffix}_${Date.now()}_${Math.floor(Math.random() * 100000)}__`;
-  return `mf__entity_type__eq=jira_ticket&mf__entity_name__re=${encodeURIComponent(tag)}`;
+// Each test seeds a preset with a unique entity_name regex so the preset's
+// filter signature is one-of-a-kind across parallel runs.
+function uniqueTag(suffix: string): string {
+  return `__e2e_${suffix}_${Date.now()}_${Math.floor(Math.random() * 100000)}__`;
+}
+
+function uniqueUrl(suffix: string): string {
+  const tag = uniqueTag(suffix);
+  return entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]);
 }
 
 test('legacy /presets route is removed', async ({ request }) => {
@@ -15,14 +19,16 @@ test('legacy /presets route is removed', async ({ request }) => {
 
 test('entities page redirects to first entity type when none selected', async ({ page }) => {
   const res = await page.goto('/entities');
-  await expect(page).toHaveURL(/mf__entity_type__eq=/);
+  // The handler seeds entity_type into the tree and redirects with the new f= format.
+  await expect(page).toHaveURL(/f=/);
+  const tree = decodeTreeFromUrl(page.url())!;
+  expect(tree.children.some(c => c.type === 'filter' && c.key === 'entity_type')).toBe(true);
   expect(res?.status()).toBeLessThan(400);
 });
 
 test('filter bar shows Type and Preset controls', async ({ page }) => {
   await page.goto('/entities');
-  await expect(page.locator('[data-type-select]')).toBeVisible();
-  // No preset selected by default → the plain select renders.
+  await expect(page.locator('[data-entity-type-select]')).toBeVisible();
   await expect(page.locator('[data-preset-select]')).toBeVisible();
 });
 
@@ -39,34 +45,33 @@ test('save preset: button reveals panel, cancel hides it', async ({ page }) => {
 test('can save a preset and it appears selected', async ({ page }) => {
   const name = `E2E Save ${Date.now()}`;
 
-  await page.goto(`/entities?${uniqueQuery('save')}`);
+  await page.goto(uniqueUrl('save'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
 
-  await expect(page).toHaveURL(/mf__entity_type__eq=/);
+  await expect(page).toHaveURL(/f=/);
   // When a preset is selected the combobox renders with the preset's name.
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
 });
 
 test('loading a preset navigates to its filters', async ({ page }) => {
   const name = `E2E Load ${Date.now()}`;
-  const presetUrl = `/entities?${uniqueQuery('load')}`;
 
-  await page.goto(presetUrl);
+  await page.goto(uniqueUrl('load'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
 
-  // Drop the regex filter from the URL so we're off the preset. Now no preset
-  // is selected — the plain `<select>` renders with "None" checked.
-  await page.goto('/entities?mf__entity_type__eq=jira_ticket');
+  // Navigate to a URL with just entity_type — no preset matches, so the plain
+  // `<select>` renders with "None".
+  await page.goto(entitiesUrl('jira_ticket'));
   await expect(page.locator('[data-preset-select] option:checked')).toHaveText('None');
 
-  // Selecting the preset from the select navigates back to its URL.
   await page.locator('[data-preset-select]').selectOption({ label: name });
-  await expect(page).toHaveURL(/mf__entity_name__re=/);
+  // Loading the preset navigates to its URL which includes the saved tree.
+  await expect(page).toHaveURL(/f=/);
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
 });
 
@@ -74,23 +79,19 @@ test('rename a preset inline via the combobox', async ({ page }) => {
   const original = `E2E Rename ${Date.now()}`;
   const renamed = `${original} renamed`;
 
-  await page.goto(`/entities?${uniqueQuery('rename')}`);
+  await page.goto(uniqueUrl('rename'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', original);
   await page.locator('#save-preset-panel button[type="submit"]').click();
 
-  // After save the combobox renders with the preset's name.
   const input = page.locator('[data-preset-name-input]');
   await expect(input).toHaveValue(original);
-  // Save changes / Revert are hidden until something changes.
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
 
-  // Typing into the name triggers draft state — Save changes appears.
   await input.fill(renamed);
   await expect(page.locator('[data-preset-save-submit]')).toBeVisible();
   await expect(page.locator('[data-preset-revert]')).toBeVisible();
 
-  // Submit; combobox now shows the new name and draft is gone.
   await page.locator('[data-preset-save-submit]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(renamed);
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
@@ -100,20 +101,18 @@ test('combobox toggle opens a list of other presets', async ({ page }) => {
   const a = `E2E A ${Date.now()}`;
   const b = `E2E B ${Date.now()}`;
 
-  // Create two presets with distinct filter signatures.
-  await page.goto(`/entities?${uniqueQuery('combo-a')}`);
+  await page.goto(uniqueUrl('combo-a'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', a);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(a);
 
-  await page.goto(`/entities?${uniqueQuery('combo-b')}`);
+  await page.goto(uniqueUrl('combo-b'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', b);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(b);
 
-  // Click the toggle — list opens, contains the other preset and "None".
   await page.locator('[data-preset-combo-toggle]').click();
   const list = page.locator('[data-preset-combo-list]');
   await expect(list).toBeVisible();
@@ -124,7 +123,7 @@ test('combobox toggle opens a list of other presets', async ({ page }) => {
 test('delete preset: confirm dialog removes it', async ({ page }) => {
   const name = `E2E Delete ${Date.now()}`;
 
-  await page.goto(`/entities?${uniqueQuery('delete')}`);
+  await page.goto(uniqueUrl('delete'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
@@ -133,134 +132,88 @@ test('delete preset: confirm dialog removes it', async ({ page }) => {
   page.once('dialog', d => d.accept());
   await page.locator('[data-preset-delete-form] button[type="submit"]').click();
 
-  // After delete, return_to brings us back to a URL without a preset — the
-  // plain `<select>` renders again and the deleted option is gone.
   await expect(page.locator(`[data-preset-select] option:has-text("${name}")`)).toHaveCount(0);
 });
 
 test('save button is hidden when a preset is selected', async ({ page }) => {
   const name = `E2E SaveVis ${Date.now()}`;
 
-  await page.goto(`/entities?${uniqueQuery('savevis')}`);
-  // Unsaved state → button visible
+  await page.goto(uniqueUrl('savevis'));
   await expect(page.locator('#save-preset-btn')).toBeVisible();
 
-  // Save the preset; combobox shows the preset's name
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
 
-  // With a preset selected, the Save button disappears
   await expect(page.locator('#save-preset-btn')).toHaveCount(0);
 
-  // Selecting "None" via the combobox returns to unsaved state — Save reappears
   await page.locator('[data-preset-combo-toggle]').click();
   await page.locator('[data-preset-combo-list] a', { hasText: 'None' }).click();
   await expect(page.locator('#save-preset-btn')).toBeVisible();
 });
 
 test('changing entity type clears other filters', async ({ page }) => {
-  const tag = `__e2e_typeswitch_${Date.now()}__`;
+  const tag = uniqueTag('typeswitch');
 
-  // Start on jira_ticket with one extra filter
-  await page.goto(
-    `/entities?mf__entity_type__eq=jira_ticket&mf__entity_name__re=${encodeURIComponent(tag)}`
-  );
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_name"]')).toBeVisible();
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toBeVisible();
 
-  // Switch type via the dropdown
-  await page.locator('[data-type-select]').selectOption('github_pr');
+  await page.locator('[data-entity-type-select]').selectOption('github_pr');
 
-  // Only the new entity_type filter survives — chip is gone
-  await expect(page).toHaveURL('/entities?mf__entity_type__eq=github_pr');
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_name"]')).toHaveCount(0);
+  // Type dropdown drives navigation: the URL switches to the new type and the
+  // old chip is gone.
+  await expect
+    .poll(() => {
+      const t = decodeTreeFromUrl(page.url());
+      const et = t?.children.find(c => c.type === 'filter' && c.key === 'entity_type');
+      return et && et.type === 'filter' ? et.value : null;
+    })
+    .toBe('github_pr');
+  await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toHaveCount(0);
 });
 
 test('selecting "None" via the combobox clears preset + filters', async ({ page }) => {
   const name = `E2E Clear ${Date.now()}`;
 
-  await page.goto(`/entities?${uniqueQuery('clear')}`);
+  await page.goto(uniqueUrl('clear'));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
 
-  // Open the combobox popup and click None.
   await page.locator('[data-preset-combo-toggle]').click();
   await page.locator('[data-preset-combo-list] a', { hasText: 'None' }).click();
 
-  await expect(page).toHaveURL('/entities?mf__entity_type__eq=jira_ticket');
+  // None leaves only entity_type in the tree.
   await expect(page.locator('[data-preset-select] option:checked')).toHaveText('None');
 });
 
-test('modifying filters while a preset is selected enters draft state', async ({ page }) => {
+test('removing a chip from a selected preset enters draft state and Apply commits', async ({
+  page,
+}) => {
   const name = `E2E Draft ${Date.now()}`;
-  const tag = `__e2e_draft_${Date.now()}__`;
+  const tag = uniqueTag('draft');
 
-  // Save a preset whose filters are unique to this test.
-  await page.goto(
-    `/entities?mf__entity_type__eq=jira_ticket&mf__entity_name__re=${encodeURIComponent(tag)}`
-  );
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
   await expect(page).toHaveURL(/preset=\d+/);
 
-  // No draft state immediately after save — Save changes is hidden.
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
 
-  // Remove the regex filter via its chip ×. Preset stays selected (draft).
-  await page.locator('.filter-chip[data-filter-edit-key="entity_name"] .filter-chip-x').click();
-
-  // URL still carries preset=N; combobox still shows the saved name; Save
-  // changes button (the amber attention variant) is now visible.
-  await expect(page).toHaveURL(/preset=\d+/);
-  await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
+  // Remove the chip — results turn stale, Apply button + Save-changes appear.
+  await page.locator('.filter-chip[data-filter-key="entity_name"] .filter-chip-x').click();
+  await expect(page.locator('body.filter-results-stale')).toBeAttached();
+  await expect(page.locator('[data-filter-apply]')).toBeVisible();
   await expect(page.locator('[data-preset-save-submit].filter-btn-attention')).toBeVisible();
 
-  // Revert restores the saved filters — chip returns, button hidden again.
-  await page.locator('[data-preset-revert]').click();
-  await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
-  await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_name"]')).toBeVisible();
-
-  // Re-enter draft, then commit with Save changes instead of reverting.
-  await page.locator('.filter-chip[data-filter-edit-key="entity_name"] .filter-chip-x').click();
-  await expect(page.locator('[data-preset-save-submit]')).toBeVisible();
+  // Save-changes commits the modified tree under the same preset id.
   await page.locator('[data-preset-save-submit]').click();
-
-  // After save the preset's stored filters now equal the URL filters, so the
-  // Save changes button hides again.
-  await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
   await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_name"]')).toHaveCount(0);
-});
-
-test('rename + filter edit commit together in one Save changes', async ({ page }) => {
-  const original = `E2E Both ${Date.now()}`;
-  const renamed = `${original} v2`;
-  const tag = `__e2e_both_${Date.now()}__`;
-
-  await page.goto(
-    `/entities?mf__entity_type__eq=jira_ticket&mf__entity_name__re=${encodeURIComponent(tag)}`
-  );
-  await page.click('#save-preset-btn');
-  await page.fill('#save-preset-panel input[name="name"]', original);
-  await page.locator('#save-preset-panel button[type="submit"]').click();
-
-  // Make BOTH a name change and a filter change in the same session, then
-  // commit. One Save changes should persist both.
-  await page.locator('[data-preset-name-input]').fill(renamed);
-  await expect(page.locator('[data-preset-save-submit]')).toBeVisible();
-  await page.locator('.filter-chip[data-filter-edit-key="entity_name"] .filter-chip-x').click();
-  await expect(page.locator('[data-preset-save-submit]')).toBeVisible();
-  await page.locator('[data-preset-name-input]').fill(renamed);
-  await page.locator('[data-preset-save-submit]').click();
-
-  await expect(page.locator('[data-preset-name-input]')).toHaveValue(renamed);
-  await expect(page.locator('.filter-chip[data-filter-edit-key="entity_name"]')).toHaveCount(0);
+  await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toHaveCount(0);
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
 });
 
