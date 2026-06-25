@@ -300,12 +300,12 @@ function dropLine(parentId: string, index: number): HTMLElement {
 function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLElement {
   const negated = allLeavesNegatedClient(group);
   const el = document.createElement('div');
-  el.className = `filter-group${isRoot ? ' filter-group--root' : ''}${negated ? ' filter-group--negated' : ''}`;
+  el.className = `filter-group${isRoot ? ' filter-group--root' : ''}${!isRoot && negated ? ' filter-group--negated' : ''}`;
   el.dataset.nodeId = group.id;
   el.dataset.nodeType = 'group';
   el.dataset.groupOp = group.op;
   el.dataset.depth = String(depth);
-  if (negated) el.dataset.negated = 'true';
+  if (!isRoot && negated) el.dataset.negated = 'true';
   if (!isRoot) el.draggable = true;
 
   if (!isRoot) {
@@ -1167,11 +1167,6 @@ function openGroupRemoveConfirm(groupId: string, anchor: HTMLElement) {
   panel.className = 'filter-widget-panel filter-group-remove-confirm';
   panel.dataset.groupRemoveConfirm = '1';
   panel.style.position = 'absolute';
-
-  const label = document.createElement('span');
-  label.className = 'filter-widget-label';
-  label.textContent = 'Remove group?';
-  panel.appendChild(label);
 
   const removeAll = document.createElement('button');
   removeAll.type = 'button';
