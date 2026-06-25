@@ -463,15 +463,6 @@ export const FilterBar: FC<FilterBarProps> = ({
           </button>
         )}
 
-        <button
-          type="button"
-          class="filter-btn filter-btn-apply"
-          data-filter-apply
-          style="display:none"
-        >
-          Apply changes
-        </button>
-
         {visibleTree.children.length > 0 && selectedEntityType && (
           <a href={bareTypeUrl} class="filter-clear" data-clear-all>
             Clear all

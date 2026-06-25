@@ -231,8 +231,15 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
 
     // Returns available filter metadata keys for the given set of matched entity IDs.
     // Accepts the already-filtered entity list so reactive narrowing is always exact.
-    async getAvailableFilters(entityIds: number[]): Promise<AvailableFilter[]> {
+    // `allDistinctValues: true` lifts the per-field 20-value cap on distinctValues
+    // — only the filter editor's "values with this leaf disabled" fetch should pass
+    // it, since other call sites embed the values in initial page HTML.
+    async getAvailableFilters(
+      entityIds: number[],
+      opts: { allDistinctValues?: boolean } = {}
+    ): Promise<AvailableFilter[]> {
       if (entityIds.length === 0) return [];
+      const distinctLimit = opts.allDistinctValues ? Infinity : 20;
 
       const placeholders = entityIds.map(() => '?').join(', ');
       const rows = await adapter.query<{
@@ -276,7 +283,7 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
             value_type: vt,
             entityType: entity_type,
           };
-          if (vt === 'string' && values.size <= 20) {
+          if (vt === 'string' && values.size <= distinctLimit) {
             filter.distinctValues = Array.from(values).sort();
           }
           return filter;

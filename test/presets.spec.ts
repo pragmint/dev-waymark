@@ -204,10 +204,10 @@ test('removing a chip from a selected preset enters draft state and Apply commit
 
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
 
-  // Remove the chip — results turn stale, Apply button + Save-changes appear.
+  // Remove the chip — auto-apply updates the URL; Save-changes appears because
+  // the live tree no longer matches the pinned preset.
   await page.locator('.filter-chip[data-filter-key="entity_name"] .filter-chip-x').click();
-  await expect(page.locator('body.filter-results-stale')).toBeAttached();
-  await expect(page.locator('[data-filter-apply]')).toBeVisible();
+  await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toHaveCount(0);
   await expect(page.locator('[data-preset-save-submit].filter-btn-attention')).toBeVisible();
 
   // Save-changes commits the modified tree under the same preset id.

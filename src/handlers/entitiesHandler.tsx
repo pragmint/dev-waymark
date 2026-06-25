@@ -126,8 +126,12 @@ export async function entitiesHandler(c: Context) {
     pagedResult = { pageEntities: [], allIds: unfiltered.ids, total: 0 };
   }
 
+  // The filter editor refetches available values with the leaf-being-edited
+  // removed and needs every distinct value (not the capped initial-render set)
+  // — when `all_distinct=1` is set, lift the per-field cap.
+  const allDistinctValues = c.req.query('all_distinct') === '1';
   const availableFilters = selectedEntityType
-    ? await repo.getAvailableFilters(pagedResult.allIds)
+    ? await repo.getAvailableFilters(pagedResult.allIds, { allDistinctValues })
     : unfiltered.available;
 
   const presetsWithTree = await appStateRepo.listPresetsWithTree();

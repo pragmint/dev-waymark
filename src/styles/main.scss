@@ -1236,16 +1236,6 @@ form {
   padding: 10px 12px;
 }
 
-.filter-btn-apply {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
-
-  &:hover {
-    filter: brightness(1.05);
-  }
-}
-
 // Drag-and-drop affordances
 .filter-chip[draggable='true'],
 .filter-group[draggable='true'] {
@@ -1451,6 +1441,14 @@ body.filter-dragging * {
   }
 }
 
+// The chip currently being edited in the popover. Greyed out to signal that
+// the filter is temporarily disabled — its constraint is dropped when the
+// editor computes the unrestricted set of available values.
+.filter-chip--editing {
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
+
 // Negated group — red dashed border + subtle tint, same visual language as
 // the negated chip, scaled up. Applied when every leaf descendant is NOT'd.
 .filter-group--negated {
@@ -1459,11 +1457,15 @@ body.filter-dragging * {
   background: rgba(214, 57, 57, 0.04);
 }
 
-// Greyed-out results while uncommitted filter changes exist
-.filter-results-stale .entity-table,
-.filter-results-stale .table-scroll-wrap,
-.filter-results-stale .pagination {
+// Grey out the results while an auto-apply fetch is in flight, so the user
+// can see the current view is stale relative to the filter tree they edited.
+// Cleared once the latest fetch's swap completes.
+.filter-results-loading [data-results-count],
+.filter-results-loading [data-results-region] {
   opacity: 0.5;
   pointer-events: none;
   filter: grayscale(0.4);
+  transition:
+    opacity 120ms ease,
+    filter 120ms ease;
 }

@@ -54,11 +54,16 @@ for (let i = 1; i <= 25; i++) {
   );
 }
 
-// A few github_pr rows so the entity_type filter has more than one distinct value.
-for (let i = 26; i <= 30; i++) {
+// github_pr rows — enough distinct creators (>20) that the default
+// distinctValues cap excludes them from the initial page render. The filter
+// editor must lift that cap when it loads "values available with this filter
+// disabled", so this seed exercises that path realistically.
+const PR_COUNT = 25;
+for (let i = 26; i <= 25 + PR_COUNT; i++) {
   entities.push({ id: i, name: `PR-${String(i - 25).padStart(4, '0')}`, type: 'github_pr' });
   metadata.push(
     s(i, 'pr_state', i % 2 === 0 ? 'merged' : 'closed'),
+    s(i, 'creator', `dev-${String(i - 25).padStart(3, '0')}`),
     n(i, 'additions', String(50 + i * 10)),
     d(i, 'pr_created_at', isoDate(i)),
     d(i, 'pr_merged_at', isoDate(i + 2))

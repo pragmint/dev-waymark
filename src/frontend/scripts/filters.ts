@@ -39,7 +39,6 @@ type FilterConfig = {
 };
 
 const state = {
-  applied: emptyTree(),
   current: emptyTree(),
   available: [] as AvailableFilter[],
   config: { selectedPresetId: null, selectedEntityType: null, isDraft: false } as FilterConfig,
@@ -56,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
   wirePresetSelect();
   wireTreeContainer();
   wireAddFilter();
-  wireApply();
   wireSavePresetForm();
   wireClearAll();
   wirePresetSaveChanges();
@@ -73,9 +71,7 @@ function hydrate() {
     // Normalize any legacy NOT(group) into per-leaf NOTs. The SSR already
     // does this for its DOM render, but if the JSON embed was produced by an
     // older code path we make sure the live state matches the UI model.
-    const normalized = normalizeTreeNots(treeRaw) as FilterTree;
-    state.applied = normalized;
-    state.current = clone(normalized);
+    state.current = normalizeTreeNots(treeRaw) as FilterTree;
   }
   const available = readJsonEmbed('filter-available');
   if (Array.isArray(available)) state.available = available as AvailableFilter[];
@@ -108,11 +104,6 @@ function isFilterTree(v: unknown): v is FilterTree {
 
 function emptyTree(): FilterTree {
   return { type: 'group', id: 'root', op: 'AND', children: [] };
-}
-
-function clone<T>(v: T): T {
-  if (typeof structuredClone === 'function') return structuredClone(v);
-  return JSON.parse(JSON.stringify(v)) as T;
 }
 
 function nextId(prefix: string): string {
@@ -210,20 +201,77 @@ function render() {
   root.innerHTML = '';
   root.appendChild(renderNode(state.current, 0, true));
 
-  const dirty = !treesEqual(state.applied, state.current);
-  document.body.classList.toggle('filter-results-stale', dirty);
-
-  const apply = document.querySelector<HTMLElement>('[data-filter-apply]');
-  if (apply) apply.style.display = dirty ? '' : 'none';
-
-  // Preset "Save changes" button mirrors dirtiness.
+  // Preset "Save changes" button shows when the visible tree no longer matches
+  // the active preset's saved tree (or when the preset name has been edited).
+  // The server's initial draft verdict is preserved via `data-server-is-draft`
+  // so a fresh page load with `?preset=N&f=...` (pinned-but-drifted state)
+  // still surfaces the dot.
   const presetForm = document.querySelector<HTMLElement>('[data-preset-save-changes]');
   if (presetForm) {
+    const treeDirty = presetTreesDiffer();
+    const nameInput = presetForm.querySelector<HTMLInputElement>('[data-preset-name-input]');
+    const original = nameInput?.dataset.originalName ?? '';
+    const nameDirty = nameInput ? nameInput.value !== original : false;
     presetForm.dataset.isDraft =
-      dirty || presetForm.dataset.serverIsDraft === 'true' ? 'true' : 'false';
+      treeDirty || nameDirty || presetForm.dataset.serverIsDraft === 'true' ? 'true' : 'false';
   }
 
   refreshSelectionToolbar();
+}
+
+// Auto-apply: every filter-tree mutation calls commit(), which both re-renders
+// the chips and kicks off a fetch that swaps the results region + count in
+// place. The URL is updated via replaceState so the address bar always reflects
+// the live tree. Stale-response races are handled by `pendingApplyId`.
+let pendingApplyId = 0;
+
+function commit() {
+  render();
+  applyFilters();
+}
+
+async function applyFilters() {
+  const url = buildUrl(state.current, state.config.selectedPresetId);
+  const myId = ++pendingApplyId;
+  history.replaceState(null, '', url);
+  document.body.classList.add('filter-results-loading');
+  try {
+    const resp = await fetch(url, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+    if (myId !== pendingApplyId) return;
+    if (!resp.ok) return;
+    const html = await resp.text();
+    if (myId !== pendingApplyId) return;
+    swapResults(html);
+  } catch {
+    // network failures: leave stale results in place; the next mutation retries
+  } finally {
+    // Only the latest in-flight request clears the loading class. A superseded
+    // earlier request must NOT remove it — the newer fetch is still pending.
+    if (myId === pendingApplyId) {
+      document.body.classList.remove('filter-results-loading');
+    }
+  }
+}
+
+function swapResults(html: string) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  const newCount = doc.querySelector('[data-results-count]');
+  const oldCount = document.querySelector('[data-results-count]');
+  if (newCount && oldCount) oldCount.replaceWith(newCount);
+
+  const newRegion = doc.querySelector('[data-results-region]');
+  const oldRegion = document.querySelector('[data-results-region]');
+  if (newRegion && oldRegion) {
+    oldRegion.replaceWith(newRegion);
+    document.dispatchEvent(new CustomEvent('entities:results-swapped'));
+  }
+}
+
+function presetTreesDiffer(): boolean {
+  const raw = readJsonEmbed('filter-selected-preset-tree');
+  if (!raw || !isFilterTree(raw)) return false;
+  return !treesEqual(mergeEntityType(state.current), raw);
 }
 
 // NOT(leaf) collapses into a negated chip; the wrapper itself isn't rendered.
@@ -390,7 +438,7 @@ function addLeaf(key: string) {
   const op = defaultOpFor(available);
   const value = defaultValueFor(available);
   state.current.children.push({ type: 'filter', id: nextId('l'), key, op, value });
-  render();
+  commit();
 }
 
 function defaultOpFor(f: AvailableFilter | undefined): LeafOp {
@@ -417,7 +465,7 @@ function removeNode(id: string) {
   flattenSameOp(state.current);
   pruneEmptyNotGroups(state.current);
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 // Dissolve a group container, splicing its children up into the parent.
@@ -431,7 +479,7 @@ function ungroupNode(id: string) {
   if (target.op === 'NOT') return;
   ref.parent.children.splice(ref.index, 1, ...target.children);
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 // If any non-root group has exactly one child after a mutation, replace the
@@ -474,7 +522,7 @@ function togglePairOp(groupId: string, rightIndex: number) {
   // 2-child group: a flip is unambiguous — just change the group's op.
   if (group.children.length === 2) {
     group.op = newOp;
-    render();
+    commit();
     return;
   }
 
@@ -500,7 +548,7 @@ function togglePairOp(groupId: string, rightIndex: number) {
 
   flattenSameOp(state.current);
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 // Collapse a child group whose op matches its parent's into the parent — e.g.
@@ -542,7 +590,7 @@ function toggleNot(id: string) {
       const grandRef = findParent(state.current, ref.parent.id);
       if (grandRef) {
         grandRef.parent.children.splice(grandRef.index, 1, node);
-        render();
+        commit();
         return;
       }
     }
@@ -554,14 +602,14 @@ function toggleNot(id: string) {
       children: [node],
     };
     ref.parent.children.splice(ref.index, 1, notGroup);
-    render();
+    commit();
     return;
   }
 
   // Group: bulk-set every leaf to !current-state.
   const target = !allLeavesNegatedClient(node);
   setAllLeavesNegated(node, target);
-  render();
+  commit();
 }
 
 // `true` iff every leaf descendant of `node` sits in a unary NOT wrapper.
@@ -641,7 +689,7 @@ function wrapWithNew(targetId: string, draggedId: string, op: GroupOp) {
   targetRef.parent.children.splice(targetRef.index, 1, group);
   pruneEmptyNotGroups(state.current);
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 function findNodeOrThrow(id: string): FilterNode {
@@ -683,7 +731,7 @@ function moveNode(sourceId: string, dest: { parentId: string; index: number }) {
   flattenSameOp(state.current);
   pruneEmptyNotGroups(state.current);
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 function updateLeaf(id: string, patch: Partial<Pick<FilterLeaf, 'op' | 'value'>>) {
@@ -691,7 +739,7 @@ function updateLeaf(id: string, patch: Partial<Pick<FilterLeaf, 'op' | 'value'>>
   if (!node || node.type !== 'filter') return;
   if (patch.op !== undefined) node.op = patch.op;
   if (patch.value !== undefined) node.value = patch.value;
-  render();
+  commit();
 }
 
 // ── Selection ────────────────────────────────────────────────────────────────
@@ -752,7 +800,7 @@ function groupNodes(ids: string[], op: GroupOp) {
   // Skip flattenSameOp: the user explicitly picked this op via the toolbar;
   // don't silently collapse the resulting nesting even if it matches parent.
   collapseSingletons(state.current);
-  render();
+  commit();
 }
 
 function refreshSelectionToolbar() {
@@ -1034,14 +1082,6 @@ function wireAddFilter() {
   });
 }
 
-function wireApply() {
-  const btn = document.querySelector<HTMLButtonElement>('[data-filter-apply]');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    location.href = buildUrl(state.current, state.config.selectedPresetId);
-  });
-}
-
 function wireSavePresetForm() {
   const form = document.querySelector<HTMLFormElement>('[data-save-preset-form]');
   if (!form) return;
@@ -1088,16 +1128,21 @@ function wirePresetSaveChanges() {
 function openLeafEditor(leafId: string) {
   const leaf = findNode(state.current, leafId);
   if (!leaf || leaf.type !== 'filter') return;
-  const available = state.available.find(a => a.key === leaf.key);
-  if (!available) return;
+  const initialAvailable = state.available.find(a => a.key === leaf.key);
+  if (!initialAvailable) return;
 
   const existing = document.querySelector<HTMLElement>('[data-leaf-editor]');
   existing?.remove();
 
+  // While the editor is open the chip is "disabled" — visually greyed out so
+  // the user can see the filter is being excluded from the value computation.
+  const chip = document.querySelector<HTMLElement>(`[data-node-id="${leafId}"]`);
+  chip?.classList.add('filter-chip--editing');
+
   const editor = document.createElement('div');
   editor.className = 'filter-widget-panel';
   editor.dataset.leafEditor = '1';
-  editor.dataset.filterType = available.value_type;
+  editor.dataset.filterType = initialAvailable.value_type;
   editor.style.position = 'absolute';
   editor.innerHTML = '';
 
@@ -1106,7 +1151,10 @@ function openLeafEditor(leafId: string) {
   label.textContent = formatFieldLabel(leaf.key);
   editor.appendChild(label);
 
-  const body = renderWidgetBody(leaf, available);
+  // `body` and `activeAvailable` are mutable so the async fetch for the
+  // unrestricted value set can replace the rendered widget once it lands.
+  let activeAvailable: AvailableFilter = initialAvailable;
+  let body = renderWidgetBody(leaf, activeAvailable);
   editor.appendChild(body);
 
   const apply = document.createElement('button');
@@ -1125,28 +1173,84 @@ function openLeafEditor(leafId: string) {
 
   positionEditor(editor, leafId);
 
-  apply.addEventListener('click', () => {
-    const patch = readWidgetBody(body, available);
-    if (patch) updateLeaf(leafId, patch);
-    editor.remove();
+  // Fetch the available-values set with this leaf removed from the tree, so
+  // the multi-select shows every value reachable when the filter is disabled
+  // (not just the narrow set its own predicate currently allows).
+  fetchAvailableWithoutLeaf(leafId).then(unrestricted => {
+    if (!editor.isConnected) return;
+    const match = unrestricted.find(a => a.key === leaf.key);
+    if (!match) return;
+    activeAvailable = match;
+    const fresh = renderWidgetBody(leaf, activeAvailable);
+    body.replaceWith(fresh);
+    body = fresh;
+    editor.dataset.filterType = activeAvailable.value_type;
+    positionEditor(editor, leafId);
   });
-  cancel.addEventListener('click', () => editor.remove());
+
+  const close = () => {
+    editor.remove();
+    chip?.classList.remove('filter-chip--editing');
+    document.removeEventListener('keydown', escListener);
+    document.removeEventListener('mousedown', outsideClick);
+  };
+
+  apply.addEventListener('click', () => {
+    const patch = readWidgetBody(body, activeAvailable);
+    if (patch) updateLeaf(leafId, patch);
+    close();
+  });
+  cancel.addEventListener('click', close);
   document.addEventListener('keydown', escListener);
 
   function escListener(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      editor.remove();
-      document.removeEventListener('keydown', escListener);
-    }
+    if (e.key === 'Escape') close();
   }
 
   document.addEventListener('mousedown', outsideClick);
   function outsideClick(e: MouseEvent) {
-    if (!editor.contains(e.target as Node)) {
-      editor.remove();
-      document.removeEventListener('mousedown', outsideClick);
-    }
+    if (!editor.contains(e.target as Node)) close();
   }
+}
+
+// Build a clone of state.current with `leafId` removed, then collapse any
+// groups it leaves empty. Used by the editor to ask the server "what values
+// would be available if this leaf were turned off?".
+function cloneTreeWithoutLeaf(tree: FilterTree, leafId: string): FilterTree {
+  function strip(node: FilterNode): FilterNode | null {
+    if (node.type === 'filter') return node.id === leafId ? null : { ...node };
+    const kept: FilterNode[] = [];
+    for (const c of node.children) {
+      const cloned = strip(c);
+      if (cloned !== null) kept.push(cloned);
+    }
+    if (kept.length === 0) return null;
+    return { ...node, children: kept };
+  }
+  const stripped = strip(tree);
+  if (stripped === null || stripped.type === 'filter') return emptyTree();
+  return stripped as FilterTree;
+}
+
+async function fetchAvailableWithoutLeaf(leafId: string): Promise<AvailableFilter[]> {
+  const cloned = cloneTreeWithoutLeaf(state.current, leafId);
+  const baseUrl = buildUrl(cloned, state.config.selectedPresetId);
+  // `all_distinct=1` tells the handler to skip the default 20-value cap so
+  // the editor's multi-select gets every value, not a truncated set.
+  const url = baseUrl.includes('?') ? `${baseUrl}&all_distinct=1` : `${baseUrl}?all_distinct=1`;
+  try {
+    const resp = await fetch(url, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+    if (!resp.ok) return state.available;
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const embed = doc.getElementById('filter-available');
+    if (!embed) return state.available;
+    const parsed = JSON.parse(embed.textContent ?? '');
+    if (Array.isArray(parsed)) return parsed as AvailableFilter[];
+  } catch {
+    // Fall back to whatever's already in client state; better than nothing.
+  }
+  return state.available;
 }
 
 function positionEditor(editor: HTMLElement, leafId: string) {
