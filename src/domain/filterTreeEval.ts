@@ -43,8 +43,11 @@ function matchesRegex(raw: string, pattern: string): boolean {
 function leafMatches(leaf: FilterLeaf, entity: EntityWithMetadata): boolean {
   const raw = leafValueFor(leaf, entity);
   if (leaf.op === 'eq') return matchesEq(raw, leaf.value);
-  if (raw == null) return false;
   const target = Array.isArray(leaf.value) ? leaf.value[0] : leaf.value;
+  // Empty-value range filters carry IS NULL semantics — a date/number filter
+  // with no bound specified matches entities whose value is unset.
+  if ((leaf.op === 'gte' || leaf.op === 'lte') && !target) return raw == null;
+  if (raw == null) return false;
   if (target == null) return false;
   if (leaf.op === 'contains') return raw.includes(target);
   if (leaf.op === 'gte' || leaf.op === 'lte') return compareNumOrLex(raw, target, leaf.op);

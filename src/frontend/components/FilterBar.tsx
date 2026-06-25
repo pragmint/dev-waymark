@@ -107,7 +107,9 @@ const FilterTreeView: FC<{
         </span>
         <span class="filter-chip-content" data-edit-leaf>
           <span class="filter-chip-key">{formatFieldLabel(leaf.key)}:</span>{' '}
-          <span class="filter-chip-val">{leafLabel(leaf)}</span>
+          <span class="filter-chip-val" title={leafLabel(leaf)}>
+            {leafLabel(leaf)}
+          </span>
         </span>
         <NotBtn id={leaf.id} active={negated} label={`Negate ${leaf.key} filter`} />
         <button

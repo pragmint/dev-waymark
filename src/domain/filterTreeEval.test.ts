@@ -53,6 +53,29 @@ describe('evaluateFilterTree — leaves', () => {
     expect(evaluateFilterTree(makeLeaf('active_prs', 'lte', '3'), entity())).toBe(true);
   });
 
+  it('treats empty-value gte / lte as IS NULL', () => {
+    // Key absent from metadata → matches.
+    expect(evaluateFilterTree(makeLeaf('started_at', 'gte', ''), entity())).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('started_at', 'lte', ''), entity())).toBe(true);
+    // Key present with a value → does not match.
+    expect(evaluateFilterTree(makeLeaf('active_prs', 'gte', ''), entity())).toBe(false);
+    expect(evaluateFilterTree(makeLeaf('active_prs', 'lte', ''), entity())).toBe(false);
+    // Key present with an explicit null value → matches.
+    const withNullMeta = entity({
+      metadata: [
+        {
+          entity_id: 1,
+          key: 'started_at',
+          value: null,
+          value_type: 'date',
+          created_at: '',
+          updated_at: '',
+        },
+      ],
+    });
+    expect(evaluateFilterTree(makeLeaf('started_at', 'gte', ''), withNullMeta)).toBe(true);
+  });
+
   it('matches regex', () => {
     expect(evaluateFilterTree(makeLeaf('owner', 're', '^Da'), entity())).toBe(true);
     expect(evaluateFilterTree(makeLeaf('owner', 're', '^Sa'), entity())).toBe(false);

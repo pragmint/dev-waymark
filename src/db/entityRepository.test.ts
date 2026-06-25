@@ -116,6 +116,21 @@ describe('entityRepository', () => {
     expect(results[0].id).toBe(2);
   });
 
+  it('treats an empty-value date filter as IS NULL on metadata', async () => {
+    // Entity 1 has a value, entity 2 has the key with an explicit null,
+    // entity 3 has no row for the key at all. Only 2 and 3 should match.
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'started-date', value: '2026-02-11', value_type: 'date' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'started-date', value: null, value_type: 'date' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 3, name: 'C' }), []);
+    const results = await repo.list(makeGroup('AND', [makeLeaf('started-date', 'gte', '')]));
+    const ids = results.map(r => r.id).sort();
+    expect(ids).toEqual([2, 3]);
+  });
+
   it('filters entities by date metadata range', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
       makeMetadata(1, {

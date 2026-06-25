@@ -67,6 +67,16 @@ function rangeSql(
   entityField: EntityFieldConfig | undefined,
   cmp: '>=' | '<='
 ): SqlFragment {
+  if (value === '') {
+    // Empty bound carries IS NULL semantics — match entities with no value.
+    if (entityField) {
+      return { sql: `e.${entityField.column} IS NULL`, params: [] };
+    }
+    return {
+      sql: `NOT EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value IS NOT NULL)`,
+      params: [leaf.key],
+    };
+  }
   if (entityField) {
     return { sql: `e.${entityField.column} ${cmp} ?`, params: [value] };
   }

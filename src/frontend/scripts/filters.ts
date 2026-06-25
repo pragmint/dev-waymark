@@ -322,7 +322,8 @@ function renderLeaf(leaf: FilterLeaf, negated: boolean): HTMLElement {
   const content = document.createElement('span');
   content.className = 'filter-chip-content';
   content.dataset.editLeaf = '1';
-  content.innerHTML = `<span class="filter-chip-key">${escapeHtml(formatFieldLabel(leaf.key))}:</span> <span class="filter-chip-val">${escapeHtml(leafLabel(leaf))}</span>`;
+  const valLabel = leafLabel(leaf);
+  content.innerHTML = `<span class="filter-chip-key">${escapeHtml(formatFieldLabel(leaf.key))}:</span> <span class="filter-chip-val" title="${escapeHtml(valLabel)}">${escapeHtml(valLabel)}</span>`;
   chip.appendChild(content);
 
   chip.appendChild(notBtn(leaf.id, negated, `Negate ${leaf.key} filter`));
@@ -409,8 +410,10 @@ function leafLabel(leaf: FilterLeaf): string {
   const v = leaf.value;
   if (leaf.op === 'eq') return Array.isArray(v) ? v.join(', ') : v;
   const s = Array.isArray(v) ? v[0] : v;
-  if (leaf.op === 'gte') return `≥ ${s}`;
-  if (leaf.op === 'lte') return `≤ ${s}`;
+  if (leaf.op === 'gte' || leaf.op === 'lte') {
+    if (!s) return 'null';
+    return leaf.op === 'gte' ? `≥ ${s}` : `≤ ${s}`;
+  }
   if (leaf.op === 're') return `/${s}/`;
   if (leaf.op === 'contains') return `~${s}`;
   return String(s);
@@ -1464,7 +1467,8 @@ function readRangeBody(body: HTMLElement): LeafPatch {
   const lte = body.querySelector<HTMLInputElement>('input[data-op="lte"]')?.value ?? '';
   if (gte) return { op: 'gte', value: gte };
   if (lte) return { op: 'lte', value: lte };
-  return null;
+  // Both bounds blank → commit an IS NULL filter (match entities with no value).
+  return { op: 'gte', value: '' };
 }
 
 function readStringModesBody(modes: HTMLElement): LeafPatch {

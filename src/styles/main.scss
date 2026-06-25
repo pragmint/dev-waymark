@@ -428,6 +428,14 @@ form {
   color: var(--color-muted);
 }
 
+.filter-chip-val {
+  display: inline-block;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
 .filter-chip-x {
   display: flex;
   align-items: center;
@@ -1193,6 +1201,28 @@ form {
   border-radius: var(--radius);
   background: rgba(0, 0, 0, 0.02);
   position: relative;
+}
+
+// Non-root groups pin the NOT/× buttons to the top-right corner so they don't
+// wrap onto their own line when the children overflow horizontally. The extra
+// padding-right reserves room so wrapped children never slide under them.
+.filter-group:not(.filter-group--root) {
+  padding-right: calc(var(--control-height) * 2 + 8px);
+
+  > .filter-not-btn,
+  > .filter-group-x {
+    position: absolute;
+    top: 8px;
+  }
+
+  > .filter-not-btn {
+    right: calc(var(--control-height) + 8px);
+    border-left: 0;
+  }
+
+  > .filter-group-x {
+    right: 8px;
+  }
 }
 
 .filter-group--root {
