@@ -373,22 +373,33 @@ function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLEl
   } else {
     // Insertion-line drop zones bracket every child so the user has a drop
     // target on both sides of every node. Between two siblings the op-badge
-    // is flanked by drop-lines, both targeting the same index.
-    el.appendChild(dropLine(group.id, 0));
+    // is flanked by drop-lines, both targeting the same index. Each drop-line
+    // is bundled with its adjacent chip / op-badge into a .filter-tree-cluster
+    // so the pair wraps together and never orphans onto its own line.
     group.children.forEach((child, i) => {
-      if (i > 0) {
-        const badge = document.createElement('button');
-        badge.type = 'button';
-        badge.className = 'filter-op-badge';
-        badge.dataset.togglePair = `${group.id}:${i}`;
-        badge.draggable = false;
-        badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
-        badge.textContent = group.op;
-        el.appendChild(badge);
-        el.appendChild(dropLine(group.id, i));
+      if (i === 0) {
+        const cluster = document.createElement('div');
+        cluster.className = 'filter-tree-cluster';
+        cluster.appendChild(dropLine(group.id, 0));
+        cluster.appendChild(renderNode(child, depth + 1, false));
+        cluster.appendChild(dropLine(group.id, 1));
+        el.appendChild(cluster);
+        return;
       }
-      el.appendChild(renderNode(child, depth + 1, false));
-      el.appendChild(dropLine(group.id, i + 1));
+      const cluster = document.createElement('div');
+      cluster.className = 'filter-tree-cluster';
+      const badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = 'filter-op-badge';
+      badge.dataset.togglePair = `${group.id}:${i}`;
+      badge.draggable = false;
+      badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
+      badge.textContent = group.op;
+      cluster.appendChild(badge);
+      cluster.appendChild(dropLine(group.id, i));
+      cluster.appendChild(renderNode(child, depth + 1, false));
+      cluster.appendChild(dropLine(group.id, i + 1));
+      el.appendChild(cluster);
     });
   }
 

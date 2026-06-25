@@ -1307,6 +1307,16 @@ body.filter-dragging * {
   opacity: 0.4;
 }
 
+// Binds each drop-line to its adjacent chip / op-badge so the pair wraps as a
+// unit. Without this, flex-wrap can leave a drop-line stranded at the end of
+// one line while its badge moves to the next (or vice versa). Internal gap
+// matches the parent .filter-group gap so spacing is visually identical.
+.filter-tree-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 // Insertion-line drop zones between sibling nodes. Idle: an invisible 8px-wide
 // strip that flex-aligns to the chip height. Active: a 2px primary-color bar.
 .filter-drop-line {
