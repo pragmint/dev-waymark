@@ -65,6 +65,21 @@ describe('FilterTreeSchema', () => {
     const bad = { type: 'group', id: 'g1', op: 'XOR', children: [] };
     expect(FilterNodeSchema.safeParse(bad).success).toBe(false);
   });
+
+  it('accepts a NOT group with exactly one child', () => {
+    const tree = makeGroup('AND', [makeGroup('NOT', [makeLeaf('owner', 'eq', 'Dave')])]);
+    expect(() => FilterTreeSchema.parse(tree)).not.toThrow();
+  });
+
+  it('rejects a NOT group with zero children', () => {
+    const bad = makeGroup('NOT', []);
+    expect(FilterNodeSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects a NOT group with more than one child', () => {
+    const bad = makeGroup('NOT', [makeLeaf('a', 'eq', '1'), makeLeaf('b', 'eq', '2')]);
+    expect(FilterNodeSchema.safeParse(bad).success).toBe(false);
+  });
 });
 
 describe('emptyTree', () => {

@@ -5,7 +5,7 @@
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 
 type LeafOp = 'eq' | 'contains' | 'gte' | 'lte' | 're';
-type GroupOp = 'AND' | 'OR';
+type GroupOp = 'AND' | 'OR' | 'NOT';
 
 type FilterLeaf = {
   type: 'filter';
@@ -70,8 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
 function hydrate() {
   const treeRaw = readJsonEmbed('filter-tree-initial');
   if (treeRaw && isFilterTree(treeRaw)) {
-    state.applied = treeRaw;
-    state.current = clone(treeRaw);
+    // Normalize any legacy NOT(group) into per-leaf NOTs. The SSR already
+    // does this for its DOM render, but if the JSON embed was produced by an
+    // older code path we make sure the live state matches the UI model.
+    const normalized = normalizeTreeNots(treeRaw) as FilterTree;
+    state.applied = normalized;
+    state.current = clone(normalized);
   }
   const available = readJsonEmbed('filter-available');
   if (Array.isArray(available)) state.available = available as AvailableFilter[];
@@ -222,18 +226,43 @@ function render() {
   refreshSelectionToolbar();
 }
 
+// NOT(leaf) collapses into a negated chip; the wrapper itself isn't rendered.
+// All other NOT shapes were eliminated on hydrate (`normalizeTreeNots`), so
+// the view layer only deals with NOT(leaf) and AND/OR groups.
 function renderNode(node: FilterNode, depth: number, isRoot: boolean): HTMLElement {
-  if (node.type === 'filter') return renderLeaf(node);
+  if (
+    node.type === 'group' &&
+    node.op === 'NOT' &&
+    node.children.length === 1 &&
+    node.children[0].type === 'filter'
+  ) {
+    return renderLeaf(node.children[0], true);
+  }
+  if (node.type === 'filter') return renderLeaf(node, false);
   return renderGroup(node, depth, isRoot);
 }
 
-function renderLeaf(leaf: FilterLeaf): HTMLElement {
+function notBtn(id: string, active: boolean, label: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `filter-not-btn${active ? ' filter-not-btn--active' : ''}`;
+  btn.dataset.toggleNot = id;
+  btn.draggable = false;
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  btn.setAttribute('aria-label', label);
+  btn.title = active ? 'Remove !' : 'Negate';
+  btn.textContent = '!';
+  return btn;
+}
+
+function renderLeaf(leaf: FilterLeaf, negated: boolean): HTMLElement {
   const chip = document.createElement('span');
-  chip.className = 'filter-chip';
+  chip.className = `filter-chip${negated ? ' filter-chip--negated' : ''}`;
   if (state.selected.has(leaf.id)) chip.classList.add('filter-chip--selected');
   chip.dataset.nodeId = leaf.id;
   chip.dataset.nodeType = 'filter';
   chip.dataset.filterKey = leaf.key;
+  if (negated) chip.dataset.negated = 'true';
   chip.draggable = true;
 
   const grip = document.createElement('span');
@@ -247,6 +276,8 @@ function renderLeaf(leaf: FilterLeaf): HTMLElement {
   content.dataset.editLeaf = '1';
   content.innerHTML = `<span class="filter-chip-key">${escapeHtml(formatFieldLabel(leaf.key))}:</span> <span class="filter-chip-val">${escapeHtml(leafLabel(leaf))}</span>`;
   chip.appendChild(content);
+
+  chip.appendChild(notBtn(leaf.id, negated, `Negate ${leaf.key} filter`));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -267,12 +298,14 @@ function dropLine(parentId: string, index: number): HTMLElement {
 }
 
 function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLElement {
+  const negated = allLeavesNegatedClient(group);
   const el = document.createElement('div');
-  el.className = `filter-group${isRoot ? ' filter-group--root' : ''}`;
+  el.className = `filter-group${isRoot ? ' filter-group--root' : ''}${negated ? ' filter-group--negated' : ''}`;
   el.dataset.nodeId = group.id;
   el.dataset.nodeType = 'group';
   el.dataset.groupOp = group.op;
   el.dataset.depth = String(depth);
+  if (negated) el.dataset.negated = 'true';
   if (!isRoot) el.draggable = true;
 
   if (!isRoot) {
@@ -281,15 +314,6 @@ function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLEl
     grip.setAttribute('aria-hidden', 'true');
     grip.textContent = '⋮⋮';
     el.appendChild(grip);
-
-    const ungroup = document.createElement('button');
-    ungroup.type = 'button';
-    ungroup.className = 'filter-group-ungroup filter-group-ungroup--labeled';
-    ungroup.dataset.ungroup = '1';
-    ungroup.setAttribute('aria-label', 'Ungroup');
-    ungroup.title = 'Inline these filters into the parent group';
-    ungroup.textContent = 'Ungroup';
-    el.appendChild(ungroup);
   }
 
   if (group.children.length === 0) {
@@ -297,28 +321,38 @@ function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLEl
     empty.className = 'filter-group-empty';
     empty.textContent = 'No filters yet';
     el.appendChild(empty);
-    return el;
+  } else {
+    // Insertion-line drop zones bracket every child so the user has a drop
+    // target on both sides of every node. Between two siblings the op-badge
+    // is flanked by drop-lines, both targeting the same index.
+    el.appendChild(dropLine(group.id, 0));
+    group.children.forEach((child, i) => {
+      if (i > 0) {
+        const badge = document.createElement('button');
+        badge.type = 'button';
+        badge.className = 'filter-op-badge';
+        badge.dataset.togglePair = `${group.id}:${i}`;
+        badge.draggable = false;
+        badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
+        badge.textContent = group.op;
+        el.appendChild(badge);
+        el.appendChild(dropLine(group.id, i));
+      }
+      el.appendChild(renderNode(child, depth + 1, false));
+      el.appendChild(dropLine(group.id, i + 1));
+    });
   }
 
-  // Insertion-line drop zones bracket every child (chip OR group) so the user
-  // has a drop target on both sides of every node. Between two siblings the
-  // op-badge is flanked by drop-lines, both targeting the same index.
-  el.appendChild(dropLine(group.id, 0));
-  group.children.forEach((child, i) => {
-    if (i > 0) {
-      const badge = document.createElement('button');
-      badge.type = 'button';
-      badge.className = 'filter-op-badge';
-      badge.dataset.togglePair = `${group.id}:${i}`;
-      badge.draggable = false;
-      badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
-      badge.textContent = group.op;
-      el.appendChild(badge);
-      el.appendChild(dropLine(group.id, i));
-    }
-    el.appendChild(renderNode(child, depth + 1, false));
-    el.appendChild(dropLine(group.id, i + 1));
-  });
+  if (!isRoot) {
+    el.appendChild(notBtn(group.id, negated, 'Negate group'));
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'filter-group-x';
+    removeBtn.dataset.removeNode = '1';
+    removeBtn.setAttribute('aria-label', 'Remove group');
+    removeBtn.textContent = '×';
+    el.appendChild(removeBtn);
+  }
 
   return el;
 }
@@ -381,19 +415,49 @@ function removeNode(id: string) {
   if (!ref) return;
   ref.parent.children.splice(ref.index, 1);
   flattenSameOp(state.current);
+  pruneEmptyNotGroups(state.current);
+  collapseSingletons(state.current);
+  render();
+}
+
+// Dissolve a group container, splicing its children up into the parent.
+// Intentionally skips flattenSameOp: ungrouping must not flip AND↔OR on
+// neighbouring same-op nesting as a side effect.
+function ungroupNode(id: string) {
+  const ref = findParent(state.current, id);
+  if (!ref) return;
+  const target = ref.parent.children[ref.index];
+  if (target.type !== 'group') return;
+  if (target.op === 'NOT') return;
+  ref.parent.children.splice(ref.index, 1, ...target.children);
   collapseSingletons(state.current);
   render();
 }
 
 // If any non-root group has exactly one child after a mutation, replace the
-// group with that child in its parent. Single-child groups serve no purpose.
+// group with that child in its parent. Single-child groups serve no purpose —
+// except for NOT, which is unary by definition.
 function collapseSingletons(group: FilterGroup) {
   for (let i = 0; i < group.children.length; i++) {
     const c = group.children[i];
     if (c.type !== 'group') continue;
     collapseSingletons(c);
-    if (c.children.length === 1) {
+    if (c.op !== 'NOT' && c.children.length === 1) {
       group.children[i] = c.children[0];
+    }
+  }
+}
+
+// Remove NOT groups left childless by an earlier splice. NOT must have exactly
+// one child; a zero-child NOT is meaningless and would break the schema if
+// serialised.
+function pruneEmptyNotGroups(group: FilterGroup) {
+  for (let i = group.children.length - 1; i >= 0; i--) {
+    const c = group.children[i];
+    if (c.type !== 'group') continue;
+    pruneEmptyNotGroups(c);
+    if (c.op === 'NOT' && c.children.length === 0) {
+      group.children.splice(i, 1);
     }
   }
 }
@@ -401,6 +465,7 @@ function collapseSingletons(group: FilterGroup) {
 function togglePairOp(groupId: string, rightIndex: number) {
   const group = findNode(state.current, groupId);
   if (!group || group.type !== 'group') return;
+  if (group.op === 'NOT') return; // NOT is unary — no inter-sibling op to toggle.
   const leftIndex = rightIndex - 1;
   if (leftIndex < 0 || rightIndex >= group.children.length) return;
 
@@ -440,29 +505,118 @@ function togglePairOp(groupId: string, rightIndex: number) {
 
 // Collapse a child group whose op matches its parent's into the parent — e.g.
 // `(A AND (B AND C))` becomes `(A AND B AND C)`. Keeps the tree canonical so
-// equivalent expressions stringify the same way.
+// equivalent expressions stringify the same way. NOT is excluded because
+// `NOT(NOT(X))` is a deliberate double-negation the user chose — collapsing
+// it would silently change semantics.
 function flattenSameOp(group: FilterGroup) {
   for (let i = group.children.length - 1; i >= 0; i--) {
     const c = group.children[i];
     if (c.type !== 'group') continue;
     flattenSameOp(c);
-    if (c.op === group.op) {
+    if (c.op === group.op && c.op !== 'NOT') {
       group.children.splice(i, 1, ...c.children);
     }
   }
 }
 
-function ungroup(id: string) {
-  const ref = findParent(state.current, id);
-  if (!ref) return;
-  const target = ref.parent.children[ref.index];
-  if (target.type !== 'group') return;
-  ref.parent.children.splice(ref.index, 1, ...target.children);
-  // Skip flattenSameOp here: ungrouping should only dissolve the one group
-  // the user clicked. Running flatten on the whole tree could collapse
-  // unrelated same-op nesting elsewhere as a surprise side effect.
-  collapseSingletons(state.current);
+// Toggle the negation of a chip or group.
+//
+// - Chip (leaf): wraps the leaf in NOT, or unwraps if it's already in a unary
+//   NOT. The button's `id` is the leaf's id even when negated (rendering
+//   collapses NOT(leaf) → negated chip), so unwrap checks the parent.
+// - Group: bulk-toggle every leaf descendant to a single target state. The
+//   target is the inverse of the current "all leaves negated" state, so the
+//   button effectively means "make every filter inside match my new state".
+//   A child chip's own ! can still flip just that one — when it does, the
+//   group's ! falls back to OFF because not all leaves are negated anymore.
+function toggleNot(id: string) {
+  if (id === 'root') return;
+  const node = findNode(state.current, id);
+  if (!node) return;
+
+  if (node.type === 'filter') {
+    const ref = findParent(state.current, id);
+    if (!ref) return;
+    if (ref.parent.op === 'NOT' && ref.parent.children.length === 1) {
+      // Already negated — remove the wrapper by replacing it in the grandparent.
+      const grandRef = findParent(state.current, ref.parent.id);
+      if (grandRef) {
+        grandRef.parent.children.splice(grandRef.index, 1, node);
+        render();
+        return;
+      }
+    }
+    // Wrap in a fresh unary NOT.
+    const notGroup: FilterGroup = {
+      type: 'group',
+      id: nextId('g'),
+      op: 'NOT',
+      children: [node],
+    };
+    ref.parent.children.splice(ref.index, 1, notGroup);
+    render();
+    return;
+  }
+
+  // Group: bulk-set every leaf to !current-state.
+  const target = !allLeavesNegatedClient(node);
+  setAllLeavesNegated(node, target);
   render();
+}
+
+// `true` iff every leaf descendant of `node` sits in a unary NOT wrapper.
+// Empty groups return false. Matches the shared helper in filterTree.ts; kept
+// inline because the client uses its own type aliases for FilterNode.
+function allLeavesNegatedClient(node: FilterNode): boolean {
+  if (node.type === 'filter') return false;
+  if (node.op === 'NOT' && node.children.length === 1 && node.children[0].type === 'filter') {
+    return true;
+  }
+  if (node.children.length === 0) return false;
+  return node.children.every(allLeavesNegatedClient);
+}
+
+// Bulk-toggle every leaf descendant of `group` to the target negation state.
+// Mutates in place. Walks the tree; at each leaf slot (bare leaf or NOT(leaf))
+// it either wraps or unwraps to match the target. Sub-groups recurse.
+function setAllLeavesNegated(group: FilterGroup, target: boolean): void {
+  for (let i = 0; i < group.children.length; i++) {
+    const c = group.children[i];
+    if (c.type === 'filter') {
+      if (target) {
+        group.children[i] = { type: 'group', id: nextId('g'), op: 'NOT', children: [c] };
+      }
+      continue;
+    }
+    if (c.op === 'NOT' && c.children.length === 1 && c.children[0].type === 'filter') {
+      if (!target) {
+        group.children[i] = c.children[0];
+      }
+      continue;
+    }
+    setAllLeavesNegated(c, target);
+  }
+}
+
+// Distribute any NOT-wrapping-a-group into per-leaf NOT wrappers within the
+// group, applied at hydrate time so the live tree only has NOT(leaf). Mirrors
+// `distributeGroupNots` in filterTree.ts but uses the client's `nextId`.
+function normalizeTreeNots(node: FilterNode): FilterNode {
+  if (node.type === 'filter') return node;
+  if (node.op === 'NOT' && node.children.length === 1 && node.children[0].type === 'group') {
+    return toggleEveryLeafNotClient(normalizeTreeNots(node.children[0]));
+  }
+  return { ...node, children: node.children.map(normalizeTreeNots) };
+}
+
+function toggleEveryLeafNotClient(node: FilterNode): FilterNode {
+  if (node.type === 'filter') {
+    return { type: 'group', id: nextId('g'), op: 'NOT', children: [node] };
+  }
+  if (node.op === 'NOT' && node.children.length === 1 && node.children[0].type === 'filter') {
+    return node.children[0];
+  }
+  return { ...node, children: node.children.map(toggleEveryLeafNotClient) };
 }
 
 function wrapWithNew(targetId: string, draggedId: string, op: GroupOp) {
@@ -485,6 +639,7 @@ function wrapWithNew(targetId: string, draggedId: string, op: GroupOp) {
   const target = targetRef.parent.children[targetRef.index];
   const group: FilterGroup = { type: 'group', id: nextId('g'), op, children: [target, dragged] };
   targetRef.parent.children.splice(targetRef.index, 1, group);
+  pruneEmptyNotGroups(state.current);
   collapseSingletons(state.current);
   render();
 }
@@ -495,24 +650,38 @@ function findNodeOrThrow(id: string): FilterNode {
   return n;
 }
 
+// When a node is the sole child of a NOT chain, drag/drop should treat the
+// whole chain as one unit so the negation travels with the chip/group the
+// user sees. Walks up while each parent is a unary NOT and returns the
+// outermost wrapper's id.
+function effectiveDragId(visualId: string): string {
+  let id = visualId;
+  for (;;) {
+    const ref = findParent(state.current, id);
+    if (!ref || ref.parent.op !== 'NOT' || ref.parent.children.length !== 1) return id;
+    id = ref.parent.id;
+  }
+}
+
 function moveNode(sourceId: string, dest: { parentId: string; index: number }) {
   if (sourceId === dest.parentId) return;
   const sourceNode = findNode(state.current, sourceId);
   if (!sourceNode) return;
   if (isAncestor(sourceNode, dest.parentId)) return;
+  const destGroup = findNode(state.current, dest.parentId);
+  if (!destGroup || destGroup.type !== 'group') return;
+  // NOT groups are unary — refuse to add a sibling. The user must remove the
+  // NOT first if they want to change what it wraps.
+  if (destGroup.op === 'NOT') return;
   const sourceRef = findParent(state.current, sourceId);
   if (!sourceRef) return;
   const [removed] = sourceRef.parent.children.splice(sourceRef.index, 1);
-  const destGroup = findNode(state.current, dest.parentId);
-  if (!destGroup || destGroup.type !== 'group') {
-    sourceRef.parent.children.splice(sourceRef.index, 0, removed);
-    return;
-  }
   // If removal shifted indices within the same parent, adjust.
   let targetIndex = dest.index;
   if (sourceRef.parent === destGroup && sourceRef.index < dest.index) targetIndex -= 1;
   destGroup.children.splice(targetIndex, 0, removed);
   flattenSameOp(state.current);
+  pruneEmptyNotGroups(state.current);
   collapseSingletons(state.current);
   render();
 }
@@ -650,9 +819,21 @@ function wireTreeContainer() {
 
   root.addEventListener('click', e => {
     const target = e.target as HTMLElement;
-    if (target.closest('[data-remove-node]')) {
-      const chip = target.closest<HTMLElement>('[data-node-id]');
-      if (chip) removeNode(chip.dataset.nodeId!);
+    const removeBtn = target.closest<HTMLElement>('[data-remove-node]');
+    if (removeBtn) {
+      const nodeEl = removeBtn.closest<HTMLElement>('[data-node-id]');
+      if (nodeEl) {
+        const id = nodeEl.dataset.nodeId!;
+        // A group X is ambiguous — does the user want to nuke the contents or
+        // just dissolve the container? Always open the confirm popover and let
+        // the user pick; never short-circuit to either action. Chips are
+        // unambiguous; remove immediately.
+        if (nodeEl.dataset.nodeType === 'group') {
+          openGroupRemoveConfirm(id, removeBtn);
+        } else {
+          removeNode(id);
+        }
+      }
       e.stopPropagation();
       return;
     }
@@ -662,9 +843,9 @@ function wireTreeContainer() {
       togglePairOp(groupId, parseInt(idxStr, 10));
       return;
     }
-    if (target.closest('[data-ungroup]')) {
-      const group = target.closest<HTMLElement>('[data-node-type="group"]');
-      if (group) ungroup(group.dataset.nodeId!);
+    const notBtn = target.closest<HTMLElement>('[data-toggle-not]');
+    if (notBtn) {
+      toggleNot(notBtn.dataset.toggleNot!);
       e.stopPropagation();
       return;
     }
@@ -691,9 +872,9 @@ function wireTreeContainer() {
   // ── Drag and drop ──
   root.addEventListener('dragstart', e => {
     const target = e.target as HTMLElement;
-    // Drags initiated from a badge / ungroup pill / × button would otherwise
+    // Drags initiated from a badge / × button / ¬ button would otherwise
     // bubble up and start a drag on the enclosing group container. Suppress.
-    if (target.closest('.filter-op-badge, [data-ungroup], [data-remove-node]')) {
+    if (target.closest('.filter-op-badge, [data-remove-node], [data-toggle-not]')) {
       e.preventDefault();
       return;
     }
@@ -704,7 +885,10 @@ function wireTreeContainer() {
       e.preventDefault();
       return;
     }
-    e.dataTransfer?.setData('text/plain', id);
+    // A negated chip's data-node-id is the inner leaf, but the user is
+    // dragging the visible (NOT-wrapped) unit — promote to the outermost
+    // wrapper so negation travels with the move.
+    e.dataTransfer?.setData('text/plain', effectiveDragId(id));
     e.dataTransfer!.effectAllowed = 'move';
     node.classList.add('filter-node--dragging');
     document.body.classList.add('filter-dragging');
@@ -767,10 +951,10 @@ function showDropHint(target: HTMLElement) {
 }
 
 function resolveDropTarget(el: HTMLElement): HTMLElement | null {
-  // Op badges and the ungroup pill are not drop targets — dropping on them
+  // Op badges, × and NOT pills are not drop targets — dropping on them
   // would otherwise bubble up to the enclosing group and surprise the user
   // with an "append to group" outcome.
-  if (el.closest('.filter-op-badge, [data-ungroup], [data-remove-node]')) return null;
+  if (el.closest('.filter-op-badge, [data-remove-node], [data-toggle-not]')) return null;
   // Insertion lines beat chip drops beat group container drops. Drop lines are
   // most specific (a precise position between two siblings); chips imply
   // "create a sub-group with this filter"; groups imply "append to group end".
@@ -778,8 +962,7 @@ function resolveDropTarget(el: HTMLElement): HTMLElement | null {
   if (line) return line;
   const chip = el.closest<HTMLElement>('[data-node-type="filter"]');
   if (chip) return chip;
-  const group = el.closest<HTMLElement>('[data-node-type="group"]');
-  return group;
+  return el.closest<HTMLElement>('[data-node-type="group"]');
 }
 
 function handleDrop(draggedId: string, targetEl: HTMLElement) {
@@ -794,9 +977,13 @@ function handleDrop(draggedId: string, targetEl: HTMLElement) {
     // Drop on a chip → wrap the two in a NEW sub-group using the parent's op
     // verbatim (no auto-flip). The user can click the inner badge to change
     // the op if they want a different operator inside this new group.
-    const ref = findParent(state.current, targetId);
+    // Promote the visible target to its NOT-wrapper so a negated chip wraps
+    // as a unit (the new group sits where the negated chip sat).
+    const effectiveTargetId = effectiveDragId(targetId);
+    const ref = findParent(state.current, effectiveTargetId);
     const parentOp: GroupOp = ref?.parent.op ?? 'AND';
-    wrapWithNew(targetId, draggedId, parentOp);
+    const wrapOp: GroupOp = parentOp === 'NOT' ? 'AND' : parentOp;
+    wrapWithNew(effectiveTargetId, draggedId, wrapOp);
     return;
   }
   if (targetEl.dataset.nodeType === 'group') {
@@ -968,6 +1155,73 @@ function positionEditor(editor: HTMLElement, leafId: string) {
   const rect = chip.getBoundingClientRect();
   editor.style.top = `${rect.bottom + window.scrollY + 4}px`;
   editor.style.left = `${rect.left + window.scrollX}px`;
+}
+
+// Confirm popover for the group × — disambiguates "remove the whole subtree"
+// from "dissolve just this container, keep the chips inside". Anchored to the
+// × button so it appears right where the user clicked.
+function openGroupRemoveConfirm(groupId: string, anchor: HTMLElement) {
+  document.querySelector<HTMLElement>('[data-group-remove-confirm]')?.remove();
+
+  const panel = document.createElement('div');
+  panel.className = 'filter-widget-panel filter-group-remove-confirm';
+  panel.dataset.groupRemoveConfirm = '1';
+  panel.style.position = 'absolute';
+
+  const label = document.createElement('span');
+  label.className = 'filter-widget-label';
+  label.textContent = 'Remove group?';
+  panel.appendChild(label);
+
+  const removeAll = document.createElement('button');
+  removeAll.type = 'button';
+  removeAll.className = 'filter-btn filter-btn-danger';
+  removeAll.textContent = 'Remove all';
+  removeAll.title = 'Delete this group and every filter inside it';
+  panel.appendChild(removeAll);
+
+  const ungroupBtn = document.createElement('button');
+  ungroupBtn.type = 'button';
+  ungroupBtn.className = 'filter-btn filter-btn-secondary';
+  ungroupBtn.textContent = 'Ungroup';
+  ungroupBtn.title = 'Keep the filters, remove just the grouping container';
+  panel.appendChild(ungroupBtn);
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'filter-clear';
+  cancel.textContent = 'Cancel';
+  panel.appendChild(cancel);
+
+  document.body.appendChild(panel);
+
+  const rect = anchor.getBoundingClientRect();
+  panel.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  panel.style.left = `${rect.right + window.scrollX - panel.offsetWidth}px`;
+
+  function close() {
+    panel.remove();
+    document.removeEventListener('keydown', escListener);
+    document.removeEventListener('mousedown', outsideClick);
+  }
+  function escListener(e: KeyboardEvent) {
+    if (e.key === 'Escape') close();
+  }
+  function outsideClick(e: MouseEvent) {
+    if (!panel.contains(e.target as Node)) close();
+  }
+
+  removeAll.addEventListener('click', () => {
+    close();
+    removeNode(groupId);
+  });
+  ungroupBtn.addEventListener('click', () => {
+    close();
+    ungroupNode(groupId);
+  });
+  cancel.addEventListener('click', close);
+  document.addEventListener('keydown', escListener);
+  document.addEventListener('mousedown', outsideClick);
 }
 
 function renderWidgetBody(leaf: FilterLeaf, available: AvailableFilter): HTMLElement {

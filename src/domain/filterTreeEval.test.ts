@@ -105,4 +105,46 @@ describe('evaluateFilterTree — groups', () => {
     ]);
     expect(evaluateFilterTree(tree, entity())).toBe(true);
   });
+
+  it('NOT inverts a leaf result', () => {
+    expect(evaluateFilterTree(makeGroup('NOT', [makeLeaf('owner', 'eq', 'Sam')]), entity())).toBe(
+      true
+    );
+    expect(evaluateFilterTree(makeGroup('NOT', [makeLeaf('owner', 'eq', 'Dave')]), entity())).toBe(
+      false
+    );
+  });
+
+  it('NOT inverts a missing-key leaf (which was false → true)', () => {
+    expect(evaluateFilterTree(makeGroup('NOT', [makeLeaf('missing', 'eq', 'x')]), entity())).toBe(
+      true
+    );
+  });
+
+  it('NOT inverts a nested group', () => {
+    const inner = makeGroup('AND', [
+      makeLeaf('owner', 'eq', 'Dave'),
+      makeLeaf('active_prs', 'gte', '1'),
+    ]);
+    expect(evaluateFilterTree(makeGroup('NOT', [inner]), entity())).toBe(false);
+  });
+
+  it('double NOT returns to the original result', () => {
+    const inner = makeLeaf('owner', 'eq', 'Dave');
+    const outer = makeGroup('NOT', [makeGroup('NOT', [inner])]);
+    expect(evaluateFilterTree(outer, entity())).toBe(true);
+  });
+
+  it('AND with NOT child narrows correctly', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'Service'),
+      makeGroup('NOT', [makeLeaf('owner', 'eq', 'Sam')]),
+    ]);
+    expect(evaluateFilterTree(tree, entity())).toBe(true);
+    const tree2 = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'Service'),
+      makeGroup('NOT', [makeLeaf('owner', 'eq', 'Dave')]),
+    ]);
+    expect(evaluateFilterTree(tree2, entity())).toBe(false);
+  });
 });

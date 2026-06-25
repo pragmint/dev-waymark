@@ -207,6 +207,17 @@ form {
   }
 }
 
+.filter-btn-danger {
+  border-color: var(--color-danger, #d63939);
+  background: var(--color-danger, #d63939);
+  color: #fff;
+
+  &:hover {
+    background: var(--color-danger, #d63939);
+    filter: brightness(1.1);
+  }
+}
+
 .filter-inline-panel {
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
@@ -423,12 +434,15 @@ form {
   justify-content: center;
   width: var(--control-height);
   height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
   color: var(--color-muted);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1;
-  text-decoration: none;
   cursor: pointer;
-  border-left: 1px solid var(--color-border);
 
   &:hover {
     color: var(--color-text);
@@ -478,6 +492,21 @@ form {
   font-weight: 500;
   color: var(--color-muted);
   min-width: 80px;
+}
+
+// Floating confirm shown when the user clicks × on a group container.
+// Mounted on <body> with inline top/left, so it needs its own border + shadow
+// to stand off from whatever it lands over.
+.filter-group-remove-confirm {
+  z-index: 20;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: var(--color-bg);
+
+  .filter-widget-label {
+    min-width: 0;
+  }
 }
 
 .filter-date-row {
@@ -1180,27 +1209,6 @@ form {
   font-style: italic;
 }
 
-.filter-group-ungroup {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 100px;
-  background: var(--color-surface);
-  color: var(--color-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text);
-    border-color: var(--color-primary);
-  }
-}
-
 .filter-op-badge {
   height: var(--control-height);
   padding: 0 10px;
@@ -1368,29 +1376,87 @@ body.filter-dragging * {
   }
 }
 
-// Labeled ungroup pill — replaces the old tiny × at the group's corner.
-.filter-group-ungroup--labeled {
-  position: absolute;
-  top: -10px;
-  right: 6px;
-  width: auto;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 100px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+// "!" toggle button — sits next to the × on both chips and groups. Same
+// dimensions/visual weight as the × icon button. Off-state is muted; on-state
+// is filled red with a white "!" so it reads as "excluded" at a glance.
+.filter-not-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
   color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  text-transform: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 80ms ease-in,
+    color 80ms ease-in;
+
+  &:hover {
+    color: var(--color-danger, #d63939);
+    background: rgba(214, 57, 57, 0.06);
+  }
+
+  &--active {
+    color: #fff;
+    background: var(--color-danger, #d63939);
+
+    &:hover {
+      color: #fff;
+      filter: brightness(1.1);
+    }
+  }
+}
+
+// Group remove "×" button — same visual as the chip's ×, scoped on the group
+// container so the existing chip styling doesn't change.
+.filter-group-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 
   &:hover {
-    color: var(--color-primary);
-    border-color: var(--color-primary);
+    color: var(--color-text);
+    background: rgba(0, 0, 0, 0.05);
   }
+}
+
+// Negated chip — subtle red border + muted red tint so the chip reads as
+// "excluded" at a glance without overpowering the row.
+.filter-chip--negated {
+  border-color: var(--color-danger, #d63939);
+  background: rgba(214, 57, 57, 0.05);
+
+  &:hover {
+    background: rgba(214, 57, 57, 0.1);
+    border-color: var(--color-danger, #d63939);
+  }
+}
+
+// Negated group — red dashed border + subtle tint, same visual language as
+// the negated chip, scaled up. Applied when every leaf descendant is NOT'd.
+.filter-group--negated {
+  border-color: var(--color-danger, #d63939);
+  border-style: dashed;
+  background: rgba(214, 57, 57, 0.04);
 }
 
 // Greyed-out results while uncommitted filter changes exist

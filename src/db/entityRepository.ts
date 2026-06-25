@@ -95,6 +95,14 @@ function nodeSql(node: FilterNode): SqlFragment {
   if (!isGroup(node)) return { sql: '1=1', params: [] };
   if (node.children.length === 0) return { sql: '1=1', params: [] };
 
+  if (node.op === 'NOT') {
+    // NOT(1=1) would collapse to 1=0 and exclude rows the JS post-filter needs
+    // to inspect — fall back to a superset and let evaluateFilterTree narrow.
+    if (treeHasRegex(node)) return { sql: '1=1', params: [] };
+    const child = nodeSql(node.children[0]);
+    return { sql: `NOT (${child.sql})`, params: child.params };
+  }
+
   const childResults = node.children.map(nodeSql);
   if (childResults.length === 1) return childResults[0];
 

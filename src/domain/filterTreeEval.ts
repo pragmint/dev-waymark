@@ -56,6 +56,7 @@ export function evaluateFilterTree(node: FilterNode, entity: EntityWithMetadata)
   if (isLeaf(node)) return leafMatches(node, entity);
   if (isGroup(node)) {
     if (node.children.length === 0) return true;
+    if (node.op === 'NOT') return !evaluateFilterTree(node.children[0], entity);
     return node.op === 'AND'
       ? node.children.every(c => evaluateFilterTree(c, entity))
       : node.children.some(c => evaluateFilterTree(c, entity));

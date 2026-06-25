@@ -57,6 +57,33 @@ describe('encodeTreeHex / decodeTreeHex', () => {
     expect(encodeTreeHex(a)).not.toBe(encodeTreeHex(b));
   });
 
+  it('round-trips a tree containing a NOT', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'Service'),
+      makeGroup('NOT', [makeLeaf('owner', 'eq', 'Dave')]),
+    ]);
+    const decoded = decodeTreeHex(encodeTreeHex(tree));
+    expect(decoded).not.toBeNull();
+    expect(eq(decoded!, tree)).toBe(true);
+  });
+
+  it('round-trips nested NOT around a group', () => {
+    const tree = makeGroup('AND', [
+      makeGroup('NOT', [
+        makeGroup('OR', [makeLeaf('owner', 'eq', 'Dave'), makeLeaf('owner', 'eq', 'Sam')]),
+      ]),
+    ]);
+    const decoded = decodeTreeHex(encodeTreeHex(tree));
+    expect(decoded).not.toBeNull();
+    expect(eq(decoded!, tree)).toBe(true);
+  });
+
+  it('distinguishes NOT from AND/OR', () => {
+    const a = makeGroup('AND', [makeLeaf('k', 'eq', 'v')]);
+    const n = makeGroup('NOT', [makeLeaf('k', 'eq', 'v')]);
+    expect(encodeTreeHex(a)).not.toBe(encodeTreeHex(n));
+  });
+
   it('produces identical hex for trees that differ only in node ids', () => {
     const a = makeGroup('AND', [
       makeLeaf('k', 'eq', 'v'),

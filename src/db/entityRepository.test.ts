@@ -232,6 +232,53 @@ describe('entityRepository', () => {
     expect(results).toHaveLength(0);
   });
 
+  it('NOT excludes matching entities', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'owner', value: 'Dave' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'owner', value: 'Sam' }),
+    ]);
+    const tree = makeGroup('AND', [makeGroup('NOT', [makeLeaf('owner', 'eq', 'Dave')])]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id)).toEqual([2]);
+  });
+
+  it('NOT around a nested group inverts the group result', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'owner', value: 'Dave' }),
+      makeMetadata(1, { key: 'priority', value: 'low' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'owner', value: 'Sam' }),
+      makeMetadata(2, { key: 'priority', value: 'high' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 3, name: 'C' }), [
+      makeMetadata(3, { key: 'owner', value: 'Alex' }),
+      makeMetadata(3, { key: 'priority', value: 'low' }),
+    ]);
+    // NOT(owner = Dave OR priority = high) → keeps only C.
+    const tree = makeGroup('AND', [
+      makeGroup('NOT', [
+        makeGroup('OR', [makeLeaf('owner', 'eq', 'Dave'), makeLeaf('priority', 'eq', 'high')]),
+      ]),
+    ]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id)).toEqual([3]);
+  });
+
+  it('NOT around a regex leaf narrows via JS post-filter', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+      makeMetadata(1, { key: 'description', value: 'bartle-bee' }),
+    ]);
+    await repo.upsert(makeEntity({ id: 2, name: 'B' }), [
+      makeMetadata(2, { key: 'description', value: 'unrelated' }),
+    ]);
+    const tree = makeGroup('AND', [makeGroup('NOT', [makeLeaf('description', 're', 'bartle')])]);
+    const results = await repo.list(tree);
+    expect(results.map(r => r.id)).toEqual([2]);
+  });
+
   it('combines regex with OR against a non-regex filter', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
       makeMetadata(1, { key: 'description', value: 'bartle-bee' }),

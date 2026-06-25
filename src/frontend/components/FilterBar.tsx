@@ -2,7 +2,14 @@ import type { FC } from 'hono/jsx';
 import type { AvailableFilter } from '../../schemas/entity';
 import type { Preset } from '../../schemas/preset';
 import type { FilterTree } from '../../schemas/filterTree';
-import { isGroup, isLeaf, makeLeaf, emptyTree } from '../../schemas/filterTree';
+import {
+  allLeavesNegated,
+  distributeGroupNots,
+  isGroup,
+  isLeaf,
+  makeLeaf,
+  emptyTree,
+} from '../../schemas/filterTree';
 import type { FilterLeaf, FilterNode } from '../../schemas/filterTree';
 import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
 
@@ -53,92 +60,117 @@ function urlForEntityType(_activeTree: FilterTree, entityType: string): string {
   return buildEntityUrl(next);
 }
 
-// Recursive server render of the tree. The client takes over on hydrate, so
-// this is only the first-paint shell — node ids are still embedded for the
-// client to anchor onto.
-const FilterTreeView: FC<{ node: FilterNode; depth: number; isRoot?: boolean }> = ({
-  node,
-  depth,
-  isRoot,
-}) => {
-  if (isLeaf(node)) {
+// NOT(leaf) collapses into a negated-leaf chip; the wrapper isn't rendered.
+// All other NOT shapes are eliminated by `distributeGroupNots` before render,
+// so the only "negation" the view layer sees is a unary NOT wrapping a leaf.
+function unwrapLeafNot(node: FilterNode): { leaf: FilterLeaf; negated: boolean } | null {
+  if (isLeaf(node)) return { leaf: node, negated: false };
+  if (node.op === 'NOT' && node.children.length === 1 && isLeaf(node.children[0])) {
+    return { leaf: node.children[0], negated: true };
+  }
+  return null;
+}
+
+const NotBtn: FC<{ id: string; active: boolean; label: string }> = ({ id, active, label }) => (
+  <button
+    type="button"
+    class={`filter-not-btn${active ? ' filter-not-btn--active' : ''}`}
+    data-toggle-not={id}
+    draggable={false}
+    aria-pressed={active ? 'true' : 'false'}
+    aria-label={label}
+    title={active ? 'Remove !' : 'Negate'}
+  >
+    !
+  </button>
+);
+
+const FilterTreeView: FC<{
+  node: FilterNode;
+  depth: number;
+  isRoot?: boolean;
+}> = ({ node: input, depth, isRoot }) => {
+  const asLeaf = unwrapLeafNot(input);
+  if (asLeaf) {
+    const { leaf, negated } = asLeaf;
     return (
       <span
-        class="filter-chip"
-        data-node-id={node.id}
+        class={`filter-chip${negated ? ' filter-chip--negated' : ''}`}
+        data-node-id={leaf.id}
         data-node-type="filter"
-        data-filter-key={node.key}
+        data-filter-key={leaf.key}
+        data-negated={negated ? 'true' : undefined}
         draggable="true"
       >
         <span class="filter-chip-grip" aria-hidden="true">
           ⋮⋮
         </span>
         <span class="filter-chip-content" data-edit-leaf>
-          <span class="filter-chip-key">{formatFieldLabel(node.key)}:</span>{' '}
-          <span class="filter-chip-val">{leafLabel(node)}</span>
+          <span class="filter-chip-key">{formatFieldLabel(leaf.key)}:</span>{' '}
+          <span class="filter-chip-val">{leafLabel(leaf)}</span>
         </span>
+        <NotBtn id={leaf.id} active={negated} label={`Negate ${leaf.key} filter`} />
         <button
           type="button"
           class="filter-chip-x"
           data-remove-node
-          aria-label={`Remove ${node.key} filter`}
+          aria-label={`Remove ${leaf.key} filter`}
         >
           ×
         </button>
       </span>
     );
   }
-  if (isGroup(node)) {
+  if (isGroup(input)) {
+    const groupNegated = allLeavesNegated(input);
     return (
       <div
-        class={`filter-group${isRoot ? ' filter-group--root' : ''}`}
-        data-node-id={node.id}
+        class={`filter-group${isRoot ? ' filter-group--root' : ''}${groupNegated ? ' filter-group--negated' : ''}`}
+        data-node-id={input.id}
         data-node-type="group"
-        data-group-op={node.op}
+        data-group-op={input.op}
         data-depth={depth}
+        data-negated={groupNegated ? 'true' : undefined}
         draggable={isRoot ? undefined : 'true'}
       >
         {!isRoot && (
-          <>
-            <span class="filter-group-grip" aria-hidden="true">
-              ⋮⋮
-            </span>
-            <button
-              type="button"
-              class="filter-group-ungroup filter-group-ungroup--labeled"
-              data-ungroup
-              aria-label="Ungroup"
-              title="Inline these filters into the parent group"
-            >
-              Ungroup
-            </button>
-          </>
+          <span class="filter-group-grip" aria-hidden="true">
+            ⋮⋮
+          </span>
         )}
-        {node.children.length === 0 ? (
+        {input.children.length === 0 ? (
           <span class="filter-group-empty">No filters yet</span>
         ) : (
           <>
-            <span class="filter-drop-line" data-drop-line={`${node.id}:0`} />
-            {node.children.map((child, i) => (
+            <span class="filter-drop-line" data-drop-line={`${input.id}:0`} />
+            {input.children.map((child, i) => (
               <>
                 {i > 0 && (
                   <>
                     <button
                       type="button"
                       class="filter-op-badge"
-                      data-toggle-pair={`${node.id}:${i}`}
+                      data-toggle-pair={`${input.id}:${i}`}
                       draggable={false}
-                      aria-label={`Toggle operator between filters (currently ${node.op})`}
+                      aria-label={`Toggle operator between filters (currently ${input.op})`}
                     >
-                      {node.op}
+                      {input.op}
                     </button>
-                    <span class="filter-drop-line" data-drop-line={`${node.id}:${i}`} />
+                    <span class="filter-drop-line" data-drop-line={`${input.id}:${i}`} />
                   </>
                 )}
                 <FilterTreeView node={child} depth={depth + 1} />
-                <span class="filter-drop-line" data-drop-line={`${node.id}:${i + 1}`} />
+                <span class="filter-drop-line" data-drop-line={`${input.id}:${i + 1}`} />
               </>
             ))}
+          </>
+        )}
+        {!isRoot && (
+          <>
+            <NotBtn id={input.id} active={groupNegated} label="Negate group" />
+            <button type="button" class="filter-group-x" data-remove-node aria-label="Remove group">
+              ×
+            </button>
           </>
         )}
       </div>
@@ -170,11 +202,12 @@ export const FilterBar: FC<FilterBarProps> = ({
 
   // Strip the entity_type leaf from the tree shown to the client — it lives
   // in the Type dropdown, not the tree view. The client merges it back when
-  // building the final URL.
-  const visibleTree: FilterTree = {
+  // building the final URL. We also normalize any legacy NOT(group) wrappers
+  // into per-leaf NOTs so the view layer only has to handle NOT(leaf).
+  const visibleTree = distributeGroupNots({
     ...activeTree,
     children: activeTree.children.filter(c => !(isLeaf(c) && c.key === 'entity_type')),
-  };
+  }) as FilterTree;
 
   return (
     <div class="filter-bar" data-filter-bar>
