@@ -18,6 +18,8 @@ await build({
 });
 await $`sass src/styles/main.scss:public/style.css`;
 
+cpSync('src/frontend/static', 'public', { recursive: true });
+
 // Production: bundle server + assemble dist/
 if (isProd) {
   rmSync('dist', { recursive: true, force: true });
