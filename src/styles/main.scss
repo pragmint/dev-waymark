@@ -1142,9 +1142,18 @@ form {
   }
 }
 
+.dashboard-controls {
+  // The dashboard combo (preset-combo-list) opens absolutely positioned, so
+  // give this sticky stacking context room to paint above the viz grid.
+  position: relative;
+  z-index: 5;
+}
+
 .dashboard-viz-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  // Sized to fit three cards within the 1152px content area on a typical
+  // laptop (3 * 320 + 2 * 16 = 992).
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
   margin-top: 16px;
 }
@@ -1198,11 +1207,11 @@ form {
 
 .dashboard-viz-canvas-wrap {
   position: relative;
-  height: 280px;
+  height: 220px;
 }
 
 .dashboard-viz-canvas {
-  max-height: 280px;
+  max-height: 220px;
 }
 
 .dashboard-date-range-row {
@@ -1477,6 +1486,16 @@ form {
   .dashboard-viz-grid {
     grid-template-columns: 1fr;
   }
+
+  // Keep the dashboard picker + date range visible while scrolling a long
+  // single-column list of cards on tablet/mobile.
+  .dashboard-controls {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
 }
 
 // Mobile: stack the entity-fields rows entirely and shrink the page header.
@@ -1511,6 +1530,19 @@ form {
 
   .dashboard-viz-card {
     padding: 8px;
+  }
+
+  .dashboard-viz-canvas-wrap {
+    height: 200px;
+  }
+
+  .dashboard-viz-canvas {
+    max-height: 200px;
+  }
+
+  .dashboard-controls {
+    margin: 0 -12px;
+    padding: 0 12px;
   }
 
   .dashboard-date-range-row {

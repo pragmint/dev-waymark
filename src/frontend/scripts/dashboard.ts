@@ -411,6 +411,12 @@ function rebuildDropLines(): void {
   grid.appendChild(dropLineEl(cards.length));
 }
 
+function clearDropLines(): void {
+  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
+  if (!grid) return;
+  grid.querySelectorAll('.dashboard-drop-line').forEach(el => el.remove());
+}
+
 function reorderGridDom(): void {
   const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
   if (!grid) return;
@@ -419,19 +425,17 @@ function reorderGridDom(): void {
     const id = parseInt(card.dataset.vizId ?? '', 10);
     if (!isNaN(id)) cardByVizId.set(id, card);
   });
-  // Clear, then re-append in the new order. Drop lines get rebuilt afterwards.
+  // Clear, then re-append in the new order. dragend clears drop lines after.
   grid.querySelectorAll('.dashboard-viz-card').forEach(el => el.remove());
   for (const id of state.currentVizIds) {
     const card = cardByVizId.get(id);
     if (card) grid.appendChild(card);
   }
-  rebuildDropLines();
 }
 
 function wireDragReorder(): void {
   const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
   if (!grid) return;
-  rebuildDropLines();
 
   grid.addEventListener('dragstart', e => {
     const card = (e.target as HTMLElement).closest<HTMLElement>('.dashboard-viz-card');
@@ -440,15 +444,16 @@ function wireDragReorder(): void {
     if (isNaN(id)) return;
     dragSourceId = id;
     card.classList.add('is-dragging');
+    // Drop lines live only for the duration of a drag — otherwise they'd
+    // occupy grid cells and break the card tiling.
+    rebuildDropLines();
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   });
 
   grid.addEventListener('dragend', () => {
     dragSourceId = null;
     grid.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
-    grid
-      .querySelectorAll('.dashboard-drop-line.is-active')
-      .forEach(el => el.classList.remove('is-active'));
+    clearDropLines();
   });
 
   grid.addEventListener('dragover', e => {

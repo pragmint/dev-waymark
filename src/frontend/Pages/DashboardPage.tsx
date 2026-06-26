@@ -52,9 +52,13 @@ export const DashboardPage: FC<Props> = ({
         <h1>Visualizations</h1>
       </div>
 
-      <DashboardMetaRow dashboards={dashboards} selectedDashboard={selectedDashboard} />
+      <div class="dashboard-controls">
+        <DashboardMetaRow dashboards={dashboards} selectedDashboard={selectedDashboard} />
 
-      {selectedDashboard && <DateRangeRow dateRange={dateRange} dateRangeLabel={dateRangeLabel} />}
+        {selectedDashboard && (
+          <DateRangeRow dateRange={dateRange} dateRangeLabel={dateRangeLabel} />
+        )}
+      </div>
 
       {!selectedDashboard ? (
         <EmptyState hasAnyDashboards={dashboards.length > 0} />
