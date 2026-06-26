@@ -376,29 +376,28 @@ function renderGroup(group: FilterGroup, depth: number, isRoot: boolean): HTMLEl
     // is flanked by drop-lines, both targeting the same index. Each drop-line
     // is bundled with its adjacent chip / op-badge into a .filter-tree-cluster
     // so the pair wraps together and never orphans onto its own line.
+    // The leading drop-line lives INSIDE the badge's cluster (not as the
+    // trailing of the previous cluster) so that when the cluster wraps to a
+    // new line the drop-line indents the badge to align with the chip column
+    // above.
+    const last = group.children.length - 1;
     group.children.forEach((child, i) => {
-      if (i === 0) {
-        const cluster = document.createElement('div');
-        cluster.className = 'filter-tree-cluster';
-        cluster.appendChild(dropLine(group.id, 0));
-        cluster.appendChild(renderNode(child, depth + 1, false));
-        cluster.appendChild(dropLine(group.id, 1));
-        el.appendChild(cluster);
-        return;
-      }
       const cluster = document.createElement('div');
       cluster.className = 'filter-tree-cluster';
-      const badge = document.createElement('button');
-      badge.type = 'button';
-      badge.className = 'filter-op-badge';
-      badge.dataset.togglePair = `${group.id}:${i}`;
-      badge.draggable = false;
-      badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
-      badge.textContent = group.op;
-      cluster.appendChild(badge);
       cluster.appendChild(dropLine(group.id, i));
+      if (i > 0) {
+        const badge = document.createElement('button');
+        badge.type = 'button';
+        badge.className = 'filter-op-badge';
+        badge.dataset.togglePair = `${group.id}:${i}`;
+        badge.draggable = false;
+        badge.setAttribute('aria-label', `Toggle operator between filters (currently ${group.op})`);
+        badge.textContent = group.op;
+        cluster.appendChild(badge);
+        cluster.appendChild(dropLine(group.id, i));
+      }
       cluster.appendChild(renderNode(child, depth + 1, false));
-      cluster.appendChild(dropLine(group.id, i + 1));
+      if (i === last) cluster.appendChild(dropLine(group.id, i + 1));
       el.appendChild(cluster);
     });
   }
@@ -477,8 +476,11 @@ function removeNode(id: string) {
   if (!ref) return;
   ref.parent.children.splice(ref.index, 1);
   flattenSameOp(state.current);
-  pruneEmptyNotGroups(state.current);
-  collapseSingletons(state.current);
+  pruneEmptyGroups(state.current);
+  // Intentionally skip collapseSingletons: an OR (or any) group that loses a
+  // sibling should keep its container so the remaining filter doesn't get
+  // silently re-parented under the surrounding AND — that reads as the user's
+  // OR being converted to AND.
   commit();
 }
 
@@ -510,58 +512,33 @@ function collapseSingletons(group: FilterGroup) {
   }
 }
 
-// Remove NOT groups left childless by an earlier splice. NOT must have exactly
-// one child; a zero-child NOT is meaningless and would break the schema if
-// serialised.
-function pruneEmptyNotGroups(group: FilterGroup) {
+// Remove any groups left childless by an earlier splice. NOT must be unary,
+// and an empty AND/OR has no semantic content; either would break the schema
+// if serialised.
+function pruneEmptyGroups(group: FilterGroup) {
   for (let i = group.children.length - 1; i >= 0; i--) {
     const c = group.children[i];
     if (c.type !== 'group') continue;
-    pruneEmptyNotGroups(c);
-    if (c.op === 'NOT' && c.children.length === 0) {
+    pruneEmptyGroups(c);
+    if (c.children.length === 0) {
       group.children.splice(i, 1);
     }
   }
 }
 
-function togglePairOp(groupId: string, rightIndex: number) {
+// Clicking any op-badge in a group flips the entire group's op. Every badge
+// in a group already displays the same value (the group's op), so the click
+// matches what's shown. We deliberately do NOT wrap the adjacent pair in a
+// new sub-group — that surprises users who clicked "AND" expecting a flip,
+// not a structural change.
+function togglePairOp(groupId: string, _rightIndex: number) {
   const group = findNode(state.current, groupId);
   if (!group || group.type !== 'group') return;
   if (group.op === 'NOT') return; // NOT is unary — no inter-sibling op to toggle.
-  const leftIndex = rightIndex - 1;
-  if (leftIndex < 0 || rightIndex >= group.children.length) return;
+  if (group.children.length < 2) return;
 
-  const newOp: GroupOp = group.op === 'AND' ? 'OR' : 'AND';
-
-  // 2-child group: a flip is unambiguous — just change the group's op.
-  if (group.children.length === 2) {
-    group.op = newOp;
-    commit();
-    return;
-  }
-
-  const left = group.children[leftIndex];
-  const right = group.children[rightIndex];
-
-  // Merge into a matching neighbor group if one exists; otherwise wrap the pair.
-  if (right.type === 'group' && right.op === newOp) {
-    right.children.unshift(left);
-    group.children.splice(leftIndex, 1);
-  } else if (left.type === 'group' && left.op === newOp) {
-    left.children.push(right);
-    group.children.splice(rightIndex, 1);
-  } else {
-    const newGroup: FilterGroup = {
-      type: 'group',
-      id: nextId('g'),
-      op: newOp,
-      children: [left, right],
-    };
-    group.children.splice(leftIndex, 2, newGroup);
-  }
-
+  group.op = group.op === 'AND' ? 'OR' : 'AND';
   flattenSameOp(state.current);
-  collapseSingletons(state.current);
   commit();
 }
 
@@ -701,7 +678,7 @@ function wrapWithNew(targetId: string, draggedId: string, op: GroupOp) {
   const target = targetRef.parent.children[targetRef.index];
   const group: FilterGroup = { type: 'group', id: nextId('g'), op, children: [target, dragged] };
   targetRef.parent.children.splice(targetRef.index, 1, group);
-  pruneEmptyNotGroups(state.current);
+  pruneEmptyGroups(state.current);
   collapseSingletons(state.current);
   commit();
 }
@@ -743,7 +720,7 @@ function moveNode(sourceId: string, dest: { parentId: string; index: number }) {
   if (sourceRef.parent === destGroup && sourceRef.index < dest.index) targetIndex -= 1;
   destGroup.children.splice(targetIndex, 0, removed);
   flattenSameOp(state.current);
-  pruneEmptyNotGroups(state.current);
+  pruneEmptyGroups(state.current);
   collapseSingletons(state.current);
   commit();
 }
@@ -1003,7 +980,7 @@ function showDropHint(target: HTMLElement) {
     hint.textContent = 'Move here';
   } else if (target.dataset.nodeType === 'filter') {
     const key = target.dataset.filterKey ?? 'filter';
-    hint.textContent = `Move next to ${formatFieldLabel(key)}`;
+    hint.textContent = `Create a new group with ${formatFieldLabel(key)}`;
   } else if (target.dataset.nodeType === 'group') {
     hint.textContent = 'Append to group';
   } else {

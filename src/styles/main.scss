@@ -1352,7 +1352,7 @@ body.filter-dragging * {
   outline-offset: 2px;
 }
 
-// Floating hint that names the outcome of dropping here ("Move next to X",
+// Floating hint that names the outcome of dropping here ("Create a new group with X",
 // "Append to group", "Move here"). Sits below or inside the active target.
 .filter-drop-hint {
   position: absolute;

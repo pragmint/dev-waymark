@@ -143,30 +143,32 @@ const FilterTreeView: FC<{
         {input.children.length === 0 ? (
           <span class="filter-group-empty">No filters yet</span>
         ) : (
-          input.children.map((child, i) =>
-            i === 0 ? (
+          input.children.map((child, i) => {
+            const isLast = i === input.children.length - 1;
+            return (
               <div class="filter-tree-cluster">
-                <span class="filter-drop-line" data-drop-line={`${input.id}:0`} />
-                <FilterTreeView node={child} depth={depth + 1} />
-                <span class="filter-drop-line" data-drop-line={`${input.id}:1`} />
-              </div>
-            ) : (
-              <div class="filter-tree-cluster">
-                <button
-                  type="button"
-                  class="filter-op-badge"
-                  data-toggle-pair={`${input.id}:${i}`}
-                  draggable={false}
-                  aria-label={`Toggle operator between filters (currently ${input.op})`}
-                >
-                  {input.op}
-                </button>
                 <span class="filter-drop-line" data-drop-line={`${input.id}:${i}`} />
+                {i > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      class="filter-op-badge"
+                      data-toggle-pair={`${input.id}:${i}`}
+                      draggable={false}
+                      aria-label={`Toggle operator between filters (currently ${input.op})`}
+                    >
+                      {input.op}
+                    </button>
+                    <span class="filter-drop-line" data-drop-line={`${input.id}:${i}`} />
+                  </>
+                )}
                 <FilterTreeView node={child} depth={depth + 1} />
-                <span class="filter-drop-line" data-drop-line={`${input.id}:${i + 1}`} />
+                {isLast && (
+                  <span class="filter-drop-line" data-drop-line={`${input.id}:${i + 1}`} />
+                )}
               </div>
-            )
-          )
+            );
+          })
         )}
         {!isRoot && (
           <>
