@@ -217,6 +217,65 @@ test('removing a chip from a selected preset enters draft state and Apply commit
   await expect(page.locator('[data-preset-save-submit]')).toBeHidden();
 });
 
+test('save as new: hidden until draft, then forks into a separate preset', async ({ page }) => {
+  const original = `E2E SaveAsNew ${Date.now()}`;
+  const fork = `${original} fork`;
+  const tag = uniqueTag('saveasnew');
+
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.click('#save-preset-btn');
+  await page.fill('#save-preset-panel input[name="name"]', original);
+  await page.locator('#save-preset-panel button[type="submit"]').click();
+  await expect(page.locator('[data-preset-name-input]')).toHaveValue(original);
+  await expect(page).toHaveURL(/preset=\d+/);
+
+  // Clean preset — Save-as-new is hidden along with Save-changes/Revert.
+  await expect(page.locator('[data-preset-save-as-new]')).toBeHidden();
+
+  // Enter draft by removing the chip; Save-as-new should now surface
+  // alongside Save-changes.
+  await page.locator('.filter-chip[data-filter-key="entity_name"] .filter-chip-x').click();
+  await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toHaveCount(0);
+  await expect(page.locator('[data-preset-save-submit]')).toBeVisible();
+  await expect(page.locator('[data-preset-save-as-new]')).toBeVisible();
+
+  // Clicking Save-as-new opens the save panel with an empty name field focused,
+  // so the user picks a fresh name rather than overwriting the original.
+  await page.locator('[data-preset-save-as-new]').click();
+  await expect(page.locator('#save-preset-panel')).toBeVisible();
+  const nameField = page.locator('#save-preset-panel input[name="name"]');
+  await expect(nameField).toHaveValue('');
+  await expect(nameField).toBeFocused();
+
+  await nameField.fill(fork);
+  await page.locator('#save-preset-panel button[type="submit"]').click();
+
+  // New preset is selected with the modified tree; original preset still exists.
+  await expect(page.locator('[data-preset-name-input]')).toHaveValue(fork);
+  await expect(page).toHaveURL(/preset=\d+/);
+  await expect(page.locator('[data-preset-save-as-new]')).toBeHidden();
+
+  await page.locator('[data-preset-combo-toggle]').click();
+  await expect(page.locator('[data-preset-combo-list] a', { hasText: original })).toBeVisible();
+});
+
+test('save changes button has no decorative dot', async ({ page }) => {
+  const name = `E2E NoDot ${Date.now()}`;
+  const tag = uniqueTag('nodot');
+
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.click('#save-preset-btn');
+  await page.fill('#save-preset-panel input[name="name"]', name);
+  await page.locator('#save-preset-panel button[type="submit"]').click();
+  await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
+
+  // Enter draft state to make Save-changes visible.
+  await page.locator('.filter-chip[data-filter-key="entity_name"] .filter-chip-x').click();
+  const saveChanges = page.locator('[data-preset-save-submit]');
+  await expect(saveChanges).toBeVisible();
+  await expect(saveChanges.locator('.filter-btn-dot')).toHaveCount(0);
+});
+
 test('nav bar has no Saved Presets link', async ({ page }) => {
   await page.goto('/entities');
   await expect(page.locator('a[href="/presets"]')).toHaveCount(0);

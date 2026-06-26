@@ -374,8 +374,10 @@ form {
 
 // Hide the Save changes button + Revert link until the form is in draft state.
 .preset-combo-form[data-is-draft='false'] [data-preset-save-submit],
+.preset-combo-form[data-is-draft='false'] [data-preset-save-as-new],
 .preset-combo-form[data-is-draft='false'] [data-preset-revert],
 .preset-combo-wrap[data-is-draft='false'] [data-preset-save-submit],
+.preset-combo-wrap[data-is-draft='false'] [data-preset-save-as-new],
 .preset-combo-wrap[data-is-draft='false'] [data-preset-revert] {
   display: none;
 }

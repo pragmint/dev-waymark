@@ -325,10 +325,10 @@ export const FilterBar: FC<FilterBarProps> = ({
               data-preset-save-submit
               data-preset-id={String(selectedPreset.id)}
             >
-              <span aria-hidden="true" class="filter-btn-dot">
-                ●
-              </span>{' '}
               Save changes
+            </button>
+            <button type="button" class="filter-btn" data-preset-save-as-new>
+              Save as new
             </button>
             <a
               href={selectedPreset.url}

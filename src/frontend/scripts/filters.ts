@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!document.querySelector('[data-filter-tree-root]')) return;
   hydrate();
   wireSavePresetPanel();
+  wireSaveAsNewPreset();
   wirePresetCombo();
   wirePresetNameDraftDetection();
   wireDeletePresetConfirm();
@@ -1511,6 +1512,20 @@ function wireSavePresetPanel() {
       panel.style.display = 'none';
     });
   }
+}
+
+function wireSaveAsNewPreset() {
+  const btn = document.querySelector<HTMLButtonElement>('[data-preset-save-as-new]');
+  const panel = document.getElementById('save-preset-panel');
+  if (!btn || !panel) return;
+  btn.addEventListener('click', () => {
+    const treeInput = panel.querySelector<HTMLInputElement>('[data-save-preset-tree]');
+    if (treeInput) treeInput.value = encodeTreeHex(mergeEntityType(state.current));
+    const nameInput = panel.querySelector<HTMLInputElement>('input[name="name"]');
+    if (nameInput) nameInput.value = '';
+    panel.style.display = '';
+    nameInput?.focus();
+  });
 }
 
 function wirePresetCombo() {
