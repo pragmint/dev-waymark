@@ -330,6 +330,29 @@ const EmptyState: FC<{ hasAnyDashboards: boolean }> = ({ hasAnyDashboards }) => 
   </div>
 );
 
+const WarningIndicator: FC<{ warnings: string[]; excludedEntitiesUrl: string | null }> = ({
+  warnings,
+  excludedEntitiesUrl,
+}) => (
+  <span class="warning-indicator" tabIndex={0} aria-label="Visualization warnings">
+    <span class="warning-icon" aria-hidden="true">
+      !
+    </span>
+    <span class="warning-popover" role="tooltip">
+      {warnings.map(w => (
+        <p class="warning">{w}</p>
+      ))}
+      {excludedEntitiesUrl && (
+        <p class="warning">
+          <a class="warning-link" href={excludedEntitiesUrl}>
+            View excluded entities →
+          </a>
+        </p>
+      )}
+    </span>
+  </span>
+);
+
 const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = ({
   card,
   dashboardCount,
@@ -337,6 +360,9 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
   <div class="dashboard-viz-card" data-viz-id={card.id} draggable={true}>
     <div class="dashboard-viz-card-header">
       <span class="dashboard-viz-card-title">{card.name}</span>
+      {card.warnings.length > 0 && (
+        <WarningIndicator warnings={card.warnings} excludedEntitiesUrl={card.excludedEntitiesUrl} />
+      )}
       <button
         type="button"
         class="dashboard-viz-edit-btn"
@@ -357,20 +383,6 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
         ×
       </button>
     </div>
-    {card.warnings.length > 0 && (
-      <div class="warning-box">
-        {card.warnings.map(w => (
-          <p class="warning">{w}</p>
-        ))}
-        {card.excludedEntitiesUrl && (
-          <p class="warning">
-            <a class="warning-link" href={card.excludedEntitiesUrl}>
-              View excluded entities →
-            </a>
-          </p>
-        )}
-      </div>
-    )}
     <div class="dashboard-viz-canvas-wrap">
       <canvas
         class="dashboard-viz-canvas"

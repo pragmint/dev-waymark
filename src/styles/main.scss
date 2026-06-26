@@ -1047,14 +1047,6 @@ form {
 
 // ── Warnings ─────────────────────────────────────────────────────────────────
 
-.warning-box {
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border: 1px solid #f5c6cb;
-  border-radius: var(--radius);
-  background: #fff3f3;
-}
-
 .warning {
   margin: 0;
   font-size: 13px;
@@ -1072,6 +1064,55 @@ form {
 
   &:hover {
     color: #4a1217;
+  }
+}
+
+// Warning icon + hover/focus popover used in the dashboard viz card header.
+// Floats over the card so the warning text doesn't push the canvas down.
+.warning-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  outline: none;
+  cursor: help;
+}
+
+.warning-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #f5c6cb;
+  background: #fff3f3;
+  color: #721c24;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.warning-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: none;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 14px;
+  border: 1px solid #f5c6cb;
+  border-radius: var(--radius);
+  background: #fff3f3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  white-space: normal;
+
+  .warning-indicator:hover &,
+  .warning-indicator:focus-within & {
+    display: block;
   }
 }
 

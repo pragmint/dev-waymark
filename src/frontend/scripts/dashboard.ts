@@ -1286,14 +1286,29 @@ function syncDateRangeRowUI(range: DateRangeState): void {
   }
 }
 
-function buildWarningBox(warnings: string[], excludedEntitiesUrl: string | null): HTMLDivElement {
-  const box = document.createElement('div');
-  box.className = 'warning-box';
+function buildWarningIndicator(
+  warnings: string[],
+  excludedEntitiesUrl: string | null
+): HTMLSpanElement {
+  const wrap = document.createElement('span');
+  wrap.className = 'warning-indicator';
+  wrap.tabIndex = 0;
+  wrap.setAttribute('aria-label', 'Visualization warnings');
+
+  const icon = document.createElement('span');
+  icon.className = 'warning-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '!';
+  wrap.appendChild(icon);
+
+  const popover = document.createElement('span');
+  popover.className = 'warning-popover';
+  popover.setAttribute('role', 'tooltip');
   for (const text of warnings) {
     const p = document.createElement('p');
     p.className = 'warning';
     p.textContent = text;
-    box.appendChild(p);
+    popover.appendChild(p);
   }
   if (excludedEntitiesUrl) {
     const p = document.createElement('p');
@@ -1303,9 +1318,10 @@ function buildWarningBox(warnings: string[], excludedEntitiesUrl: string | null)
     a.href = excludedEntitiesUrl;
     a.textContent = 'View excluded entities →';
     p.appendChild(a);
-    box.appendChild(p);
+    popover.appendChild(p);
   }
-  return box;
+  wrap.appendChild(popover);
+  return wrap;
 }
 
 interface CardPayload {
@@ -1323,12 +1339,16 @@ function applyCardUpdate(card: CardPayload): void {
   );
   if (!cardEl) return;
 
-  const existingWarning = cardEl.querySelector('.warning-box');
+  const existingWarning = cardEl.querySelector('.warning-indicator');
   existingWarning?.remove();
   if (card.warnings.length > 0) {
-    const box = buildWarningBox(card.warnings, card.excludedEntitiesUrl);
-    const canvasWrap = cardEl.querySelector('.dashboard-viz-canvas-wrap');
-    if (canvasWrap) canvasWrap.before(box);
+    const indicator = buildWarningIndicator(card.warnings, card.excludedEntitiesUrl);
+    const editBtn = cardEl.querySelector('[data-edit-viz]');
+    if (editBtn) {
+      editBtn.before(indicator);
+    } else {
+      cardEl.querySelector('.dashboard-viz-card-header')?.appendChild(indicator);
+    }
   }
 
   const canvas = cardEl.querySelector<HTMLCanvasElement>('canvas');
