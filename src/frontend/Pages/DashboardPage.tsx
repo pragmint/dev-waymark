@@ -15,6 +15,7 @@ export type DashboardCard = {
   pointUrls: string[];
   warnings: string[];
   excludedEntityCount: number;
+  excludedEntitiesUrl: string | null;
 };
 
 type Props = {
@@ -275,6 +276,13 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
         {card.warnings.map(w => (
           <p class="warning">{w}</p>
         ))}
+        {card.excludedEntitiesUrl && (
+          <p class="warning">
+            <a class="warning-link" href={card.excludedEntitiesUrl}>
+              View excluded entities →
+            </a>
+          </p>
+        )}
       </div>
     )}
     <div class="dashboard-viz-canvas-wrap">

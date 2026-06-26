@@ -4,6 +4,7 @@ import { getEntityRepo } from '../db/source/index';
 import {
   buildChartData,
   buildChartJsConfig,
+  buildExcludedEntityFilters,
   buildPointEntityFilters,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
@@ -43,6 +44,12 @@ async function buildCard(
     buildEntityUrl(combineWithExtras(preset.tree, buildPointEntityFilters(label, viz.config)))
   );
 
+  const excludedFilters = buildExcludedEntityFilters(viz.config);
+  const excludedEntitiesUrl =
+    chartResult.excludedEntityCount > 0 && excludedFilters.length > 0
+      ? buildEntityUrl(combineWithExtras(preset.tree, excludedFilters))
+      : null;
+
   return {
     id: viz.id,
     name: viz.name,
@@ -50,6 +57,7 @@ async function buildCard(
     pointUrls,
     warnings: chartResult.warnings,
     excludedEntityCount: chartResult.excludedEntityCount,
+    excludedEntitiesUrl,
   };
 }
 

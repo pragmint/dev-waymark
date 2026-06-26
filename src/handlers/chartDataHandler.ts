@@ -6,8 +6,27 @@ import { resolveTemplate } from '../domain/templateResolver';
 import {
   buildChartData,
   buildChartJsConfig,
+  buildExcludedEntityFilters,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
+import { buildEntityUrl } from '../domain/filterUrl';
+import type { FilterNode, FilterTree } from '../schemas/filterTree';
+import type { VisualizationConfig } from '../schemas/visualization';
+
+function combineWithExtras(presetTree: FilterTree, extras: FilterNode[]): FilterTree {
+  if (extras.length === 0) return presetTree;
+  return { type: 'group', id: 'root', op: 'AND', children: [presetTree, ...extras] };
+}
+
+function excludedEntitiesUrlFor(
+  config: VisualizationConfig,
+  presetTree: FilterTree,
+  excludedCount: number
+): string | null {
+  const extras = buildExcludedEntityFilters(config);
+  if (excludedCount <= 0 || extras.length === 0) return null;
+  return buildEntityUrl(combineWithExtras(presetTree, extras));
+}
 
 /** GET /api/preset-fields/:id — returns available filter fields for a preset */
 export async function presetFieldsHandler(c: Context) {
@@ -50,6 +69,11 @@ export async function chartDataByIdHandler(c: Context) {
     chartJsConfig,
     warnings: chartResult.warnings,
     excludedEntityCount: chartResult.excludedEntityCount,
+    excludedEntitiesUrl: excludedEntitiesUrlFor(
+      viz.config,
+      preset.tree,
+      chartResult.excludedEntityCount
+    ),
   });
 }
 
@@ -86,5 +110,10 @@ export async function chartDataPreviewHandler(c: Context) {
     chartJsConfig,
     warnings: chartResult.warnings,
     excludedEntityCount: chartResult.excludedEntityCount,
+    excludedEntitiesUrl: excludedEntitiesUrlFor(
+      config,
+      preset.tree,
+      chartResult.excludedEntityCount
+    ),
   });
 }

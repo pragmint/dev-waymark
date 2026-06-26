@@ -176,6 +176,19 @@ export function buildPointEntityFilters(label: string, config: VisualizationConf
   return [];
 }
 
+// Filter nodes that, combined with the preset's filter tree under an AND,
+// isolate the entities that were excluded from the chart because they were
+// missing one or more required fields. Each required field becomes an IS NULL
+// leaf (range op with empty value — see filterTreeEval/entityRepository for
+// the semantics), OR'd together so any single missing field qualifies.
+export function buildExcludedEntityFilters(config: VisualizationConfig): FilterNode[] {
+  const keys = requiredFieldKeys(config);
+  if (keys.length === 0) return [];
+  const nullLeaves: FilterNode[] = keys.map(k => makeLeaf(k, 'gte', ''));
+  if (nullLeaves.length === 1) return nullLeaves;
+  return [{ type: 'group', id: 'excluded', op: 'OR', children: nullLeaves }];
+}
+
 // ── Unit conversion ───────────────────────────────────────────────────────────
 
 const DURATION_TO_SECONDS: Record<DurationUnit, number> = {
@@ -327,7 +340,7 @@ function sortCategoricalLabels(
   });
 }
 
-function buildExclusionWarning(count: number, config: VisualizationConfig): string {
+function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);
@@ -336,6 +349,11 @@ function buildExclusionWarning(count: number, config: VisualizationConfig): stri
   } else if (config.yAxis && config.aggregation.function !== 'count') {
     keys.push(config.yAxis.metadataKey);
   }
+  return Array.from(new Set(keys));
+}
+
+function buildExclusionWarning(count: number, config: VisualizationConfig): string {
+  const keys = requiredFieldKeys(config);
   const noun = count === 1 ? 'entity was' : 'entities were';
   return `${count} ${noun} excluded because they were missing required fields: ${keys.join(', ')}.`;
 }

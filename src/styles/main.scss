@@ -1063,6 +1063,16 @@ form {
   }
 }
 
+.warning-link {
+  color: #721c24;
+  text-decoration: underline;
+  font-weight: 500;
+
+  &:hover {
+    color: #4a1217;
+  }
+}
+
 // ── Form sections ────────────────────────────────────────────────────────────
 
 .form-section {

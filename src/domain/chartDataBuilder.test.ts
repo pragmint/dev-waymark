@@ -8,9 +8,11 @@ import {
   computeDerivedMetric,
   buildChartData,
   buildChartJsConfig,
+  buildExcludedEntityFilters,
   buildPointEntityFilters,
   validateVisualizationConfig,
 } from './chartDataBuilder';
+import { isGroup, isLeaf } from '../schemas/filterTree';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -479,6 +481,72 @@ describe('buildChartData — missing metadata handling', () => {
     expect(result.labels).toEqual([]);
     expect(result.warnings).toEqual([]);
     expect(result.excludedEntityCount).toBe(0);
+  });
+
+  test('warning lists each required key once even when x-axis equals derived metric end', () => {
+    const config: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'avg' },
+      derivedMetric: {
+        name: 'lead_time',
+        type: 'duration',
+        startMetadataKey: 'created_at',
+        endMetadataKey: 'done_at',
+        unit: 'days',
+      },
+    };
+    const entities = [makeEntity(1, {})];
+    const result = buildChartData(entities, config);
+    expect(result.warnings.length).toBe(1);
+    const occurrences = (result.warnings[0].match(/done_at/g) ?? []).length;
+    expect(occurrences).toBe(1);
+    expect(result.warnings[0]).toContain('created_at');
+  });
+});
+
+describe('buildExcludedEntityFilters', () => {
+  test('returns IS NULL leaves OR-grouped for each unique required key', () => {
+    const config: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'avg' },
+      derivedMetric: {
+        name: 'lead_time',
+        type: 'duration',
+        startMetadataKey: 'created_at',
+        endMetadataKey: 'done_at',
+        unit: 'days',
+      },
+    };
+    const nodes = buildExcludedEntityFilters(config);
+    expect(nodes.length).toBe(1);
+    const group = nodes[0];
+    expect(isGroup(group)).toBe(true);
+    if (!isGroup(group)) return;
+    expect(group.op).toBe('OR');
+    const keys = group.children.filter(isLeaf).map(l => l.key);
+    expect(keys.sort()).toEqual(['created_at', 'done_at']);
+    for (const child of group.children) {
+      if (!isLeaf(child)) continue;
+      expect(child.op).toBe('gte');
+      expect(child.value).toBe('');
+    }
+  });
+
+  test('returns single IS NULL leaf without OR group when one required key', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    const nodes = buildExcludedEntityFilters(config);
+    expect(nodes.length).toBe(1);
+    expect(isLeaf(nodes[0])).toBe(true);
+    if (!isLeaf(nodes[0])) return;
+    expect(nodes[0].key).toBe('team');
+    expect(nodes[0].op).toBe('gte');
+    expect(nodes[0].value).toBe('');
   });
 });
 

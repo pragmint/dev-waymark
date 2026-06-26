@@ -1084,15 +1084,19 @@ async function fetchAndRenderModalPreview(slots: Record<string, string>): Promis
     showModalWarnings(err.details ?? err.error ?? 'Unknown error');
     return;
   }
-  const data = (await resp.json()) as { chartJsConfig: object; warnings: string[] };
-  if (data.warnings.length > 0) showModalWarnings(data.warnings);
+  const data = (await resp.json()) as {
+    chartJsConfig: object;
+    warnings: string[];
+    excludedEntitiesUrl?: string | null;
+  };
+  if (data.warnings.length > 0) showModalWarnings(data.warnings, data.excludedEntitiesUrl ?? null);
   const canvas = document.getElementById('viz-modal-preview') as HTMLCanvasElement | null;
   if (!canvas) return;
   if (modalPreviewChart) modalPreviewChart.destroy();
   modalPreviewChart = new Chart(canvas, data.chartJsConfig);
 }
 
-function showModalWarnings(details: unknown): void {
+function showModalWarnings(details: unknown, excludedEntitiesUrl: string | null = null): void {
   const el = document.getElementById('viz-modal-warnings');
   if (!el) return;
   el.innerHTML = '';
@@ -1103,6 +1107,18 @@ function showModalWarnings(details: unknown): void {
     const p = document.createElement('p');
     p.textContent = msg;
     p.className = 'warning';
+    el.appendChild(p);
+  }
+  if (excludedEntitiesUrl) {
+    const p = document.createElement('p');
+    p.className = 'warning';
+    const a = document.createElement('a');
+    a.href = excludedEntitiesUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'warning-link';
+    a.textContent = 'View excluded entities →';
+    p.appendChild(a);
     el.appendChild(p);
   }
 }
