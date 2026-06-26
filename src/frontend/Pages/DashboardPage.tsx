@@ -3,6 +3,7 @@ import type { Dashboard } from '../../schemas/dashboard';
 import type { Preset } from '../../schemas/preset';
 import type { VisualizationSummary } from '../../schemas/visualization';
 import type { ChartJsConfig } from '../../domain/chartDataBuilder';
+import type { DateRange } from '../../domain/dateRange';
 import { TEMPLATES } from '../../schemas/visualizationTemplate';
 import { Layout } from '../components/Layout';
 
@@ -26,6 +27,8 @@ type Props = {
   availableVisualizations: VisualizationSummary[];
   vizDashboardCounts: Record<number, number>;
   presets: Preset[];
+  dateRange: DateRange;
+  dateRangeLabel: string;
 };
 
 export const DashboardPage: FC<Props> = ({
@@ -35,6 +38,8 @@ export const DashboardPage: FC<Props> = ({
   availableVisualizations,
   vizDashboardCounts,
   presets,
+  dateRange,
+  dateRangeLabel,
 }) => {
   const dashboardConfig = {
     dashboardId: selectedDashboard?.id ?? null,
@@ -48,6 +53,8 @@ export const DashboardPage: FC<Props> = ({
       </div>
 
       <DashboardMetaRow dashboards={dashboards} selectedDashboard={selectedDashboard} />
+
+      {selectedDashboard && <DateRangeRow dateRange={dateRange} dateRangeLabel={dateRangeLabel} />}
 
       {!selectedDashboard ? (
         <EmptyState hasAnyDashboards={dashboards.length > 0} />
@@ -87,6 +94,11 @@ export const DashboardPage: FC<Props> = ({
         id="presets-list"
         type="application/json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(presets) }}
+      />
+      <script
+        id="date-range-config"
+        type="application/json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(dateRange) }}
       />
       <script
         id="templates-list"
@@ -218,6 +230,86 @@ const DashboardMetaRow: FC<{
     </div>
   </div>
 );
+
+const DateRangeRow: FC<{ dateRange: DateRange; dateRangeLabel: string }> = ({
+  dateRange,
+  dateRangeLabel,
+}) => {
+  const isStepper =
+    dateRange.period === 'week' ||
+    dateRange.period === 'month' ||
+    dateRange.period === 'quarter' ||
+    dateRange.period === 'year';
+  return (
+    <div class="dashboard-date-range-row" data-date-range-row>
+      <label class="filter-widget-label" for="date-range-period">
+        Range
+      </label>
+      <select id="date-range-period" class="filter-select date-range-period" data-date-range-period>
+        <option value="all" selected={dateRange.period === 'all'}>
+          All time
+        </option>
+        <option value="week" selected={dateRange.period === 'week'}>
+          Week
+        </option>
+        <option value="month" selected={dateRange.period === 'month'}>
+          Month
+        </option>
+        <option value="quarter" selected={dateRange.period === 'quarter'}>
+          Quarter
+        </option>
+        <option value="year" selected={dateRange.period === 'year'}>
+          Year
+        </option>
+        <option value="custom" selected={dateRange.period === 'custom'}>
+          Custom
+        </option>
+      </select>
+
+      <div class="date-range-stepper" hidden={!isStepper}>
+        <button
+          type="button"
+          class="filter-icon-btn date-range-arrow"
+          data-date-range-prev
+          aria-label="Previous period"
+          title="Previous period"
+        >
+          ‹
+        </button>
+        <span class="date-range-label" data-date-range-label>
+          {dateRangeLabel}
+        </span>
+        <button
+          type="button"
+          class="filter-icon-btn date-range-arrow"
+          data-date-range-next
+          aria-label="Next period"
+          title="Next period"
+        >
+          ›
+        </button>
+      </div>
+
+      <div class="date-range-custom" hidden={dateRange.period !== 'custom'}>
+        <input
+          type="date"
+          class="filter-input date-range-date-input"
+          data-date-range-custom-start
+          value={dateRange.customStart ?? ''}
+          aria-label="Range start"
+        />
+        <span class="date-range-dash">–</span>
+        <input
+          type="date"
+          class="filter-input date-range-date-input"
+          data-date-range-custom-end
+          value={dateRange.customEnd ?? ''}
+          aria-label="Range end"
+        />
+      </div>
+    </div>
+  );
+};
 
 const EmptyState: FC<{ hasAnyDashboards: boolean }> = ({ hasAnyDashboards }) => (
   <div class="dashboard-empty">

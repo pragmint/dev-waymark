@@ -1203,6 +1203,66 @@ form {
   max-height: 280px;
 }
 
+.dashboard-date-range-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.date-range-period {
+  min-width: 120px;
+}
+
+.date-range-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.date-range-arrow {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.date-range-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  min-width: 140px;
+  text-align: center;
+}
+
+.date-range-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.date-range-date-input {
+  // Native date pickers ignore our typical font-family/padding tweaks on some
+  // browsers — keep width fixed so the row doesn't jump as values are typed.
+  width: 150px;
+}
+
+.date-range-dash {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
 .dashboard-add-viz-row {
   margin-top: 16px;
 }
@@ -1424,6 +1484,15 @@ form {
 
   .dashboard-viz-card {
     padding: 8px;
+  }
+
+  .dashboard-date-range-row {
+    flex-direction: column;
+    align-items: stretch;
+
+    .date-range-label {
+      flex: 1;
+    }
   }
 }
 

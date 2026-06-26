@@ -14,6 +14,7 @@ import {
 } from './src/handlers/entityPresetsHandler';
 import {
   dashboardsPageHandler,
+  dashboardCardsApiHandler,
   dashboardSaveHandler,
   dashboardUpdateHandler,
   dashboardDeleteHandler,
@@ -73,6 +74,8 @@ app.get('/api/visualizations/:id', visualizationDetailApiHandler);
 app.post('/api/visualizations/:id', visualizationUpdateApiHandler);
 app.get('/api/visualizations/:id/dashboards', visualizationDashboardsApiHandler);
 app.post('/api/visualizations/:id/delete', visualizationDeleteApiHandler);
+
+app.get('/api/dashboards/:id/cards', dashboardCardsApiHandler);
 
 app.get('/api/chart-data/:id', chartDataByIdHandler);
 app.post('/api/chart-data/preview', chartDataPreviewHandler);

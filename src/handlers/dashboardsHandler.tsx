@@ -8,6 +8,13 @@ import {
   buildPointEntityFilters,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
+import {
+  buildDateRangeFilters,
+  computeDateRange,
+  parseDateRangeFromQuery,
+  resolveVizDateField,
+} from '../domain/dateRange';
+import type { ComputedDateRange, DateRange } from '../domain/dateRange';
 import { buildEntityUrl } from '../domain/filterUrl';
 import { resolveTemplate } from '../domain/templateResolver';
 import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
@@ -26,7 +33,8 @@ function combineWithExtras(presetTree: FilterTree, extras: FilterNode[]): Filter
 
 async function buildCard(
   vizId: number,
-  repo: ReturnType<typeof getAppStateRepo>
+  repo: ReturnType<typeof getAppStateRepo>,
+  computedRange: ComputedDateRange
 ): Promise<DashboardCard | null> {
   const viz = await repo.getVisualization(vizId);
   if (!viz) return null;
@@ -34,20 +42,30 @@ async function buildCard(
   const preset = await repo.getPreset(viz.presetId);
   if (!preset) return null;
 
+  // If the dashboard's date range is bounded and this viz has a resolvable
+  // date field, layer gte/lte leaves over the preset tree so the entity
+  // query already applies the time window — no need to re-aggregate later.
+  const dateField = resolveVizDateField(viz.config);
+  const rangeFilters =
+    dateField && (computedRange.start || computedRange.end)
+      ? buildDateRangeFilters(computedRange, dateField)
+      : [];
+  const filteredTree = combineWithExtras(preset.tree, rangeFilters);
+
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.tree);
+  const entities = await entityRepo.list(filteredTree);
 
   const chartResult = buildChartData(entities, viz.config);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
   const pointUrls = chartResult.labels.map(label =>
-    buildEntityUrl(combineWithExtras(preset.tree, buildPointEntityFilters(label, viz.config)))
+    buildEntityUrl(combineWithExtras(filteredTree, buildPointEntityFilters(label, viz.config)))
   );
 
   const excludedFilters = buildExcludedEntityFilters(viz.config);
   const excludedEntitiesUrl =
     chartResult.excludedEntityCount > 0 && excludedFilters.length > 0
-      ? buildEntityUrl(combineWithExtras(preset.tree, excludedFilters))
+      ? buildEntityUrl(combineWithExtras(filteredTree, excludedFilters))
       : null;
 
   return {
@@ -240,6 +258,30 @@ export async function visualizationUpdateApiHandler(c: Context) {
   return c.json({ id });
 }
 
+// Returns the same card data the page handler builds, but as JSON — used by the
+// client to swap charts in place when the date range changes, without a full
+// page reload. The dashboard's viz list is read from the saved dashboard, so
+// reordering or add/remove still requires a full reload.
+export async function dashboardCardsApiHandler(c: Context) {
+  const repo = getAppStateRepo();
+  const id = parseInt(c.req.param('id') ?? '', 10);
+  if (isNaN(id)) return c.json({ error: 'Invalid id' }, 400);
+
+  const dashboard = await repo.getDashboard(id);
+  if (!dashboard) return c.json({ error: 'Not found' }, 404);
+
+  const queryString = new URL(c.req.url).search.slice(1);
+  const dateRange = parseDateRangeFromQuery(new URLSearchParams(queryString));
+  const computedRange = computeDateRange(dateRange, new Date());
+
+  const built = await Promise.all(
+    dashboard.visualizationIds.map(vizId => buildCard(vizId, repo, computedRange))
+  );
+  const cards = built.filter((c): c is DashboardCard => c !== null);
+
+  return c.json({ cards, dateRangeLabel: computedRange.label });
+}
+
 export async function dashboardsPageHandler(c: Context) {
   const repo = getAppStateRepo();
   const dashboards = await repo.listDashboards();
@@ -254,11 +296,17 @@ export async function dashboardsPageHandler(c: Context) {
     return c.redirect('/visualizations');
   }
 
+  const queryString = new URL(c.req.url).search.slice(1);
+  const dateRange: DateRange = parseDateRangeFromQuery(new URLSearchParams(queryString));
+  const computedRange = computeDateRange(dateRange, new Date());
+
   let cards: DashboardCard[] = [];
   let availableVisualizations: VisualizationSummary[] = [];
 
   if (selected) {
-    const built = await Promise.all(selected.visualizationIds.map(id => buildCard(id, repo)));
+    const built = await Promise.all(
+      selected.visualizationIds.map(id => buildCard(id, repo, computedRange))
+    );
     cards = built.filter((c): c is DashboardCard => c !== null);
     availableVisualizations = await repo.listVisualizationsNotOnDashboard(selected.id);
   }
@@ -274,6 +322,8 @@ export async function dashboardsPageHandler(c: Context) {
       availableVisualizations={availableVisualizations}
       vizDashboardCounts={vizDashboardCounts}
       presets={presets}
+      dateRange={dateRange}
+      dateRangeLabel={computedRange.label}
     />
   );
 }

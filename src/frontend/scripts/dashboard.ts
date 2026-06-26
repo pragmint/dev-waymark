@@ -1,6 +1,7 @@
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
+  getChart(canvas: HTMLCanvasElement): ChartInstance | undefined;
 };
 
 interface ChartInstance {
@@ -27,12 +28,22 @@ interface ChartConfig {
   options?: ChartOptions;
 }
 
+type DateRangePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
+interface DateRangeState {
+  period: DateRangePeriod;
+  offset: number;
+  customStart: string | null;
+  customEnd: string | null;
+}
+
 interface DashboardState {
   dashboardId: number | null;
   savedVizIds: number[];
   currentVizIds: number[];
   originalName: string;
   vizDashboardCounts: Record<number, number>;
+  dateRange: DateRangeState;
 }
 
 const state: DashboardState = {
@@ -41,6 +52,7 @@ const state: DashboardState = {
   currentVizIds: [],
   originalName: '',
   vizDashboardCounts: {},
+  dateRange: { period: 'all', offset: 0, customStart: null, customEnd: null },
 };
 
 // ── Hydration ────────────────────────────────────────────────────────────────
@@ -63,6 +75,7 @@ function hydrate(): void {
   state.savedVizIds = readJsonEmbed<number[]>('dashboard-saved-viz-ids', []);
   state.currentVizIds = state.savedVizIds.slice();
   state.vizDashboardCounts = readJsonEmbed<Record<number, number>>('viz-dashboard-counts', {});
+  state.dateRange = readJsonEmbed<DateRangeState>('date-range-config', state.dateRange);
 
   const nameInput = document.querySelector<HTMLInputElement>('[data-dashboard-name-input]');
   state.originalName = nameInput?.dataset.originalName ?? nameInput?.value ?? '';
@@ -96,21 +109,24 @@ function attachPointNavigation(config: ChartConfig, pointUrls: string[]): void {
   };
 }
 
+function renderCardChart(canvas: HTMLCanvasElement): void {
+  Chart.getChart(canvas)?.destroy();
+  const raw = canvas.getAttribute('data-config');
+  if (!raw) return;
+  let config: ChartConfig;
+  try {
+    config = JSON.parse(raw) as ChartConfig;
+  } catch {
+    return;
+  }
+  const pointUrls = readPointUrls(canvas);
+  if (pointUrls) attachPointNavigation(config, pointUrls);
+  new Chart(canvas, config);
+}
+
 function renderCardCharts(): void {
   const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas[data-config]');
-  for (const canvas of canvases) {
-    const raw = canvas.getAttribute('data-config');
-    if (!raw) continue;
-    let config: ChartConfig;
-    try {
-      config = JSON.parse(raw) as ChartConfig;
-    } catch {
-      continue;
-    }
-    const pointUrls = readPointUrls(canvas);
-    if (pointUrls) attachPointNavigation(config, pointUrls);
-    new Chart(canvas, config);
-  }
+  for (const canvas of canvases) renderCardChart(canvas);
 }
 
 // ── Dirty-state tracking ─────────────────────────────────────────────────────
@@ -1198,11 +1214,223 @@ async function addOrReload(vizId: number): Promise<void> {
 }
 
 function reloadDashboard(): void {
-  if (state.dashboardId != null) {
-    window.location.href = `/visualizations?dashboard=${state.dashboardId}`;
-  } else {
-    window.location.href = '/visualizations';
+  window.location.href = buildDashboardUrl(state.dateRange);
+}
+
+// ── Date range stepper ───────────────────────────────────────────────────────
+
+function buildDashboardUrl(range: DateRangeState): string {
+  const params: string[] = [];
+  if (state.dashboardId != null) params.push(`dashboard=${state.dashboardId}`);
+  if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
+  if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
+    params.push(`offset=${range.offset}`);
   }
+  if (range.period === 'custom') {
+    if (range.customStart) params.push(`rs=${encodeURIComponent(range.customStart)}`);
+    if (range.customEnd) params.push(`re=${encodeURIComponent(range.customEnd)}`);
+  }
+  return params.length === 0 ? '/visualizations' : `/visualizations?${params.join('&')}`;
+}
+
+function isStepperPeriod(period: DateRangePeriod): boolean {
+  return period === 'week' || period === 'month' || period === 'quarter' || period === 'year';
+}
+
+function syncDateRangeRowUI(range: DateRangeState): void {
+  const row = document.querySelector<HTMLElement>('[data-date-range-row]');
+  if (!row) return;
+
+  const periodSelect = row.querySelector<HTMLSelectElement>('[data-date-range-period]');
+  if (periodSelect && periodSelect.value !== range.period) periodSelect.value = range.period;
+
+  const stepper = row.querySelector<HTMLElement>('.date-range-stepper');
+  if (stepper) stepper.hidden = !isStepperPeriod(range.period);
+
+  const custom = row.querySelector<HTMLElement>('.date-range-custom');
+  if (custom) custom.hidden = range.period !== 'custom';
+
+  const startInput = row.querySelector<HTMLInputElement>('[data-date-range-custom-start]');
+  if (startInput && document.activeElement !== startInput) {
+    startInput.value = range.customStart ?? '';
+  }
+  const endInput = row.querySelector<HTMLInputElement>('[data-date-range-custom-end]');
+  if (endInput && document.activeElement !== endInput) {
+    endInput.value = range.customEnd ?? '';
+  }
+}
+
+function buildWarningBox(warnings: string[], excludedEntitiesUrl: string | null): HTMLDivElement {
+  const box = document.createElement('div');
+  box.className = 'warning-box';
+  for (const text of warnings) {
+    const p = document.createElement('p');
+    p.className = 'warning';
+    p.textContent = text;
+    box.appendChild(p);
+  }
+  if (excludedEntitiesUrl) {
+    const p = document.createElement('p');
+    p.className = 'warning';
+    const a = document.createElement('a');
+    a.className = 'warning-link';
+    a.href = excludedEntitiesUrl;
+    a.textContent = 'View excluded entities →';
+    p.appendChild(a);
+    box.appendChild(p);
+  }
+  return box;
+}
+
+interface CardPayload {
+  id: number;
+  chartJsConfig: unknown;
+  pointUrls: string[];
+  warnings: string[];
+  excludedEntityCount: number;
+  excludedEntitiesUrl: string | null;
+}
+
+function applyCardUpdate(card: CardPayload): void {
+  const cardEl = document.querySelector<HTMLElement>(
+    `.dashboard-viz-card[data-viz-id="${card.id}"]`
+  );
+  if (!cardEl) return;
+
+  const existingWarning = cardEl.querySelector('.warning-box');
+  existingWarning?.remove();
+  if (card.warnings.length > 0) {
+    const box = buildWarningBox(card.warnings, card.excludedEntitiesUrl);
+    const canvasWrap = cardEl.querySelector('.dashboard-viz-canvas-wrap');
+    if (canvasWrap) canvasWrap.before(box);
+  }
+
+  const canvas = cardEl.querySelector<HTMLCanvasElement>('canvas');
+  if (canvas) {
+    canvas.setAttribute('data-config', JSON.stringify(card.chartJsConfig));
+    canvas.setAttribute('data-point-urls', JSON.stringify(card.pointUrls));
+    renderCardChart(canvas);
+  }
+}
+
+// Sequence guards stale responses: if the user clicks the arrow several times
+// in quick succession, only the latest fetch is allowed to mutate the DOM.
+let rangeRequestSeq = 0;
+
+async function applyRange(range: DateRangeState, opts: { pushHistory: boolean }): Promise<void> {
+  state.dateRange = range;
+  syncDateRangeRowUI(range);
+
+  if (opts.pushHistory) {
+    history.pushState({ dateRange: range }, '', buildDashboardUrl(range));
+  }
+
+  if (state.dashboardId == null) return;
+  const seq = ++rangeRequestSeq;
+  const apiUrl = buildDashboardCardsApiUrl(state.dashboardId, range);
+
+  let resp: Response;
+  try {
+    resp = await fetch(apiUrl, { headers: { Accept: 'application/json' } });
+  } catch {
+    return;
+  }
+  if (seq !== rangeRequestSeq || !resp.ok) return;
+
+  const data = (await resp.json()) as { cards: CardPayload[]; dateRangeLabel: string };
+  if (seq !== rangeRequestSeq) return;
+
+  const labelEl = document.querySelector<HTMLElement>('[data-date-range-label]');
+  if (labelEl) labelEl.textContent = data.dateRangeLabel;
+
+  for (const card of data.cards) applyCardUpdate(card);
+}
+
+function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): string {
+  const params: string[] = [];
+  if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
+  if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
+    params.push(`offset=${range.offset}`);
+  }
+  if (range.period === 'custom') {
+    if (range.customStart) params.push(`rs=${encodeURIComponent(range.customStart)}`);
+    if (range.customEnd) params.push(`re=${encodeURIComponent(range.customEnd)}`);
+  }
+  const query = params.length === 0 ? '' : `?${params.join('&')}`;
+  return `/api/dashboards/${dashboardId}/cards${query}`;
+}
+
+function readRangeFromUrl(): DateRangeState {
+  const params = new URLSearchParams(window.location.search);
+  const rawPeriod = params.get('range');
+  const validPeriods: DateRangePeriod[] = ['all', 'week', 'month', 'quarter', 'year', 'custom'];
+  const period: DateRangePeriod = validPeriods.includes(rawPeriod as DateRangePeriod)
+    ? (rawPeriod as DateRangePeriod)
+    : 'all';
+  const offsetN = parseInt(params.get('offset') ?? '0', 10);
+  const offset = Number.isFinite(offsetN) ? offsetN : 0;
+  const rs = params.get('rs');
+  const re = params.get('re');
+  const isIsoDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  return {
+    period,
+    offset,
+    customStart: isIsoDate(rs) ? rs : null,
+    customEnd: isIsoDate(re) ? re : null,
+  };
+}
+
+function wireDateRange(): void {
+  const row = document.querySelector<HTMLElement>('[data-date-range-row]');
+  if (!row) return;
+
+  const periodSelect = row.querySelector<HTMLSelectElement>('[data-date-range-period]');
+  periodSelect?.addEventListener('change', () => {
+    const period = periodSelect.value as DateRangePeriod;
+    // Switching the period type always resets the stepper offset and clears
+    // custom dates — picking a fresh granularity should land on the current
+    // period, not carry over an offset that meant something else.
+    const next: DateRangeState = {
+      period,
+      offset: 0,
+      customStart: period === 'custom' ? state.dateRange.customStart : null,
+      customEnd: period === 'custom' ? state.dateRange.customEnd : null,
+    };
+    void applyRange(next, { pushHistory: true });
+  });
+
+  const prevBtn = row.querySelector<HTMLButtonElement>('[data-date-range-prev]');
+  prevBtn?.addEventListener('click', () => {
+    void applyRange(
+      { ...state.dateRange, offset: state.dateRange.offset - 1 },
+      { pushHistory: true }
+    );
+  });
+
+  const nextBtn = row.querySelector<HTMLButtonElement>('[data-date-range-next]');
+  nextBtn?.addEventListener('click', () => {
+    void applyRange(
+      { ...state.dateRange, offset: state.dateRange.offset + 1 },
+      { pushHistory: true }
+    );
+  });
+
+  const startInput = row.querySelector<HTMLInputElement>('[data-date-range-custom-start]');
+  const endInput = row.querySelector<HTMLInputElement>('[data-date-range-custom-end]');
+  const applyCustom = (): void => {
+    const customStart = startInput?.value ? startInput.value : null;
+    const customEnd = endInput?.value ? endInput.value : null;
+    // Don't fetch until at least one bound is set — saves an unbounded round-trip
+    // on the very first focus into an empty date input.
+    if (!customStart && !customEnd) return;
+    void applyRange({ period: 'custom', offset: 0, customStart, customEnd }, { pushHistory: true });
+  };
+  startInput?.addEventListener('change', applyCustom);
+  endInput?.addEventListener('change', applyCustom);
+
+  window.addEventListener('popstate', () => {
+    void applyRange(readRangeFromUrl(), { pushHistory: false });
+  });
 }
 
 // ── Edit pencil ──────────────────────────────────────────────────────────────
@@ -1234,5 +1462,6 @@ document.addEventListener('DOMContentLoaded', () => {
   wireRemoveButtons();
   wireEditButtons();
   wireDragReorder();
+  wireDateRange();
   recomputeDirty();
 });
