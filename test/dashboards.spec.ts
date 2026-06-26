@@ -308,7 +308,7 @@ test.describe('remove visualization X-button branching', () => {
 // ── Create-viz modal ────────────────────────────────────────────────────────
 
 test.describe('create-viz modal', () => {
-  test('opening the modal from the picker walks preset → template → configure', async ({
+  test('all three sections render together and update each other as the user picks dataset + template', async ({
     page,
     request,
   }) => {
@@ -320,20 +320,24 @@ test.describe('create-viz modal', () => {
     await waitForDashboardHydrated(page);
     await page.selectOption('[data-add-viz]', '__new__');
 
-    // Step 1 visible
+    // All three sections render together from the start.
     await expect(page.locator('.viz-modal')).toBeVisible();
     await expect(page.locator('text=Choose a dataset')).toBeVisible();
-
-    // Pick our preset
-    await page.selectOption('.viz-modal-body select', { label: presetName });
-
-    // Step 2 — template cards
     await expect(page.locator('.viz-modal-template-card')).toHaveCount(6);
-    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+    await expect(page.locator('.viz-modal-section-placeholder')).toBeVisible();
 
-    // Step 3 — name + slot form visible
+    // Pick our preset → config section advances to "pick a template".
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await expect(page.locator('.viz-modal-section-placeholder')).toBeVisible();
+
+    // Pick a template → config form appears with name + slot select.
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
     await expect(page.locator('#viz-modal-form input[name="name"]')).toBeVisible();
     await expect(page.locator('#viz-modal-form select[name="category_field"]')).toBeVisible();
+    // Template card stays highlighted while the configure section is visible.
+    await expect(
+      page.locator('.viz-modal-template-card.is-selected:has-text("Category breakdown")')
+    ).toBeVisible();
   });
 
   test('ESC closes the modal', async ({ page, request }) => {
@@ -345,12 +349,52 @@ test.describe('create-viz modal', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.viz-modal')).not.toBeVisible();
   });
+
+  test('switching template after selecting one swaps slot fields in place; dataset stays selected', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetSwap');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SwapD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+
+    const datasetSelect = page.locator('.viz-modal-body select').first();
+    await datasetSelect.selectOption({ label: presetName });
+    const presetValue = await datasetSelect.inputValue();
+
+    // First template — category_breakdown — exposes a category_field slot.
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+    await expect(page.locator('#viz-modal-form select[name="category_field"]')).toBeVisible();
+    await expect(page.locator('#viz-modal-form select[name="date_field"]')).toHaveCount(0);
+
+    // Switch to a different template — slot fields swap with no walk-back step.
+    await page.locator('.viz-modal-template-card:has-text("Throughput over time")').click();
+    await expect(page.locator('#viz-modal-form select[name="date_field"]')).toBeVisible();
+    await expect(page.locator('#viz-modal-form select[name="time_bucket"]')).toBeVisible();
+    await expect(page.locator('#viz-modal-form select[name="category_field"]')).toHaveCount(0);
+
+    // Dataset selection persists across the template switch.
+    await expect(page.locator('.viz-modal-body select').first()).toHaveValue(presetValue);
+
+    // Only the newly-clicked template is highlighted.
+    await expect(page.locator('.viz-modal-template-card.is-selected')).toHaveCount(1);
+    await expect(
+      page.locator('.viz-modal-template-card.is-selected:has-text("Throughput over time")')
+    ).toBeVisible();
+  });
 });
 
 // ── Edit modal (pencil) ─────────────────────────────────────────────────────
 
 test.describe('edit-viz modal', () => {
-  test('pencil opens modal at step 3 with name pre-filled', async ({ page, request }) => {
+  test('pencil opens edit modal with all sections visible and name pre-filled', async ({
+    page,
+    request,
+  }) => {
     const presetId = await seedPreset(request, uniqueName('PEdit'));
     const vizName = uniqueName('Editable');
     const vizId = await seedViz(request, presetId, vizName);
@@ -362,7 +406,11 @@ test.describe('edit-viz modal', () => {
 
     await expect(page.locator('.viz-modal')).toBeVisible();
     await expect(page.locator('.viz-modal-title')).toHaveText('Edit visualization');
+    // All three sections are visible; the form is pre-filled and the selected
+    // template card is highlighted.
+    await expect(page.locator('.viz-modal-section')).toHaveCount(3);
     await expect(page.locator('#viz-modal-form input[name="name"]')).toHaveValue(vizName);
+    await expect(page.locator('.viz-modal-template-card.is-selected')).toHaveCount(1);
     // Footer shows the save-mode chooser.
     await expect(page.locator('.viz-modal-footer button:has-text("Save changes")')).toBeVisible();
     await expect(page.locator('.viz-modal-footer button:has-text("Save as new")')).toBeVisible();

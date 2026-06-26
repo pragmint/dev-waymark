@@ -631,7 +631,6 @@ interface ModalState {
   mode: 'create' | 'edit';
   editVizId: number | null;
   editDashboards: { id: number; name: string }[];
-  step: 1 | 2 | 3;
   presetId: number | null;
   templateId: string | null;
   name: string;
@@ -645,7 +644,6 @@ let modalState: ModalState = {
   mode: 'create',
   editVizId: null,
   editDashboards: [],
-  step: 1,
   presetId: null,
   templateId: null,
   name: '',
@@ -666,7 +664,6 @@ function resetModalState(): void {
     mode: 'create',
     editVizId: null,
     editDashboards: [],
-    step: 1,
     presetId: null,
     templateId: null,
     name: '',
@@ -699,7 +696,6 @@ async function openEditModal(vizId: number): Promise<void> {
   resetModalState();
   modalState.mode = 'edit';
   modalState.editVizId = vizId;
-  modalState.step = 3;
   dialog.showModal();
 
   const [detailResp, dashResp] = await Promise.all([
@@ -758,6 +754,10 @@ function closeModal(): void {
 function renderModal(): void {
   const dialog = getModal();
   if (!dialog) return;
+  if (modalPreviewChart) {
+    modalPreviewChart.destroy();
+    modalPreviewChart = null;
+  }
   dialog.innerHTML = '';
 
   const header = document.createElement('div');
@@ -766,48 +766,25 @@ function renderModal(): void {
   title.className = 'viz-modal-title';
   title.textContent = modalState.mode === 'edit' ? 'Edit visualization' : 'New visualization';
   header.appendChild(title);
-  if (modalState.mode === 'create') {
-    const steps = document.createElement('div');
-    steps.className = 'viz-modal-steps';
-    for (const [n, label] of [
-      [1, 'Dataset'],
-      [2, 'Template'],
-      [3, 'Configure'],
-    ] as const) {
-      const span = document.createElement('span');
-      span.textContent = `${n}. ${label}`;
-      if (n === modalState.step) span.className = 'viz-modal-step-active';
-      steps.appendChild(span);
-    }
-    header.appendChild(steps);
-  }
   dialog.appendChild(header);
 
   const body = document.createElement('div');
   body.className = 'viz-modal-body';
+  body.appendChild(renderDatasetSection());
+  body.appendChild(renderTemplateSection());
+  body.appendChild(renderConfigSection());
   dialog.appendChild(body);
 
-  if (modalState.step === 1) renderStep1(body);
-  else if (modalState.step === 2) renderStep2(body);
-  else renderStep3(body);
-
   dialog.appendChild(renderModalFooter());
+
+  if (modalState.presetId != null && modalState.templateId != null) {
+    scheduleModalPreview();
+  }
 }
 
 function renderModalFooter(): HTMLElement {
   const footer = document.createElement('div');
   footer.className = 'viz-modal-footer';
-  if (modalState.mode === 'create' && modalState.step > 1) {
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'filter-btn';
-    back.textContent = '← Back';
-    back.addEventListener('click', () => {
-      modalState.step = (modalState.step - 1) as 1 | 2;
-      renderModal();
-    });
-    footer.appendChild(back);
-  }
   const spacer = document.createElement('div');
   spacer.style.flex = '1';
   footer.appendChild(spacer);
@@ -817,8 +794,6 @@ function renderModalFooter(): HTMLElement {
   cancel.textContent = 'Cancel';
   cancel.addEventListener('click', closeModal);
   footer.appendChild(cancel);
-
-  if (modalState.step !== 3) return footer;
 
   if (modalState.mode === 'create') {
     const save = document.createElement('button');
@@ -847,20 +822,37 @@ function renderModalFooter(): HTMLElement {
   return footer;
 }
 
-function renderStep1(body: HTMLElement): void {
+function sectionShell(stepNum: number, titleText: string): HTMLElement {
+  const section = document.createElement('section');
+  section.className = 'viz-modal-section';
+  section.dataset.section = String(stepNum);
+  const h = document.createElement('h3');
+  h.className = 'viz-modal-section-title';
+  h.textContent = `${stepNum}. ${titleText}`;
+  section.appendChild(h);
+  return section;
+}
+
+function sectionPlaceholder(text: string): HTMLElement {
+  const p = document.createElement('p');
+  p.className = 'viz-modal-section-placeholder';
+  p.textContent = text;
+  return p;
+}
+
+function renderDatasetSection(): HTMLElement {
+  const section = sectionShell(1, 'Dataset');
   const presets = readJsonEmbed<PresetEntry[]>('presets-list', []);
-  body.innerHTML = '';
   if (presets.length === 0) {
-    const p = document.createElement('p');
-    p.className = 'empty';
-    p.textContent = 'No datasets (presets) found. Create one on the Entities page first.';
-    body.appendChild(p);
-    return;
+    section.appendChild(
+      sectionPlaceholder('No datasets (presets) found. Create one on the Entities page first.')
+    );
+    return section;
   }
   const label = document.createElement('label');
   label.className = 'filter-widget-label';
   label.textContent = 'Choose a dataset';
-  body.appendChild(label);
+  section.appendChild(label);
   const select = document.createElement('select');
   select.className = 'filter-select';
   const blank = document.createElement('option');
@@ -871,33 +863,40 @@ function renderStep1(body: HTMLElement): void {
     const opt = document.createElement('option');
     opt.value = String(p.id);
     opt.textContent = p.name;
+    if (modalState.presetId === p.id) opt.selected = true;
     select.appendChild(opt);
   }
-  select.addEventListener('change', async () => {
+  select.addEventListener('change', () => {
     const id = parseInt(select.value, 10);
     if (isNaN(id)) return;
-    modalState.presetId = id;
-    modalState.step = 2;
-    try {
-      const resp = await fetch(`/api/preset-fields/${id}`);
-      modalState.availableFields = resp.ok ? ((await resp.json()) as AvailableField[]) : [];
-    } catch {
-      modalState.availableFields = [];
-    }
-    renderModal();
+    void onPresetChange(id);
   });
-  body.appendChild(select);
+  section.appendChild(select);
+  return section;
 }
 
-function renderStep2(body: HTMLElement): void {
+async function onPresetChange(presetId: number): Promise<void> {
+  captureFormState();
+  modalState.presetId = presetId;
+  try {
+    const resp = await fetch(`/api/preset-fields/${presetId}`);
+    modalState.availableFields = resp.ok ? ((await resp.json()) as AvailableField[]) : [];
+  } catch {
+    modalState.availableFields = [];
+  }
+  renderModal();
+}
+
+function renderTemplateSection(): HTMLElement {
+  const section = sectionShell(2, 'Template');
   const templates = readJsonEmbed<TemplateEntry[]>('templates-list', []);
-  body.innerHTML = '';
   const grid = document.createElement('div');
   grid.className = 'viz-modal-template-grid';
   for (const t of templates) {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'viz-modal-template-card';
+    if (modalState.templateId === t.id) card.classList.add('is-selected');
     const name = document.createElement('span');
     name.className = 'viz-modal-template-name';
     name.textContent = t.name;
@@ -906,59 +905,73 @@ function renderStep2(body: HTMLElement): void {
     desc.textContent = t.description;
     card.appendChild(name);
     card.appendChild(desc);
-    card.addEventListener('click', () => {
-      modalState.templateId = t.id;
-      modalState.slots = {};
-      modalState.step = 3;
-      renderModal();
-    });
+    card.addEventListener('click', () => onTemplateChange(t.id));
     grid.appendChild(card);
   }
-  body.appendChild(grid);
+  section.appendChild(grid);
+  return section;
 }
 
-function renderStep3(body: HTMLElement): void {
+function onTemplateChange(templateId: string): void {
+  if (modalState.templateId === templateId) return;
+  captureFormState();
+  modalState.templateId = templateId;
+  // Slot keys are template-specific, so clear them; name/description are preserved.
+  modalState.slots = {};
+  renderModal();
+}
+
+function renderConfigSection(): HTMLElement {
+  const section = sectionShell(3, 'Configure');
   const tid = modalState.templateId;
   const slotDefs = tid ? TEMPLATE_SLOT_DEFS[tid] : null;
-  if (!tid || !slotDefs) {
-    body.textContent = 'Template missing.';
-    return;
+
+  if (modalState.presetId == null) {
+    section.appendChild(sectionPlaceholder('Pick a dataset to begin configuring.'));
+    return section;
   }
-  body.innerHTML = '';
+  if (!tid || !slotDefs) {
+    section.appendChild(sectionPlaceholder('Pick a template to configure its fields.'));
+    return section;
+  }
 
   const form = document.createElement('form');
   form.id = 'viz-modal-form';
   form.className = 'viz-modal-fields';
   form.addEventListener('input', () => scheduleModalPreview());
   form.addEventListener('change', () => scheduleModalPreview());
+  form.addEventListener('submit', e => e.preventDefault());
 
-  // Name
   form.appendChild(field('Name', 'text', 'name', modalState.name, true));
   form.appendChild(field('Description', 'text', 'description', modalState.description, false));
 
-  // Slots
   for (const def of slotDefs) {
     form.appendChild(buildSlotField(def, modalState.slots[def.slotKey] ?? def.defaultValue ?? ''));
   }
 
-  body.appendChild(form);
+  section.appendChild(form);
 
-  // Warnings
   const warningsBox = document.createElement('div');
   warningsBox.id = 'viz-modal-warnings';
-  body.appendChild(warningsBox);
+  section.appendChild(warningsBox);
 
-  // Preview canvas
   const previewWrap = document.createElement('div');
   previewWrap.style.marginTop = '12px';
   const canvas = document.createElement('canvas');
   canvas.id = 'viz-modal-preview';
   canvas.className = 'viz-modal-preview-canvas';
   previewWrap.appendChild(canvas);
-  body.appendChild(previewWrap);
+  section.appendChild(previewWrap);
 
-  form.addEventListener('submit', e => e.preventDefault());
-  scheduleModalPreview();
+  return section;
+}
+
+function captureFormState(): void {
+  const captured = readModalForm();
+  if (!captured) return;
+  modalState.name = captured.name;
+  modalState.description = captured.description;
+  modalState.slots = captured.slots;
 }
 
 function field(
@@ -1142,8 +1155,16 @@ function validateAndReadForm(): {
   description: string;
   slots: Record<string, string>;
 } | null {
+  if (modalState.presetId == null) {
+    alert('Pick a dataset first.');
+    return null;
+  }
+  if (modalState.templateId == null) {
+    alert('Pick a template first.');
+    return null;
+  }
   const form = readModalForm();
-  if (!form || modalState.templateId == null || modalState.presetId == null) return null;
+  if (!form) return null;
   if (!form.name) {
     showModalWarnings(['Name is required.']);
     return null;
