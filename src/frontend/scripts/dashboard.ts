@@ -130,9 +130,7 @@ function isDirty(): boolean {
 function recomputeDirty(): void {
   const dirty = isDirty();
   const save = document.querySelector<HTMLButtonElement>('[data-dashboard-save-submit]');
-  const revert = document.querySelector<HTMLAnchorElement>('[data-dashboard-revert]');
   if (save) save.hidden = !dirty;
-  if (revert) revert.hidden = !dirty;
 }
 
 // ── Dashboard combobox + select ──────────────────────────────────────────────

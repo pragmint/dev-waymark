@@ -160,16 +160,6 @@ const DashboardMetaRow: FC<{
           </span>{' '}
           Save changes
         </button>
-        <a
-          href={`/visualizations?dashboard=${selectedDashboard.id}`}
-          class="filter-clear"
-          data-dashboard-revert
-          hidden
-          title={`Revert to saved state for "${selectedDashboard.name}"`}
-        >
-          Revert
-        </a>
-
         <form
           method="post"
           action={`/visualizations/dashboards/${selectedDashboard.id}/delete`}
