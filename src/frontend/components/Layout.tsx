@@ -28,7 +28,6 @@ export const Layout: FC<{ title: string; children?: Child; extraScripts?: string
         </nav>
       </header>
       <main class="main">{children}</main>
-      <script src="/filters.js" />
       {extraScripts?.map(src => (
         <script src={src} key={src} />
       ))}

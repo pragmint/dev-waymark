@@ -13,15 +13,18 @@ import {
   entityPresetsDeleteHandler,
 } from './src/handlers/entityPresetsHandler';
 import {
-  visualizationsListHandler,
-  visualizationsNewHandler,
-  visualizationsTemplateHandler,
-  visualizationsSaveHandler,
-  visualizationsDetailHandler,
-  visualizationsEditHandler,
-  visualizationsUpdateHandler,
-  visualizationsDeleteHandler,
-} from './src/handlers/visualizationsHandler';
+  dashboardsPageHandler,
+  dashboardSaveHandler,
+  dashboardUpdateHandler,
+  dashboardDeleteHandler,
+  dashboardAddVisualizationHandler,
+  dashboardRemoveVisualizationHandler,
+  visualizationCreateApiHandler,
+  visualizationDeleteApiHandler,
+  visualizationDetailApiHandler,
+  visualizationDashboardsApiHandler,
+  visualizationUpdateApiHandler,
+} from './src/handlers/dashboardsHandler';
 import {
   chartDataByIdHandler,
   chartDataPreviewHandler,
@@ -31,6 +34,8 @@ import {
   testSeedPresetHandler,
   testClearPresetsHandler,
   testSeedVisualizationHandler,
+  testSeedDashboardHandler,
+  testClearDashboardsHandler,
 } from './src/handlers/testSeedHandler';
 
 const config = loadConfig();
@@ -54,14 +59,20 @@ app.post('/entities/presets/:id', entityPresetsUpdateHandler);
 app.post('/entities/presets/:id/delete', entityPresetsDeleteHandler);
 app.get('/entities/:id', entityDetailHandler);
 
-app.get('/visualizations', visualizationsListHandler);
-app.get('/visualizations/new', visualizationsNewHandler);
-app.get('/visualizations/new/:templateId', visualizationsTemplateHandler);
-app.post('/visualizations', visualizationsSaveHandler);
-app.get('/visualizations/:id', visualizationsDetailHandler);
-app.get('/visualizations/:id/edit', visualizationsEditHandler);
-app.post('/visualizations/:id', visualizationsUpdateHandler);
-app.post('/visualizations/:id/delete', visualizationsDeleteHandler);
+app.get('/visualizations', dashboardsPageHandler);
+app.post('/visualizations/dashboards', dashboardSaveHandler);
+app.post('/visualizations/dashboards/:id', dashboardUpdateHandler);
+app.post('/visualizations/dashboards/:id/delete', dashboardDeleteHandler);
+app.post('/visualizations/dashboards/:id/visualizations', dashboardAddVisualizationHandler);
+app.post(
+  '/visualizations/dashboards/:id/visualizations/:vizId/delete',
+  dashboardRemoveVisualizationHandler
+);
+app.post('/api/visualizations', visualizationCreateApiHandler);
+app.get('/api/visualizations/:id', visualizationDetailApiHandler);
+app.post('/api/visualizations/:id', visualizationUpdateApiHandler);
+app.get('/api/visualizations/:id/dashboards', visualizationDashboardsApiHandler);
+app.post('/api/visualizations/:id/delete', visualizationDeleteApiHandler);
 
 app.get('/api/chart-data/:id', chartDataByIdHandler);
 app.post('/api/chart-data/preview', chartDataPreviewHandler);
@@ -71,6 +82,8 @@ if (config.testMode) {
   app.post('/test/presets', testSeedPresetHandler);
   app.post('/test/presets/clear', testClearPresetsHandler);
   app.post('/test/visualizations', testSeedVisualizationHandler);
+  app.post('/test/dashboards', testSeedDashboardHandler);
+  app.post('/test/dashboards/clear', testClearDashboardsHandler);
 }
 
 export default {

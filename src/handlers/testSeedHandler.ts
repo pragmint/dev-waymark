@@ -20,6 +20,11 @@ const SeedVisualizationBodySchema = z.object({
   templateId: TemplateIdSchema,
 });
 
+const SeedDashboardBodySchema = z.object({
+  name: z.string().min(1),
+  visualizationIds: z.array(z.number().int()).optional(),
+});
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function testSeedPresetHandler(c: Context) {
@@ -33,6 +38,22 @@ export async function testSeedPresetHandler(c: Context) {
 
 export async function testClearPresetsHandler(c: Context) {
   await getAppStateRepo().deleteAllPresets();
+  return c.json({ ok: true });
+}
+
+export async function testSeedDashboardHandler(c: Context) {
+  const body = await c.req.json().catch(() => null);
+  const parsed = SeedDashboardBodySchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid body' }, 400);
+  const id = await getAppStateRepo().saveDashboard(
+    parsed.data.name,
+    parsed.data.visualizationIds ?? []
+  );
+  return c.json({ id });
+}
+
+export async function testClearDashboardsHandler(c: Context) {
+  await getAppStateRepo().deleteAllDashboards();
   return c.json({ ok: true });
 }
 

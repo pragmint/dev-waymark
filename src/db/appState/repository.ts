@@ -5,6 +5,7 @@ import type {
   VisualizationConfig,
   VisualizationSummary,
 } from '../../schemas/visualization';
+import type { Dashboard, DashboardWithViz } from '../../schemas/dashboard';
 
 /**
  * AppStateRepository — interface for Dev Waymark-owned application state.
@@ -81,6 +82,64 @@ export interface AppStateRepository {
 
   /** Delete a visualization. No-op if the id does not exist. */
   deleteVisualization(id: number): Promise<void>;
+
+  /**
+   * List visualizations that are NOT currently on the given dashboard. Used by
+   * the dashboard "Add visualization" picker.
+   */
+  listVisualizationsNotOnDashboard(dashboardId: number): Promise<VisualizationSummary[]>;
+
+  // ── Dashboards ────────────────────────────────────────────────────────────
+
+  /**
+   * Create a new dashboard with an initial ordered list of visualization ids.
+   * Returns the new dashboard's id.
+   */
+  saveDashboard(name: string, visualizationIds: number[]): Promise<number>;
+
+  /** Fetch a dashboard and its ordered viz ids by id. Returns null if not found. */
+  getDashboard(id: number): Promise<DashboardWithViz | null>;
+
+  /** List all dashboards (id + name only). */
+  listDashboards(): Promise<Dashboard[]>;
+
+  /**
+   * Atomically update a dashboard's name and replace its visualization list.
+   * The new order is the order of the array. No-op if the id does not exist.
+   */
+  updateDashboard(id: number, name: string, visualizationIds: number[]): Promise<void>;
+
+  /**
+   * Delete a dashboard. The visualizations themselves are not deleted — only
+   * the junction rows are cleaned up via FK CASCADE.
+   */
+  deleteDashboard(id: number): Promise<void>;
+
+  /** Test-mode only: delete every dashboard. */
+  deleteAllDashboards(): Promise<void>;
+
+  /**
+   * Add an existing visualization to a dashboard at the end of the current
+   * order. No-op if the visualization is already on the dashboard.
+   */
+  addVisualizationToDashboard(dashboardId: number, visualizationId: number): Promise<void>;
+
+  /**
+   * Remove a visualization from a dashboard (unlink only — does not delete the
+   * visualization). No-op if not present.
+   */
+  removeVisualizationFromDashboard(dashboardId: number, visualizationId: number): Promise<void>;
+
+  /**
+   * Return the number of dashboards each visualization belongs to, keyed by
+   * visualization id. Visualizations on zero dashboards are absent from the
+   * map (orphans). Used by the X-button to decide between silent unlink and
+   * the 3-option confirmation popover.
+   */
+  getDashboardCountsByViz(): Promise<Record<number, number>>;
+
+  /** List the dashboards a single visualization currently appears on. */
+  listDashboardsForVisualization(visualizationId: number): Promise<Dashboard[]>;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 

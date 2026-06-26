@@ -187,6 +187,166 @@ describe('SqliteAppStateRepository — presets', () => {
   });
 });
 
+describe('SqliteAppStateRepository — dashboards', () => {
+  let repo: SqliteAppStateRepository;
+
+  async function seedPreset(): Promise<number> {
+    return repo.savePreset('p', emptyTree());
+  }
+
+  async function seedViz(presetId: number, name = 'viz'): Promise<number> {
+    return repo.saveVisualization(name, null, presetId, {
+      chartType: 'bar',
+      aggregation: { function: 'count' },
+    });
+  }
+
+  beforeEach(async () => {
+    repo = new SqliteAppStateRepository(':memory:');
+    await repo.migrate();
+  });
+
+  it('saveDashboard returns a numeric id and stores the name', async () => {
+    const id = await repo.saveDashboard('My dashboard', []);
+    expect(typeof id).toBe('number');
+    const dash = await repo.getDashboard(id);
+    expect(dash!.name).toBe('My dashboard');
+    expect(dash!.visualizationIds).toEqual([]);
+  });
+
+  it('saveDashboard stores viz ids in the given order', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'A');
+    const v2 = await seedViz(presetId, 'B');
+    const v3 = await seedViz(presetId, 'C');
+    const id = await repo.saveDashboard('ordered', [v3, v1, v2]);
+    const dash = await repo.getDashboard(id);
+    expect(dash!.visualizationIds).toEqual([v3, v1, v2]);
+  });
+
+  it('getDashboard returns null for unknown id', async () => {
+    expect(await repo.getDashboard(9999)).toBeNull();
+  });
+
+  it('listDashboards returns id+name only', async () => {
+    await repo.saveDashboard('Alpha', []);
+    await repo.saveDashboard('Beta', []);
+    const list = await repo.listDashboards();
+    expect(list.map(d => d.name)).toEqual(['Alpha', 'Beta']);
+  });
+
+  it('updateDashboard replaces name and viz list', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const v2 = await seedViz(presetId);
+    const id = await repo.saveDashboard('orig', [v1]);
+    await repo.updateDashboard(id, 'renamed', [v2, v1]);
+    const after = await repo.getDashboard(id);
+    expect(after!.name).toBe('renamed');
+    expect(after!.visualizationIds).toEqual([v2, v1]);
+  });
+
+  it('updateDashboard is a no-op for unknown id', async () => {
+    await expect(repo.updateDashboard(9999, 'x', [])).resolves.toBeUndefined();
+  });
+
+  it('deleteDashboard removes the dashboard and its junction rows', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const id = await repo.saveDashboard('to-delete', [v1]);
+    await repo.deleteDashboard(id);
+    expect(await repo.getDashboard(id)).toBeNull();
+    // junction is cleaned up via FK CASCADE
+    const junction = repo
+      .getDb()
+      .query('SELECT * FROM dashboard_visualizations WHERE dashboard_id = ?')
+      .all(id);
+    expect(junction).toHaveLength(0);
+  });
+
+  it('deleteDashboard does not delete the underlying viz', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const id = await repo.saveDashboard('d', [v1]);
+    await repo.deleteDashboard(id);
+    const viz = await repo.getVisualization(v1);
+    expect(viz).not.toBeNull();
+  });
+
+  it('deleting a visualization removes its junction rows on every dashboard', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const d1 = await repo.saveDashboard('one', [v1]);
+    const d2 = await repo.saveDashboard('two', [v1]);
+    await repo.deleteVisualization(v1);
+    expect((await repo.getDashboard(d1))!.visualizationIds).toEqual([]);
+    expect((await repo.getDashboard(d2))!.visualizationIds).toEqual([]);
+  });
+
+  it('addVisualizationToDashboard appends at end and is idempotent', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'A');
+    const v2 = await seedViz(presetId, 'B');
+    const id = await repo.saveDashboard('d', [v1]);
+    await repo.addVisualizationToDashboard(id, v2);
+    await repo.addVisualizationToDashboard(id, v2); // dup → no-op
+    expect((await repo.getDashboard(id))!.visualizationIds).toEqual([v1, v2]);
+  });
+
+  it('removeVisualizationFromDashboard unlinks only, viz stays in DB', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const id = await repo.saveDashboard('d', [v1]);
+    await repo.removeVisualizationFromDashboard(id, v1);
+    expect((await repo.getDashboard(id))!.visualizationIds).toEqual([]);
+    expect(await repo.getVisualization(v1)).not.toBeNull();
+  });
+
+  it('listVisualizationsNotOnDashboard excludes viz on the dashboard', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'on');
+    const v2 = await seedViz(presetId, 'off');
+    const id = await repo.saveDashboard('d', [v1]);
+    const others = await repo.listVisualizationsNotOnDashboard(id);
+    expect(others.map(v => v.id)).toEqual([v2]);
+  });
+
+  it('getDashboardCountsByViz returns counts keyed by viz id', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'A');
+    const v2 = await seedViz(presetId, 'B');
+    await repo.saveDashboard('d1', [v1, v2]);
+    await repo.saveDashboard('d2', [v1]);
+    const counts = await repo.getDashboardCountsByViz();
+    expect(counts[v1]).toBe(2);
+    expect(counts[v2]).toBe(1);
+  });
+
+  it('orphan viz (on zero dashboards) is absent from dashboard counts', async () => {
+    const presetId = await seedPreset();
+    await seedViz(presetId, 'orphan');
+    const counts = await repo.getDashboardCountsByViz();
+    expect(Object.keys(counts)).toHaveLength(0);
+  });
+
+  it('listDashboardsForVisualization returns every dashboard the viz is on', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId);
+    const d1 = await repo.saveDashboard('one', [v1]);
+    const d2 = await repo.saveDashboard('two', [v1]);
+    await repo.saveDashboard('three', []);
+    const dashboards = await repo.listDashboardsForVisualization(v1);
+    expect(dashboards.map(d => d.id)).toEqual([d1, d2]);
+  });
+
+  it('deleteAllDashboards removes every dashboard', async () => {
+    await repo.saveDashboard('A', []);
+    await repo.saveDashboard('B', []);
+    await repo.deleteAllDashboards();
+    expect(await repo.listDashboards()).toHaveLength(0);
+  });
+});
+
 describe('app state DB independence from source DB', () => {
   it('app state DB has no entity/source tables', async () => {
     const repo = new SqliteAppStateRepository(':memory:');

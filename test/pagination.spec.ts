@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './strictTest';
 import { entitiesUrl } from './treeUrl';
 
 test('entities page paginates results and exposes prev/next', async ({ page }) => {

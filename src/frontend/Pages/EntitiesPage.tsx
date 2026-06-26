@@ -60,7 +60,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   const noEntityTypes = entityTypes.length === 0;
 
   return (
-    <Layout title="Entities" extraScripts={['/tableScroller.js']}>
+    <Layout title="Entities" extraScripts={['/tableScroller.js', '/filters.js']}>
       <div class="page-header">
         <h1>Entities</h1>
         <span class="count" data-results-count>

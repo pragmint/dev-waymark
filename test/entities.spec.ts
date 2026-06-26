@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './strictTest';
 import { decodeTreeFromUrl, entitiesUrl, leaf } from './treeUrl';
 
 test('redirects root to /entities', async ({ page }) => {

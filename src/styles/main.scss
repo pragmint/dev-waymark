@@ -1108,6 +1108,231 @@ form {
   top: 24px;
 }
 
+// ── Dashboard page ───────────────────────────────────────────────────────────
+
+.dashboard-empty {
+  margin-top: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-create-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.dashboard-viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dashboard-viz-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--color-bg);
+
+  &.is-dragging {
+    opacity: 0.4;
+  }
+}
+
+.dashboard-viz-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--control-height);
+  margin-bottom: 8px;
+}
+
+.dashboard-viz-card-title {
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-viz-edit-btn,
+.dashboard-viz-remove-btn {
+  height: var(--control-height);
+  width: var(--control-height);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.dashboard-viz-canvas-wrap {
+  position: relative;
+  height: 280px;
+}
+
+.dashboard-viz-canvas {
+  max-height: 280px;
+}
+
+.dashboard-add-viz-row {
+  margin-top: 16px;
+}
+
+.add-viz-select {
+  min-width: 240px;
+}
+
+// Drop line between cards during drag/drop reorder. Mirrors .filter-drop-line.
+.dashboard-drop-line {
+  height: 4px;
+  margin: -2px 0;
+  background: transparent;
+  border-radius: 2px;
+  transition: background 80ms ease;
+
+  &.is-active {
+    background: var(--color-primary);
+  }
+}
+
+// Native <dialog> modal for creating / editing a visualization. The 3 steps
+// (pick preset → pick template → configure + preview) all swap into the same
+// .viz-modal-body container; the modal driver in dashboard.ts handles state.
+.viz-modal {
+  width: min(900px, 95vw);
+  max-height: 90vh;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  background: var(--color-bg);
+  color: var(--color-text);
+
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.viz-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.viz-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.viz-modal-body {
+  padding: 20px;
+  overflow: auto;
+  max-height: calc(90vh - 120px);
+}
+
+.viz-modal-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.viz-modal-steps {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.viz-modal-step-active {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.viz-modal-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.viz-modal-template-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--color-bg);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+
+  &:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+.viz-modal-template-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.viz-modal-template-description {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.viz-modal-preview-canvas {
+  max-height: 240px;
+}
+
+.viz-modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// X-button popover for the single-dashboard branch — same shape as the filter
+// group remove confirm popover.
+.viz-remove-confirm {
+  z-index: 20;
+  position: absolute;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: var(--color-bg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
 // ── Responsive breakpoints ───────────────────────────────────────────────────
 
 // Tablet / small-laptop: collapse the two-pane builder layout to a single
@@ -1151,6 +1376,10 @@ form {
   .filter-group {
     padding: 6px;
   }
+
+  .dashboard-viz-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 // Mobile: stack the entity-fields rows entirely and shrink the page header.
@@ -1181,6 +1410,10 @@ form {
       border-bottom: none;
       padding-bottom: 0;
     }
+  }
+
+  .dashboard-viz-card {
+    padding: 8px;
   }
 }
 

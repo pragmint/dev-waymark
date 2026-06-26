@@ -46,6 +46,12 @@ const state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  // No-op when loaded on a page that doesn't render the filter UI. Without
+  // this guard, the document-level click/keydown handlers wired below fire
+  // on every page and crash if another bundle has shadowed `state` on the
+  // global scope (Bun emits non-module scripts whose top-level `var`
+  // declarations end up on `window`).
+  if (!document.querySelector('[data-filter-tree-root]')) return;
   hydrate();
   wireSavePresetPanel();
   wirePresetCombo();

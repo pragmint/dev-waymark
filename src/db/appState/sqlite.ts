@@ -4,6 +4,7 @@ import { logger } from '../../logger';
 import { PresetSchema, PresetWithTreeSchema } from '../../schemas/preset';
 import { FilterTreeSchema, emptyTree } from '../../schemas/filterTree';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
+import { DashboardSchema, DashboardWithVizSchema } from '../../schemas/dashboard';
 import type { Preset, PresetWithTree } from '../../schemas/preset';
 import type { FilterTree } from '../../schemas/filterTree';
 import type {
@@ -11,8 +12,32 @@ import type {
   VisualizationConfig,
   VisualizationSummary,
 } from '../../schemas/visualization';
+import type { Dashboard, DashboardWithViz } from '../../schemas/dashboard';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
+
+type VisualizationRow = {
+  id: number;
+  name: string;
+  description: string | null;
+  preset_id: number;
+  config: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToVisualizationSummary(row: VisualizationRow): VisualizationSummary {
+  const config = JSON.parse(row.config) as VisualizationConfig;
+  return VisualizationSummarySchema.parse({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    presetId: row.preset_id,
+    chartType: config.chartType,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
 
 function decodeFilterTree(raw: string | null): FilterTree {
   if (!raw) return emptyTree();
@@ -191,33 +216,27 @@ export class SqliteAppStateRepository implements AppStateRepository {
   }
 
   async listVisualizations(): Promise<VisualizationSummary[]> {
-    type Row = {
-      id: number;
-      name: string;
-      description: string | null;
-      preset_id: number;
-      config: string;
-      created_at: string;
-      updated_at: string;
-    };
     const rows = this.db
       .query<
-        Row,
+        VisualizationRow,
         []
       >('SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations ORDER BY id')
       .all();
-    return rows.map(r => {
-      const config = JSON.parse(r.config) as VisualizationConfig;
-      return VisualizationSummarySchema.parse({
-        id: r.id,
-        name: r.name,
-        description: r.description,
-        presetId: r.preset_id,
-        chartType: config.chartType,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      });
-    });
+    return rows.map(rowToVisualizationSummary);
+  }
+
+  async listVisualizationsNotOnDashboard(dashboardId: number): Promise<VisualizationSummary[]> {
+    const rows = this.db
+      .query<VisualizationRow, [number]>(
+        `SELECT id, name, description, preset_id, config, created_at, updated_at
+         FROM visualizations
+         WHERE id NOT IN (
+           SELECT visualization_id FROM dashboard_visualizations WHERE dashboard_id = ?
+         )
+         ORDER BY id`
+      )
+      .all(dashboardId);
+    return rows.map(rowToVisualizationSummary);
   }
 
   async updateVisualization(
@@ -236,6 +255,132 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async deleteVisualization(id: number): Promise<void> {
     this.db.query('DELETE FROM visualizations WHERE id = ?').run(id);
+  }
+
+  // ── Dashboards ────────────────────────────────────────────────────────────
+
+  async saveDashboard(name: string, visualizationIds: number[]): Promise<number> {
+    const tx = this.db.transaction(() => {
+      const result = this.db
+        .query<{ id: number }, [string]>('INSERT INTO dashboards (name) VALUES (?) RETURNING id')
+        .get(name);
+      const dashboardId = result!.id;
+      const insert = this.db.query<unknown, [number, number, number]>(
+        'INSERT INTO dashboard_visualizations (dashboard_id, visualization_id, position) VALUES (?, ?, ?)'
+      );
+      visualizationIds.forEach((vizId, i) => {
+        insert.run(dashboardId, vizId, i);
+      });
+      return dashboardId;
+    });
+    return tx();
+  }
+
+  async getDashboard(id: number): Promise<DashboardWithViz | null> {
+    const row = this.db
+      .query<{ id: number; name: string }, [number]>('SELECT id, name FROM dashboards WHERE id = ?')
+      .get(id);
+    if (!row) return null;
+    const vizRows = this.db
+      .query<
+        { visualization_id: number },
+        [number]
+      >('SELECT visualization_id FROM dashboard_visualizations WHERE dashboard_id = ? ORDER BY position')
+      .all(id);
+    return DashboardWithVizSchema.parse({
+      ...DashboardSchema.parse({ id: row.id, name: row.name }),
+      visualizationIds: vizRows.map(v => v.visualization_id),
+    });
+  }
+
+  async listDashboards(): Promise<Dashboard[]> {
+    const rows = this.db.query('SELECT id, name FROM dashboards ORDER BY id').all();
+    return rows.map(r => DashboardSchema.parse(r));
+  }
+
+  async updateDashboard(id: number, name: string, visualizationIds: number[]): Promise<void> {
+    const tx = this.db.transaction(() => {
+      const exists = this.db
+        .query<{ id: number }, [number]>('SELECT id FROM dashboards WHERE id = ?')
+        .get(id);
+      if (!exists) return;
+      this.db.query('UPDATE dashboards SET name = ? WHERE id = ?').run(name, id);
+      this.db.query('DELETE FROM dashboard_visualizations WHERE dashboard_id = ?').run(id);
+      const insert = this.db.query<unknown, [number, number, number]>(
+        'INSERT INTO dashboard_visualizations (dashboard_id, visualization_id, position) VALUES (?, ?, ?)'
+      );
+      visualizationIds.forEach((vizId, i) => {
+        insert.run(id, vizId, i);
+      });
+    });
+    tx();
+  }
+
+  async deleteDashboard(id: number): Promise<void> {
+    this.db.query('DELETE FROM dashboards WHERE id = ?').run(id);
+  }
+
+  async deleteAllDashboards(): Promise<void> {
+    this.db.query('DELETE FROM dashboards').run();
+  }
+
+  async addVisualizationToDashboard(dashboardId: number, visualizationId: number): Promise<void> {
+    const tx = this.db.transaction(() => {
+      const existing = this.db
+        .query<
+          { dashboard_id: number },
+          [number, number]
+        >('SELECT dashboard_id FROM dashboard_visualizations WHERE dashboard_id = ? AND visualization_id = ?')
+        .get(dashboardId, visualizationId);
+      if (existing) return;
+      const row = this.db
+        .query<
+          { max_pos: number | null },
+          [number]
+        >('SELECT MAX(position) AS max_pos FROM dashboard_visualizations WHERE dashboard_id = ?')
+        .get(dashboardId);
+      const nextPos = row && row.max_pos !== null ? row.max_pos + 1 : 0;
+      this.db
+        .query(
+          'INSERT INTO dashboard_visualizations (dashboard_id, visualization_id, position) VALUES (?, ?, ?)'
+        )
+        .run(dashboardId, visualizationId, nextPos);
+    });
+    tx();
+  }
+
+  async removeVisualizationFromDashboard(
+    dashboardId: number,
+    visualizationId: number
+  ): Promise<void> {
+    this.db
+      .query('DELETE FROM dashboard_visualizations WHERE dashboard_id = ? AND visualization_id = ?')
+      .run(dashboardId, visualizationId);
+  }
+
+  async getDashboardCountsByViz(): Promise<Record<number, number>> {
+    const rows = this.db
+      .query<
+        { visualization_id: number; n: number },
+        []
+      >('SELECT visualization_id, COUNT(*) AS n FROM dashboard_visualizations GROUP BY visualization_id')
+      .all();
+    const out: Record<number, number> = {};
+    for (const r of rows) out[r.visualization_id] = r.n;
+    return out;
+  }
+
+  async listDashboardsForVisualization(visualizationId: number): Promise<Dashboard[]> {
+    const rows = this.db
+      .query<{ id: number; name: string }, [number]>(
+        `SELECT d.id, d.name
+         FROM dashboards d
+         JOIN dashboard_visualizations dv ON dv.dashboard_id = d.id
+         WHERE dv.visualization_id = ?
+         ORDER BY d.id`
+      )
+      .all(visualizationId);
+    return rows.map(r => DashboardSchema.parse(r));
   }
 
   async close(): Promise<void> {

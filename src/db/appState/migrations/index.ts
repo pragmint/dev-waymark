@@ -23,6 +23,7 @@ import * as m2 from './migration-20260519T120000Z';
 import * as m3 from './migration-20260520T000000Z';
 import * as m4 from './migration-20260610T000000Z';
 import * as m5 from './migration-20260618T000000Z';
+import * as m6 from './migration-20260625T000000Z';
 
 export const migrations: Migration[] = [
   { name: 'migration-20260518T000000Z', ...m0 },
@@ -31,4 +32,5 @@ export const migrations: Migration[] = [
   { name: 'migration-20260520T000000Z', ...m3 },
   { name: 'migration-20260610T000000Z', ...m4 },
   { name: 'migration-20260618T000000Z', ...m5 },
+  { name: 'migration-20260625T000000Z', ...m6 },
 ];
