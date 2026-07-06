@@ -1200,13 +1200,48 @@ form {
 }
 
 .dashboard-viz-card {
+  position: relative;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 12px;
   background: var(--color-bg);
 
+  &[draggable='true'] {
+    cursor: grab;
+  }
+
   &.is-dragging {
     opacity: 0.4;
+    cursor: grabbing;
+  }
+
+  // Drop-position indicator: a vertical bar in the grid gap on the leading or
+  // trailing edge of the card. Pseudo-elements are absolute-positioned so they
+  // don't reflow the grid the way an inserted drop-line element would.
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background 80ms ease;
+    pointer-events: none;
+  }
+
+  &::before {
+    left: -10px;
+  }
+
+  &::after {
+    right: -10px;
+  }
+
+  &.drop-before::before,
+  &.drop-after::after {
+    background: var(--color-primary);
   }
 }
 
@@ -1216,6 +1251,19 @@ form {
   gap: 8px;
   height: var(--control-height);
   margin-bottom: 8px;
+}
+
+// Mirrors .filter-chip-grip so the affordance reads the same across the app.
+// No leading padding here: the card header already provides it.
+.dashboard-viz-card-grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: -2px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
 }
 
 .dashboard-viz-card-title {
@@ -1321,19 +1369,6 @@ form {
 
 .add-viz-select {
   min-width: 240px;
-}
-
-// Drop line between cards during drag/drop reorder. Mirrors .filter-drop-line.
-.dashboard-drop-line {
-  height: 4px;
-  margin: -2px 0;
-  background: transparent;
-  border-radius: 2px;
-  transition: background 80ms ease;
-
-  &.is-active {
-    background: var(--color-primary);
-  }
 }
 
 // Native <dialog> modal for creating / editing a visualization. Three sections

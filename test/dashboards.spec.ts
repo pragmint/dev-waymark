@@ -431,3 +431,135 @@ test('a viz on two dashboards stays in sync via direct unlink', async ({ page, r
   await page.goto(`/visualizations?dashboard=${d2}`);
   await expect(page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`)).toBeVisible();
 });
+
+// ── Drag-and-drop reorder ───────────────────────────────────────────────────
+// Chromium headless doesn't promote raw mouse events to HTML5 drag events,
+// so these tests drive the flow by dispatching synthetic DragEvent objects
+// with a shared DataTransfer. That verifies the JS handler logic and DOM
+// updates, but not the browser's own drag machinery (e.g. removing
+// `draggable="true"` from the JSX would still slip through).
+
+async function orderedVizIds(page: Page): Promise<number[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('.dashboard-viz-card')).map(el =>
+      parseInt((el as HTMLElement).dataset.vizId ?? '', 10)
+    )
+  );
+}
+
+test.describe('drag-and-drop reorder', () => {
+  test('grip icon renders in every card header', async ({ page, request }) => {
+    const presetId = await seedPreset(request, uniqueName('GripP'));
+    const v1 = await seedViz(request, presetId, uniqueName('V1'));
+    const v2 = await seedViz(request, presetId, uniqueName('V2'));
+    const dashId = await seedDashboard(request, uniqueName('GripD'), [v1, v2]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const grips = page.locator('.dashboard-viz-card .dashboard-viz-card-grip');
+    await expect(grips).toHaveCount(2);
+    await expect(grips.first()).toHaveText('⋮⋮');
+  });
+
+  test('dragging past a card reorders the DOM and marks the dashboard dirty', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('DragP'));
+    const v1 = await seedViz(request, presetId, uniqueName('V1'));
+    const v2 = await seedViz(request, presetId, uniqueName('V2'));
+    const v3 = await seedViz(request, presetId, uniqueName('V3'));
+    const dashId = await seedDashboard(request, uniqueName('DragD'), [v1, v2, v3]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    expect(await orderedVizIds(page)).toEqual([v1, v2, v3]);
+    await expect(page.locator('[data-dashboard-save-submit]')).toBeHidden();
+
+    const source = page.locator(`.dashboard-viz-card[data-viz-id="${v1}"]`);
+    const target = page.locator(`.dashboard-viz-card[data-viz-id="${v3}"]`);
+
+    await page.evaluate(
+      ({ srcId, tgtId }) => {
+        const src = document.querySelector<HTMLElement>(
+          `.dashboard-viz-card[data-viz-id="${srcId}"]`
+        );
+        const tgt = document.querySelector<HTMLElement>(
+          `.dashboard-viz-card[data-viz-id="${tgtId}"]`
+        );
+        if (!src || !tgt) throw new Error('missing card');
+        const dt = new DataTransfer();
+        src.dispatchEvent(
+          new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt })
+        );
+        const rect = tgt.getBoundingClientRect();
+        const clientX = rect.left + rect.width * 0.75;
+        const clientY = rect.top + rect.height / 2;
+        tgt.dispatchEvent(
+          new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX,
+            clientY,
+          })
+        );
+        const w = window as unknown as { __dt: DataTransfer; __clientX: number; __clientY: number };
+        w.__dt = dt;
+        w.__clientX = clientX;
+        w.__clientY = clientY;
+      },
+      { srcId: v1, tgtId: v3 }
+    );
+
+    await expect(source).toHaveClass(/is-dragging/);
+    await expect(target).toHaveClass(/drop-after/);
+
+    // Cursor in the left half should swap to .drop-before and clear .drop-after.
+    await page.evaluate(tgtId => {
+      const tgt = document.querySelector<HTMLElement>(
+        `.dashboard-viz-card[data-viz-id="${tgtId}"]`
+      );
+      if (!tgt) throw new Error('missing target');
+      const rect = tgt.getBoundingClientRect();
+      const w = window as unknown as { __dt: DataTransfer };
+      tgt.dispatchEvent(
+        new DragEvent('dragover', {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: w.__dt,
+          clientX: rect.left + rect.width * 0.25,
+          clientY: rect.top + rect.height / 2,
+        })
+      );
+    }, v3);
+    await expect(target).toHaveClass(/drop-before/);
+    await expect(target).not.toHaveClass(/drop-after/);
+
+    // Drop on the right half → v1 moves past v3.
+    await page.evaluate(tgtId => {
+      const tgt = document.querySelector<HTMLElement>(
+        `.dashboard-viz-card[data-viz-id="${tgtId}"]`
+      );
+      if (!tgt) throw new Error('missing target');
+      const rect = tgt.getBoundingClientRect();
+      const w = window as unknown as { __dt: DataTransfer };
+      const clientX = rect.left + rect.width * 0.75;
+      const clientY = rect.top + rect.height / 2;
+      tgt.dispatchEvent(
+        new DragEvent('drop', {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: w.__dt,
+          clientX,
+          clientY,
+        })
+      );
+    }, v3);
+
+    await expect.poll(async () => await orderedVizIds(page)).toEqual([v2, v3, v1]);
+    await expect(page.locator('[data-dashboard-save-submit]')).toBeVisible();
+  });
+});

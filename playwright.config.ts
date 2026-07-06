@@ -15,7 +15,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'PORT=4080 bun index.tsx',
+    // Build frontend assets before starting the server so tests never run
+    // against a stale public/dashboard.js or public/style.css.
+    command: 'bun scripts/build.ts && PORT=4080 bun index.tsx',
     port: 4080,
     reuseExistingServer: false,
     env: {

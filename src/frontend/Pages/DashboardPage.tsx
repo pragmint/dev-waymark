@@ -359,6 +359,9 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
 }) => (
   <div class="dashboard-viz-card" data-viz-id={card.id} draggable={true}>
     <div class="dashboard-viz-card-header">
+      <span class="dashboard-viz-card-grip" aria-hidden="true">
+        ⋮⋮
+      </span>
       <span class="dashboard-viz-card-title">{card.name}</span>
       {card.warnings.length > 0 && (
         <WarningIndicator warnings={card.warnings} excludedEntitiesUrl={card.excludedEntitiesUrl} />

@@ -395,26 +395,11 @@ async function deleteVizEntirely(vizId: number): Promise<void> {
 
 let dragSourceId: number | null = null;
 
-function dropLineEl(index: number): HTMLDivElement {
-  const div = document.createElement('div');
-  div.className = 'dashboard-drop-line';
-  div.dataset.dropIndex = String(index);
-  return div;
-}
-
-function rebuildDropLines(): void {
-  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
-  if (!grid) return;
-  grid.querySelectorAll('.dashboard-drop-line').forEach(el => el.remove());
-  const cards = Array.from(grid.querySelectorAll<HTMLElement>('.dashboard-viz-card'));
-  cards.forEach((card, i) => grid.insertBefore(dropLineEl(i), card));
-  grid.appendChild(dropLineEl(cards.length));
-}
-
-function clearDropLines(): void {
-  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
-  if (!grid) return;
-  grid.querySelectorAll('.dashboard-drop-line').forEach(el => el.remove());
+function clearDropFeedback(grid: HTMLElement): void {
+  grid.querySelectorAll('.drop-before, .drop-after').forEach(el => {
+    el.classList.remove('drop-before');
+    el.classList.remove('drop-after');
+  });
 }
 
 function reorderGridDom(): void {
@@ -425,12 +410,18 @@ function reorderGridDom(): void {
     const id = parseInt(card.dataset.vizId ?? '', 10);
     if (!isNaN(id)) cardByVizId.set(id, card);
   });
-  // Clear, then re-append in the new order. dragend clears drop lines after.
   grid.querySelectorAll('.dashboard-viz-card').forEach(el => el.remove());
   for (const id of state.currentVizIds) {
     const card = cardByVizId.get(id);
     if (card) grid.appendChild(card);
   }
+}
+
+// Which edge of the target card is closer to the cursor. Callers translate this
+// into an insert-before / insert-after index.
+function dropSide(card: HTMLElement, clientX: number): 'before' | 'after' {
+  const rect = card.getBoundingClientRect();
+  return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
 }
 
 function wireDragReorder(): void {
@@ -444,43 +435,55 @@ function wireDragReorder(): void {
     if (isNaN(id)) return;
     dragSourceId = id;
     card.classList.add('is-dragging');
-    // Drop lines live only for the duration of a drag — otherwise they'd
-    // occupy grid cells and break the card tiling.
-    rebuildDropLines();
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    if (e.dataTransfer) {
+      // Firefox refuses to initiate a drag unless setData is called here.
+      e.dataTransfer.setData('text/plain', String(id));
+      e.dataTransfer.effectAllowed = 'move';
+    }
   });
 
   grid.addEventListener('dragend', () => {
     dragSourceId = null;
     grid.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
-    clearDropLines();
+    clearDropFeedback(grid);
   });
 
   grid.addEventListener('dragover', e => {
-    const line = (e.target as HTMLElement).closest<HTMLElement>('.dashboard-drop-line');
-    if (!line) return;
+    if (dragSourceId == null) return;
+    const card = (e.target as HTMLElement).closest<HTMLElement>('.dashboard-viz-card');
+    if (!card) return;
+    const targetId = parseInt(card.dataset.vizId ?? '', 10);
+    if (isNaN(targetId) || targetId === dragSourceId) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    grid
-      .querySelectorAll('.dashboard-drop-line.is-active')
-      .forEach(el => el.classList.remove('is-active'));
-    line.classList.add('is-active');
+    const side = dropSide(card, e.clientX);
+    clearDropFeedback(grid);
+    card.classList.add(side === 'before' ? 'drop-before' : 'drop-after');
   });
 
   grid.addEventListener('drop', e => {
-    const line = (e.target as HTMLElement).closest<HTMLElement>('.dashboard-drop-line');
-    if (!line || dragSourceId == null) return;
+    if (dragSourceId == null) return;
+    const card = (e.target as HTMLElement).closest<HTMLElement>('.dashboard-viz-card');
+    if (!card) return;
+    const targetId = parseInt(card.dataset.vizId ?? '', 10);
+    if (isNaN(targetId) || targetId === dragSourceId) return;
     e.preventDefault();
-    const targetIndex = parseInt(line.dataset.dropIndex ?? '', 10);
-    if (isNaN(targetIndex)) return;
+    const side = dropSide(card, e.clientX);
+
     const sourceIndex = state.currentVizIds.indexOf(dragSourceId);
-    if (sourceIndex === -1) return;
+    const targetIndex = state.currentVizIds.indexOf(targetId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
     const next = state.currentVizIds.slice();
     next.splice(sourceIndex, 1);
-    const insertAt = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+    // Recompute target index after removal: if source came before target, the
+    // target index has shifted left by one.
+    const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    const insertAt = side === 'before' ? adjustedTarget : adjustedTarget + 1;
     next.splice(insertAt, 0, dragSourceId);
     state.currentVizIds = next;
     reorderGridDom();
+    clearDropFeedback(grid);
     recomputeDirty();
   });
 }
