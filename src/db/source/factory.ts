@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { Config } from '../../config';
+import type { Config, SourceDbSeed } from '../../config';
 import { parseSqliteUrl } from '../../config';
 import type { SourceDataAdapter } from './adapter';
 import { SqliteSourceAdapter } from './sqlite';
@@ -9,6 +9,7 @@ import { PostgresSourceAdapter } from './postgres';
 import { RedshiftSourceAdapter } from './redshift';
 import { seedGoldenData } from './goldenSeed';
 import { seedE2EData } from './e2eSeed';
+import { POSTGRES_SOURCE_SCHEMA_DDL } from './schema';
 
 // Snapshot of the seeded in-memory dataset. Stored as raw sqlite bytes plus a
 // plain-text sidecar holding a content hash of the seed source + schema DDL —
@@ -67,36 +68,60 @@ function loadFromSnapshot(): SqliteSourceAdapter {
   return new SqliteSourceAdapter(Database.deserialize(bytes));
 }
 
-async function loadInMemorySeed(): Promise<SqliteSourceAdapter> {
+async function loadInMemoryGoldenSnapshot(): Promise<SqliteSourceAdapter> {
   const hash = computeSeedSourceHash();
   if (isCacheValid(hash)) return loadFromSnapshot();
   return buildSeedCache(hash);
 }
 
-async function loadE2ESeed(): Promise<SqliteSourceAdapter> {
-  // ~30 rows — seeds in milliseconds, no disk cache needed.
-  const adapter = new SqliteSourceAdapter(':memory:', true);
-  await seedE2EData(adapter);
-  return adapter;
+async function seedInto(adapter: SourceDataAdapter, seed: SourceDbSeed): Promise<void> {
+  if (seed === 'e2e') return seedE2EData(adapter);
+  if (seed === 'golden') return seedGoldenData(adapter);
 }
 
-export async function createSourceAdapter(
-  config: Config['sourceDb'],
-  options: { testMode?: boolean } = {}
-): Promise<SourceDataAdapter> {
+export async function createSourceAdapter(config: Config['sourceDb']): Promise<SourceDataAdapter> {
+  // Fast path: in-memory SQLite + golden seed uses the on-disk snapshot cache
+  // so `bun dev` starts in milliseconds instead of re-seeding every boot.
+  if (
+    config.adapter === 'sqlite' &&
+    parseSqliteUrl(config.url) === ':memory:' &&
+    config.seed === 'golden'
+  ) {
+    return loadInMemoryGoldenSnapshot();
+  }
+
   switch (config.adapter) {
     case 'sqlite': {
       const path = parseSqliteUrl(config.url);
-      // Apply the source schema automatically only for in-memory databases.
-      // Configured file-based or external databases are assumed to have the
-      // schema already — Dev Waymark never migrates a source database.
-      if (path === ':memory:') return options.testMode ? loadE2ESeed() : loadInMemorySeed();
-      return new SqliteSourceAdapter(path, false);
+      // Apply the source schema for :memory: (empty by definition) and whenever
+      // we're about to seed. File-based configured DBs are assumed to have the
+      // schema already unless seeding is requested.
+      const applySchema = path === ':memory:' || config.seed !== 'none';
+      const adapter = new SqliteSourceAdapter(path, applySchema);
+      if (config.seed !== 'none') {
+        await adapter.execute('DELETE FROM entity_metadata');
+        await adapter.execute('DELETE FROM entities');
+        await seedInto(adapter, config.seed);
+      }
+      return adapter;
     }
-    case 'postgres':
-      return new PostgresSourceAdapter(config.url);
-    case 'redshift':
+    case 'postgres': {
+      const adapter = new PostgresSourceAdapter(config.url);
+      if (config.seed !== 'none') {
+        await adapter.execute(POSTGRES_SOURCE_SCHEMA_DDL);
+        await adapter.execute('TRUNCATE entities, entity_metadata RESTART IDENTITY CASCADE');
+        await seedInto(adapter, config.seed);
+      }
+      return adapter;
+    }
+    case 'redshift': {
+      if (config.seed !== 'none') {
+        throw new Error(
+          `Redshift source does not support seeding (DEV_WAYMARK_SOURCE_DB_SEED='${config.seed}')`
+        );
+      }
       return new RedshiftSourceAdapter(config.url);
+    }
     default: {
       const _exhaustive: never = config.adapter;
       throw new Error(`Unknown source adapter: ${_exhaustive}`);

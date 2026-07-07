@@ -69,3 +69,32 @@ export const SOURCE_SCHEMA_DDL = `
 export function applySourceSchema(db: Database): void {
   runSql(db, SOURCE_SCHEMA_DDL);
 }
+
+/**
+ * Postgres port of SOURCE_SCHEMA_DDL. Used only when the source database is
+ * configured with a seed (see Config['sourceDb'].seed) — Dev Waymark still
+ * never touches a source database it does not own (seed='none').
+ */
+export const POSTGRES_SOURCE_SCHEMA_DDL = `
+  CREATE TABLE IF NOT EXISTS entities (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL,
+    type       TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  );
+
+  CREATE TABLE IF NOT EXISTS entity_metadata (
+    id         SERIAL  PRIMARY KEY,
+    entity_id  INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    key        TEXT    NOT NULL,
+    value      TEXT,
+    value_type TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    updated_at TEXT    NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    UNIQUE (entity_id, key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_entities_type      ON entities (type);
+  CREATE INDEX IF NOT EXISTS idx_metadata_entity_id ON entity_metadata (entity_id);
+  CREATE INDEX IF NOT EXISTS idx_metadata_key_value ON entity_metadata (key, value);
+`;

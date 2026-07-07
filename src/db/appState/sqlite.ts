@@ -383,6 +383,15 @@ export class SqliteAppStateRepository implements AppStateRepository {
     return rows.map(r => DashboardSchema.parse(r));
   }
 
+  async truncateData(): Promise<void> {
+    // Order matters: junction rows first, then parents. SQLite has no
+    // TRUNCATE — DELETE is the idiom, and DELETE from an empty table is cheap.
+    this.db.query('DELETE FROM dashboard_visualizations').run();
+    this.db.query('DELETE FROM visualizations').run();
+    this.db.query('DELETE FROM dashboards').run();
+    this.db.query('DELETE FROM presets').run();
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }

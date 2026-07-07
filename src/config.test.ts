@@ -42,10 +42,10 @@ describe('parseSqliteUrl', () => {
 describe('loadConfig', () => {
   const cleanEnv = {
     PORT: undefined,
-    DATABASE_PATH: undefined,
     DEV_WAYMARK_SOURCE_DB_ADAPTER: undefined,
     DEV_WAYMARK_SOURCE_DB_URL: undefined,
     DEV_WAYMARK_SOURCE_DB_NAME: undefined,
+    DEV_WAYMARK_SOURCE_DB_SEED: undefined,
     DEV_WAYMARK_APP_DB_ADAPTER: undefined,
     DEV_WAYMARK_APP_DB_URL: undefined,
   };
@@ -59,18 +59,31 @@ describe('loadConfig', () => {
       expect(config.sourceDb.name).toBe('default');
       expect(config.appDb.adapter).toBe('sqlite');
       expect(config.appDb.url).toBe('sqlite:///dev-waymark-app.sqlite');
+      expect(config.sourceDb.seed).toBe('none');
+    });
+  });
+
+  it('reads DEV_WAYMARK_SOURCE_DB_SEED=golden', () => {
+    withEnv({ ...cleanEnv, DEV_WAYMARK_SOURCE_DB_SEED: 'golden' }, () => {
+      expect(loadConfig().sourceDb.seed).toBe('golden');
+    });
+  });
+
+  it('reads DEV_WAYMARK_SOURCE_DB_SEED=e2e', () => {
+    withEnv({ ...cleanEnv, DEV_WAYMARK_SOURCE_DB_SEED: 'e2e' }, () => {
+      expect(loadConfig().sourceDb.seed).toBe('e2e');
+    });
+  });
+
+  it('rejects unknown DEV_WAYMARK_SOURCE_DB_SEED', () => {
+    withEnv({ ...cleanEnv, DEV_WAYMARK_SOURCE_DB_SEED: 'garbage' }, () => {
+      expect(() => loadConfig()).toThrow();
     });
   });
 
   it('reads PORT', () => {
     withEnv({ ...cleanEnv, PORT: '4000' }, () => {
       expect(loadConfig().port).toBe(4000);
-    });
-  });
-
-  it('uses DATABASE_PATH as legacy fallback source URL', () => {
-    withEnv({ ...cleanEnv, DATABASE_PATH: 'custom.sqlite' }, () => {
-      expect(loadConfig().sourceDb.url).toBe('sqlite:///custom.sqlite');
     });
   });
 
@@ -145,7 +158,6 @@ describe('source and app DB independence', () => {
         DEV_WAYMARK_SOURCE_DB_ADAPTER: 'sqlite',
         DEV_WAYMARK_APP_DB_ADAPTER: 'sqlite',
         PORT: undefined,
-        DATABASE_PATH: undefined,
         DEV_WAYMARK_SOURCE_DB_NAME: undefined,
       },
       () => {

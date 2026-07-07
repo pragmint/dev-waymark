@@ -9,6 +9,7 @@ public/
 
 # Environment variables
 .env
+.env.e2e
 .env.local
 .env.*.local
 
@@ -52,6 +53,14 @@ temp/
 
 # Seed snapshot cache (rebuilt from goldenSeed.ts on demand)
 .cache/
+
+# devenv / direnv artefacts
+.devenv/
+.direnv/
+.devenv.flake.nix
+
+# Marker written by test/globalSetup.ts when it starts devenv itself
+.devenv-e2e-owned
 
 # Claude hooks sentinel (touch to disable Stop hooks during planning/analysis)
 .no-hooks

@@ -1,5 +1,11 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import { logger } from '../../logger';
+
+// Parse TIMESTAMPTZ (OID 1184) and TIMESTAMP (OID 1114) as ISO strings rather
+// than JS Date objects, so rows satisfy Zod schemas that expect `z.string()`
+// and match the SQLite adapter's TEXT-column behavior.
+types.setTypeParser(1184, val => new Date(val).toISOString());
+types.setTypeParser(1114, val => new Date(val).toISOString());
 import { PresetSchema, PresetWithTreeSchema } from '../../schemas/preset';
 import { FilterTreeSchema, emptyTree } from '../../schemas/filterTree';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
@@ -380,6 +386,15 @@ export class PostgresAppStateRepository implements AppStateRepository {
       [visualizationId]
     );
     return result.rows.map(r => DashboardSchema.parse(r));
+  }
+
+  async truncateData(): Promise<void> {
+    // RESTART IDENTITY keeps IDs deterministic across e2e runs; CASCADE clears
+    // the dashboard_visualizations junction rows even though the FK is
+    // ON DELETE CASCADE on the parent side.
+    await this.pool.query(
+      'TRUNCATE dashboards, dashboard_visualizations, visualizations, presets RESTART IDENTITY CASCADE'
+    );
   }
 
   async close(): Promise<void> {

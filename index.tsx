@@ -41,12 +41,18 @@ import {
 
 const config = loadConfig();
 
-const sourceAdapter = await createSourceAdapter(config.sourceDb, { testMode: config.testMode });
+const sourceAdapter = await createSourceAdapter(config.sourceDb);
 await sourceAdapter.validateConnection();
 initSourceAdapter(sourceAdapter);
 
 const appStateRepo = createAppStateRepo(config.appDb);
 await appStateRepo.migrate();
+if (config.testMode) {
+  // Every e2e run starts with a clean app-state DB. SQLite `:memory:` is
+  // already fresh per process; this matters for the devenv Postgres path
+  // where the database persists state across runs.
+  await appStateRepo.truncateData();
+}
 initAppStateRepo(appStateRepo);
 
 const app = new Hono();

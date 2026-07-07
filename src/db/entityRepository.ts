@@ -80,11 +80,21 @@ function rangeSql(
   if (entityField) {
     return { sql: `e.${entityField.column} ${cmp} ?`, params: [value] };
   }
+  // Only include the numeric-cast branch when the bound parses as a finite
+  // number — otherwise `CAST('2024-01-05' AS REAL)` errors in Postgres
+  // (SQLite silently coerces to 0/2024, but that's meaningless anyway).
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && value.trim() !== '') {
+    return {
+      sql:
+        `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
+        `((value_type = 'number' AND CAST(value AS REAL) ${cmp} ?) OR (value_type != 'number' AND value ${cmp} ?)))`,
+      params: [leaf.key, numeric, value],
+    };
+  }
   return {
-    sql:
-      `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
-      `(value_type = 'number' AND CAST(value AS REAL) ${cmp} CAST(? AS REAL) OR value_type != 'number' AND value ${cmp} ?))`,
-    params: [leaf.key, value, value],
+    sql: `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value_type != 'number' AND value ${cmp} ?)`,
+    params: [leaf.key, value],
   };
 }
 

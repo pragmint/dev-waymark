@@ -143,6 +143,14 @@ export interface AppStateRepository {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+  /**
+   * Wipe every row in every app-state table (presets, visualizations,
+   * dashboards, junction rows). Migrations remain applied. Used at startup in
+   * test mode so a persistent Postgres app DB starts each e2e run empty; the
+   * SQLite `:memory:` DB is already fresh per process so this is a no-op there.
+   */
+  truncateData(): Promise<void>;
+
   /** Release held connections/resources. */
   close(): Promise<void>;
 }
