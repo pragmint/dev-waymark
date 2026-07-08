@@ -39,8 +39,7 @@ export class PostgresSourceAdapter implements SourceDataAdapter {
   }
 
   inList(column: string, ids: number[]): InListFragment {
-    // node-pg serialises a JS number[] to a Postgres array literal natively,
-    // so a single `= ANY(?)` parameter is safe for any list length.
+    // node-pg serialises the number[] as one array parameter.
     return { sql: `${column} = ANY(?)`, params: [ids] };
   }
 }
