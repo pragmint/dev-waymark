@@ -145,10 +145,13 @@ async function attachMetadata(
 ): Promise<EntityWithMetadata[]> {
   if (entities.length === 0) return [];
 
-  const placeholders = entities.map(() => '?').join(',');
-  const metaRows = await adapter.query(
-    `SELECT * FROM entity_metadata WHERE entity_id IN (${placeholders}) ORDER BY key`,
+  const { sql: inSql, params: inParams } = adapter.inList(
+    'entity_id',
     entities.map(e => e.id)
+  );
+  const metaRows = await adapter.query(
+    `SELECT * FROM entity_metadata WHERE ${inSql} ORDER BY key`,
+    inParams
   );
   const allMetadata = metaRows.map(m => MetadataSchema.parse(m));
 
@@ -222,10 +225,10 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       if (pageIds.length === 0) {
         return { pageEntities: [], allIds, total: allIds.length };
       }
-      const placeholders = pageIds.map(() => '?').join(',');
+      const { sql: inSql, params: inParams } = adapter.inList('id', pageIds);
       const pageRows = await adapter.query(
-        `SELECT * FROM entities WHERE id IN (${placeholders}) ORDER BY id DESC`,
-        pageIds
+        `SELECT * FROM entities WHERE ${inSql} ORDER BY id DESC`,
+        inParams
       );
       const pageEntities = await attachMetadata(
         adapter,
@@ -261,7 +264,7 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       if (entityIds.length === 0) return [];
       const distinctLimit = opts.allDistinctValues ? Infinity : 20;
 
-      const placeholders = entityIds.map(() => '?').join(', ');
+      const { sql: inSql, params: inParams } = adapter.inList('em.entity_id', entityIds);
       const rows = await adapter.query<{
         key: string;
         value_type: string;
@@ -271,10 +274,10 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
         `SELECT em.key, em.value_type, em.value, e.type AS entity_type
          FROM entity_metadata em
          JOIN entities e ON e.id = em.entity_id
-         WHERE em.entity_id IN (${placeholders})
+         WHERE ${inSql}
          AND em.value IS NOT NULL
          ORDER BY e.type, em.key, em.value`,
-        entityIds
+        inParams
       );
 
       const byKeyAndType = new Map<
@@ -313,9 +316,10 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       for (const [key, config] of Object.entries(ENTITY_FIELDS)) {
         const filter: AvailableFilter = { key, value_type: config.value_type, entityType: '' };
         if (config.withDistinctValues) {
+          const { sql: inSql2, params: inParams2 } = adapter.inList('id', entityIds);
           const rows = await adapter.query<{ val: string }>(
-            `SELECT DISTINCT ${config.column} AS val FROM entities WHERE id IN (${placeholders}) AND ${config.column} != '' ORDER BY ${config.column}`,
-            entityIds
+            `SELECT DISTINCT ${config.column} AS val FROM entities WHERE ${inSql2} AND ${config.column} != '' ORDER BY ${config.column}`,
+            inParams2
           );
           filter.distinctValues = rows.map(r => r.val);
         }

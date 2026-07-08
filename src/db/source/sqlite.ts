@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { applySourceSchema } from './schema';
-import type { SourceDataAdapter, SqlParam } from './adapter';
+import type { InListFragment, SourceDataAdapter, SqlParam } from './adapter';
 
 export class SqliteSourceAdapter implements SourceDataAdapter {
   private db: Database;
@@ -29,13 +29,13 @@ export class SqliteSourceAdapter implements SourceDataAdapter {
 
   async query<T extends Record<string, unknown>>(
     sql: string,
-    params: SqlParam[] = []
+    params: unknown[] = []
   ): Promise<T[]> {
-    return this.db.query(sql).all(...params) as T[];
+    return this.db.query(sql).all(...(params as SqlParam[])) as T[];
   }
 
-  async execute(sql: string, params: SqlParam[] = []): Promise<void> {
-    this.db.query(sql).run(...params);
+  async execute(sql: string, params: unknown[] = []): Promise<void> {
+    this.db.query(sql).run(...(params as SqlParam[]));
   }
 
   async validateConnection(): Promise<void> {
@@ -44,6 +44,13 @@ export class SqliteSourceAdapter implements SourceDataAdapter {
 
   async close(): Promise<void> {
     this.db.close();
+  }
+
+  inList(column: string, ids: number[]): InListFragment {
+    return {
+      sql: `${column} IN (SELECT value FROM json_each(?))`,
+      params: [JSON.stringify(ids)],
+    };
   }
 
   /** Expose the raw Database for tests and the seed pipeline. */

@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import type { SourceDataAdapter, SqlParam } from './adapter';
+import type { InListFragment, SourceDataAdapter } from './adapter';
 
 /**
  * Transform ? positional placeholders to Postgres-style $1, $2, ... placeholders.
@@ -18,16 +18,16 @@ export class PostgresSourceAdapter implements SourceDataAdapter {
 
   async query<T extends Record<string, unknown>>(
     sql: string,
-    params: SqlParam[] = []
+    params: unknown[] = []
   ): Promise<T[]> {
     const pgSql = toPgPlaceholders(sql);
-    const result = await this.pool.query(pgSql, params as (string | number | null)[]);
+    const result = await this.pool.query(pgSql, params as (string | number | null | number[])[]);
     return result.rows as T[];
   }
 
-  async execute(sql: string, params: SqlParam[] = []): Promise<void> {
+  async execute(sql: string, params: unknown[] = []): Promise<void> {
     const pgSql = toPgPlaceholders(sql);
-    await this.pool.query(pgSql, params as (string | number | null)[]);
+    await this.pool.query(pgSql, params as (string | number | null | number[])[]);
   }
 
   async validateConnection(): Promise<void> {
@@ -36,5 +36,11 @@ export class PostgresSourceAdapter implements SourceDataAdapter {
 
   async close(): Promise<void> {
     await this.pool.end();
+  }
+
+  inList(column: string, ids: number[]): InListFragment {
+    // node-pg serialises a JS number[] to a Postgres array literal natively,
+    // so a single `= ANY(?)` parameter is safe for any list length.
+    return { sql: `${column} = ANY(?)`, params: [ids] };
   }
 }

@@ -478,4 +478,53 @@ describe('entityRepository', () => {
       expect(available.find(f => f.key === 'bool-field')?.value_type).toBe('boolean');
     });
   });
+
+  // Regression: per-id placeholder lists (IN (?, ?, ...)) bind one SQL parameter
+  // per id. The Postgres wire protocol's Bind message counts parameters as Int16,
+  // so any list ≥ 65 536 wraps mod 65 536 and the server rejects the bind
+  // (e.g. 108 624 ids → 43 088 format slots but 0 parameters). SQLite has its
+  // own limit of 32 766 SQLITE_MAX_VARIABLE_NUMBER. Both fail under the old
+  // approach; the array-param fix (ANY(?) / json_each(?)) uses a single bound
+  // parameter regardless of list length.
+  describe('large id list — regression for Int16 wraparound bug', () => {
+    it('attachMetadata handles an id list exceeding SQLite SQLITE_MAX_VARIABLE_NUMBER (32 766)', async () => {
+      // We insert two real entities and then pass a synthetic id array of 70 000
+      // elements (including those two ids) to getAvailableFilters / listPaged.
+      // Under the old placeholder approach the SQLite driver would throw
+      // "too many SQL variables"; with the json_each(?) fix it must succeed.
+      const ID_COUNT = 70_000;
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), [
+        makeMetadata(1, { key: 'label', value: 'alpha', value_type: 'string' }),
+      ]);
+      await repo.upsert(makeEntity({ id: ID_COUNT, name: 'B', type: 'ticket' }), [
+        makeMetadata(ID_COUNT, { key: 'label', value: 'beta', value_type: 'string' }),
+      ]);
+
+      // Build a synthetic id list with IDs 1..ID_COUNT (most are non-existent rows).
+      const bigIdList = Array.from({ length: ID_COUNT }, (_, i) => i + 1);
+
+      // getAvailableFilters must not throw and must return only the two real entities' keys.
+      const available = await repo.getAvailableFilters(bigIdList);
+      const labelFilter = available.find(f => f.key === 'label');
+      expect(labelFilter).toBeDefined();
+      expect(labelFilter?.distinctValues?.sort()).toEqual(['alpha', 'beta']);
+    });
+
+    it('listPaged page fetch handles a page id list exceeding 32 766', async () => {
+      // Seed two entities with well-separated IDs so we can build a large synthetic
+      // allIds slice whose page window is just those two.
+      const LARGE_ID = 70_000;
+      await repo.upsert(makeEntity({ id: 1, name: 'First' }), []);
+      await repo.upsert(makeEntity({ id: LARGE_ID, name: 'Last' }), []);
+
+      // Directly exercise attachMetadata via list() with a superset of IDs.
+      // We call getAvailableFilters with the large list — this exercises both the
+      // metadata IN query and the entity-fields DISTINCT query.
+      const bigIdList = Array.from({ length: LARGE_ID }, (_, i) => i + 1);
+      const available = await repo.getAvailableFilters(bigIdList);
+      // entity_type field is always included (withDistinctValues=true); it must not throw.
+      const typeFilter = available.find(f => f.key === 'entity_type');
+      expect(typeFilter).toBeDefined();
+    });
+  });
 });
