@@ -132,11 +132,17 @@ function nodeSql(node: FilterNode): SqlFragment {
   return { sql, params };
 }
 
-function buildWhereFromTree(tree: FilterTree): WhereResult {
-  if (tree.children.length === 0) return { where: '', params: [] };
+// Bare condition (no WHERE keyword) — empty string when the tree filters nothing.
+function buildConditionFromTree(tree: FilterTree): SqlFragment {
+  if (tree.children.length === 0) return { sql: '', params: [] };
   const { sql, params } = nodeSql(tree);
-  if (sql === '1=1') return { where: '', params: [] };
-  return { where: `WHERE ${sql}`, params };
+  if (sql === '1=1') return { sql: '', params: [] };
+  return { sql, params };
+}
+
+function buildWhereFromTree(tree: FilterTree): WhereResult {
+  const { sql, params } = buildConditionFromTree(tree);
+  return { where: sql ? `WHERE ${sql}` : '', params };
 }
 
 async function attachMetadata(
@@ -167,11 +173,77 @@ async function attachMetadata(
   }));
 }
 
+type MetaValueRow = {
+  key: string;
+  value_type: string;
+  value: string;
+  entity_type: string;
+};
+
+// Rows must arrive ordered by (entity_type, key): result order follows first
+// appearance, and the first row of each group decides its value_type.
+function buildMetaFilters(rows: MetaValueRow[], distinctLimit: number): AvailableFilter[] {
+  const byKeyAndType = new Map<
+    string,
+    { value_type: string; values: Set<string>; entity_type: string }
+  >();
+  for (const row of rows) {
+    const mapKey = `${row.entity_type}::${row.key}`;
+    if (!byKeyAndType.has(mapKey)) {
+      byKeyAndType.set(mapKey, {
+        value_type: row.value_type,
+        values: new Set(),
+        entity_type: row.entity_type,
+      });
+    }
+    byKeyAndType.get(mapKey)!.values.add(row.value);
+  }
+
+  return Array.from(byKeyAndType.entries()).map(([mapKey, { value_type, values, entity_type }]) => {
+    const key = mapKey.split('::')[1];
+    const parsed = MetadataValueTypeSchema.safeParse(value_type);
+    const vt = parsed.success ? parsed.data : ('string' as const);
+    const filter: AvailableFilter = {
+      key,
+      value_type: vt,
+      entityType: entity_type,
+    };
+    if (vt === 'string' && values.size <= distinctLimit) {
+      filter.distinctValues = Array.from(values).sort();
+    }
+    return filter;
+  });
+}
+
+async function buildEntityFieldFilters(
+  adapter: SourceDataAdapter,
+  populationCondition: string,
+  params: unknown[]
+): Promise<AvailableFilter[]> {
+  const filters: AvailableFilter[] = [];
+  for (const [key, config] of Object.entries(ENTITY_FIELDS)) {
+    const filter: AvailableFilter = { key, value_type: config.value_type, entityType: '' };
+    if (config.withDistinctValues) {
+      const cond = populationCondition ? `${populationCondition} AND ` : '';
+      const rows = await adapter.query<{ val: string }>(
+        `SELECT DISTINCT e.${config.column} AS val FROM entities e WHERE ${cond}e.${config.column} != '' ORDER BY e.${config.column}`,
+        params
+      );
+      filter.distinctValues = rows.map(r => r.val);
+    }
+    filters.push(filter);
+  }
+  return filters;
+}
+
 export type PageOptions = { limit: number; offset: number };
 
 export type PagedEntities = {
   pageEntities: EntityWithMetadata[];
-  allIds: number[];
+  // Present only for regex trees: their population is materialised in JS
+  // anyway, and getAvailableFilters needs the ids. Other trees never pull the
+  // id list out of the database.
+  allIds?: number[];
   total: number;
 };
 
@@ -191,17 +263,22 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       return withMeta.filter(e => evaluateFilterTree(tree, e));
     },
 
-    // Paginated variant: returns one page of entities (with metadata) plus the
-    // full set of matching IDs (so getAvailableFilters can narrow against the
-    // entire filtered population, not just the current page) and a total count.
+    async listEntityTypes(): Promise<string[]> {
+      const rows = await adapter.query<{ type: string }>(
+        `SELECT DISTINCT type FROM entities WHERE type != '' ORDER BY type`
+      );
+      return rows.map(r => r.type);
+    },
+
+    // Paginated variant: returns one page of entities (with metadata) and a
+    // total count.
     async listPaged(tree: FilterTree, page: PageOptions): Promise<PagedEntities> {
       const { where, params } = buildWhereFromTree(tree);
-      const needsPostFilter = treeHasRegex(tree);
 
-      // When the tree has regex leaves we returned a SQL superset; materialise the full
-      // filtered set in JS before slicing so getAvailableFilters narrows against the real
-      // population. The win over rendering 10k+ rows still applies.
-      if (needsPostFilter) {
+      // When the tree has regex leaves the SQL result is a superset; materialise
+      // the full filtered set in JS before slicing so the page, total, and allIds
+      // reflect the real population. The win over rendering 10k+ rows still applies.
+      if (treeHasRegex(tree)) {
         const rows = await adapter.query(
           `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
           params
@@ -216,25 +293,21 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
         };
       }
 
-      const idRows = await adapter.query<{ id: number }>(
-        `SELECT e.id FROM entities e ${where} ORDER BY e.id DESC`,
+      const countRows = await adapter.query<{ total: number | string }>(
+        `SELECT COUNT(*) AS total FROM entities e ${where}`,
         params
       );
-      const allIds = idRows.map(r => r.id);
-      const pageIds = allIds.slice(page.offset, page.offset + page.limit);
-      if (pageIds.length === 0) {
-        return { pageEntities: [], allIds, total: allIds.length };
-      }
-      const { sql: inSql, params: inParams } = adapter.inList('id', pageIds);
+      // node-pg returns COUNT(*) (int8) as a string.
+      const total = Number(countRows[0].total);
       const pageRows = await adapter.query(
-        `SELECT * FROM entities WHERE ${inSql} ORDER BY id DESC`,
-        inParams
+        `SELECT * FROM entities e ${where} ORDER BY e.id DESC LIMIT ? OFFSET ?`,
+        [...params, page.limit, page.offset]
       );
       const pageEntities = await attachMetadata(
         adapter,
         pageRows.map(r => EntitySchema.parse(r))
       );
-      return { pageEntities, allIds, total: allIds.length };
+      return { pageEntities, total };
     },
 
     async get(id: number): Promise<EntityWithMetadata | null> {
@@ -253,7 +326,8 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
     },
 
     // Returns available filter metadata keys for the given set of matched entity IDs.
-    // Accepts the already-filtered entity list so reactive narrowing is always exact.
+    // Kept alongside the tree variant because regex-filtered populations only exist
+    // as id lists after JS post-filtering.
     // `allDistinctValues: true` lifts the per-field 20-value cap on distinctValues
     // — only the filter editor's "values with this leaf disabled" fetch should pass
     // it, since other call sites embed the values in initial page HTML.
@@ -265,12 +339,7 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       const distinctLimit = opts.allDistinctValues ? Infinity : 20;
 
       const { sql: inSql, params: inParams } = adapter.inList('em.entity_id', entityIds);
-      const rows = await adapter.query<{
-        key: string;
-        value_type: string;
-        value: string;
-        entity_type: string;
-      }>(
+      const rows = await adapter.query<MetaValueRow>(
         `SELECT em.key, em.value_type, em.value, e.type AS entity_type
          FROM entity_metadata em
          JOIN entities e ON e.id = em.entity_id
@@ -280,53 +349,59 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
         inParams
       );
 
-      const byKeyAndType = new Map<
-        string,
-        { value_type: string; values: Set<string>; entity_type: string }
-      >();
-      for (const row of rows) {
-        const mapKey = `${row.entity_type}::${row.key}`;
-        if (!byKeyAndType.has(mapKey)) {
-          byKeyAndType.set(mapKey, {
-            value_type: row.value_type,
-            values: new Set(),
-            entity_type: row.entity_type,
-          });
-        }
-        byKeyAndType.get(mapKey)!.values.add(row.value);
+      const { sql: idSql, params: idParams } = adapter.inList('e.id', entityIds);
+      const entityFieldFilters = await buildEntityFieldFilters(adapter, idSql, idParams);
+      return [...entityFieldFilters, ...buildMetaFilters(rows, distinctLimit)];
+    },
+
+    // Tree variant of getAvailableFilters: ids never leave the database and the
+    // distinct-value aggregation happens in SQL. Regex trees delegate to the id
+    // path — their true population only exists after the JS post-filter narrows
+    // the SQL superset.
+    async getAvailableFiltersForTree(
+      tree: FilterTree,
+      opts: { allDistinctValues?: boolean } = {}
+    ): Promise<AvailableFilter[]> {
+      if (treeHasRegex(tree)) {
+        const entities = await this.list(tree);
+        return this.getAvailableFilters(
+          entities.map(e => e.id),
+          opts
+        );
       }
 
-      const metaFilters = Array.from(byKeyAndType.entries()).map(
-        ([mapKey, { value_type, values, entity_type }]) => {
-          const key = mapKey.split('::')[1];
-          const parsed = MetadataValueTypeSchema.safeParse(value_type);
-          const vt = parsed.success ? parsed.data : ('string' as const);
-          const filter: AvailableFilter = {
-            key,
-            value_type: vt,
-            entityType: entity_type,
-          };
-          if (vt === 'string' && values.size <= distinctLimit) {
-            filter.distinctValues = Array.from(values).sort();
-          }
-          return filter;
-        }
+      const { sql: condition, params } = buildConditionFromTree(tree);
+      const where = condition ? `WHERE ${condition}` : '';
+      const present = await adapter.query(`SELECT e.id FROM entities e ${where} LIMIT 1`, params);
+      if (present.length === 0) return [];
+
+      const distinctLimit = opts.allDistinctValues ? Infinity : 20;
+      // Fetch one value past the cap so buildMetaFilters can still tell
+      // over-the-cap keys apart and withhold their distinctValues.
+      const rankCap = Number.isFinite(distinctLimit) ? 'WHERE value_rank <= ?' : '';
+      const rankParams = Number.isFinite(distinctLimit) ? [distinctLimit + 1] : [];
+      const rows = await adapter.query<MetaValueRow>(
+        `WITH pop AS (SELECT e.id, e.type FROM entities e ${where}),
+         distinct_vals AS (
+           SELECT pop.type AS entity_type, em.key AS key, em.value AS value,
+                  MIN(em.value_type) AS value_type
+           FROM entity_metadata em
+           JOIN pop ON pop.id = em.entity_id
+           WHERE em.value IS NOT NULL
+           GROUP BY pop.type, em.key, em.value
+         ),
+         ranked AS (
+           SELECT entity_type, key, value, value_type,
+                  ROW_NUMBER() OVER (PARTITION BY entity_type, key ORDER BY value) AS value_rank
+           FROM distinct_vals
+         )
+         SELECT entity_type, key, value, value_type FROM ranked ${rankCap}
+         ORDER BY entity_type, key, value`,
+        [...params, ...rankParams]
       );
-      const entityFieldFilters: AvailableFilter[] = [];
-      for (const [key, config] of Object.entries(ENTITY_FIELDS)) {
-        const filter: AvailableFilter = { key, value_type: config.value_type, entityType: '' };
-        if (config.withDistinctValues) {
-          const { sql: inSql2, params: inParams2 } = adapter.inList('id', entityIds);
-          const rows = await adapter.query<{ val: string }>(
-            `SELECT DISTINCT ${config.column} AS val FROM entities WHERE ${inSql2} AND ${config.column} != '' ORDER BY ${config.column}`,
-            inParams2
-          );
-          filter.distinctValues = rows.map(r => r.val);
-        }
-        entityFieldFilters.push(filter);
-      }
 
-      return [...entityFieldFilters, ...metaFilters];
+      const entityFieldFilters = await buildEntityFieldFilters(adapter, condition, params);
+      return [...entityFieldFilters, ...buildMetaFilters(rows, distinctLimit)];
     },
 
     async upsert(entity: Entity, metadata: Metadata[]): Promise<void> {

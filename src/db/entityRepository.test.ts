@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'bun:test';
 import { SqliteSourceAdapter } from './source/sqlite';
 import { createEntityRepository } from './entityRepository';
 import { emptyTree, makeGroup, makeLeaf } from '../schemas/filterTree';
+import type { FilterTree } from '../schemas/filterTree';
 import type { Entity, Metadata } from '../schemas/entity';
 
 // Tests use in-memory SQLite with schema applied — same as the no-config default.
@@ -316,13 +317,13 @@ describe('entityRepository', () => {
   });
 
   describe('listPaged', () => {
-    it('returns one page worth of entities, the full id set, and total count', async () => {
+    it('returns one page worth of entities and the total count', async () => {
       for (let id = 1; id <= 10; id++) {
         await repo.upsert(makeEntity({ id, name: `E-${id}`, type: 'jira_ticket' }), []);
       }
       const result = await repo.listPaged(emptyTree(), { limit: 3, offset: 0 });
       expect(result.total).toBe(10);
-      expect(result.allIds).toHaveLength(10);
+      expect(result.allIds).toBeUndefined();
       expect(result.pageEntities).toHaveLength(3);
       // Default ordering is id DESC, so page 1 should contain ids 10, 9, 8.
       expect(result.pageEntities.map(e => e.id)).toEqual([10, 9, 8]);
@@ -345,7 +346,7 @@ describe('entityRepository', () => {
       expect(result.total).toBe(3);
     });
 
-    it('paginates while preserving filter narrowing for getAvailableFilters', async () => {
+    it('applies the filter tree to both the page and the total', async () => {
       await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'jira_ticket' }), [
         makeMetadata(1, { key: 'ticket_type', value: 'Story' }),
       ]);
@@ -360,7 +361,6 @@ describe('entityRepository', () => {
         { limit: 1, offset: 0 }
       );
       expect(result.pageEntities).toHaveLength(1);
-      expect(result.allIds.sort()).toEqual([1, 2]);
       expect(result.total).toBe(2);
     });
 
@@ -376,6 +376,23 @@ describe('entityRepository', () => {
       });
       expect(result.total).toBe(2);
       expect(result.pageEntities.map(e => e.id).sort()).toEqual([2, 4]);
+      // Regex populations are already materialised in JS — allIds rides along
+      // so getAvailableFilters can narrow without a second pass.
+      expect(result.allIds?.slice().sort()).toEqual([2, 4]);
+    });
+  });
+
+  describe('listEntityTypes', () => {
+    it('returns distinct types sorted, excluding blank', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), []);
+      await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'repo' }), []);
+      await repo.upsert(makeEntity({ id: 3, name: 'C', type: 'ticket' }), []);
+      await repo.upsert(makeEntity({ id: 4, name: 'D', type: '' }), []);
+      expect(await repo.listEntityTypes()).toEqual(['repo', 'ticket']);
+    });
+
+    it('returns empty for an empty table', async () => {
+      expect(await repo.listEntityTypes()).toEqual([]);
     });
   });
 
@@ -476,6 +493,83 @@ describe('entityRepository', () => {
       expect(available.find(f => f.key === 'num-field')?.value_type).toBe('number');
       expect(available.find(f => f.key === 'date-field')?.value_type).toBe('date');
       expect(available.find(f => f.key === 'bool-field')?.value_type).toBe('boolean');
+    });
+  });
+
+  describe('getAvailableFiltersForTree', () => {
+    // Population diverse enough to exercise every aggregation branch: two
+    // entity types sharing a key, a >20-distinct-value key, an exactly-20 key,
+    // null values, and non-string value_types.
+    const seedDiverse = async () => {
+      for (let i = 1; i <= 25; i++) {
+        await repo.upsert(makeEntity({ id: i, name: `T-${i}`, type: 'ticket' }), [
+          makeMetadata(i, { key: 'tag', value: `tag-${String(i).padStart(2, '0')}` }),
+          makeMetadata(i, {
+            key: 'bucket',
+            value: `bucket-${String(((i - 1) % 20) + 1).padStart(2, '0')}`,
+          }),
+          makeMetadata(i, { key: 'points', value: String(i), value_type: 'number' }),
+          makeMetadata(i, { key: 'status', value: i % 2 === 0 ? 'open' : 'closed' }),
+        ]);
+      }
+      for (let i = 1; i <= 5; i++) {
+        await repo.upsert(makeEntity({ id: 25 + i, name: `R-${i}`, type: 'repo' }), [
+          makeMetadata(25 + i, { key: 'status', value: i === 1 ? 'archived' : 'active' }),
+          makeMetadata(25 + i, { key: 'starred', value: 'true', value_type: 'boolean' }),
+          makeMetadata(25 + i, { key: 'last-push', value: `2026-0${i}-01`, value_type: 'date' }),
+          makeMetadata(25 + i, { key: 'notes', value: null }),
+        ]);
+      }
+    };
+
+    const expectPathsAgree = async (tree: FilterTree, opts?: { allDistinctValues?: boolean }) => {
+      const ids = (await repo.list(tree)).map(e => e.id);
+      const fromTree = await repo.getAvailableFiltersForTree(tree, opts);
+      expect(fromTree).toEqual(await repo.getAvailableFilters(ids, opts));
+      return fromTree;
+    };
+
+    it('matches the id path on an unfiltered population', async () => {
+      await seedDiverse();
+      const available = await expectPathsAgree(emptyTree());
+      expect(available.find(f => f.key === 'tag')?.distinctValues).toBeUndefined();
+      expect(available.find(f => f.key === 'bucket')?.distinctValues).toHaveLength(20);
+      expect(available.find(f => f.key === 'points')?.value_type).toBe('number');
+      expect(available.find(f => f.key === 'points')?.distinctValues).toBeUndefined();
+      expect(available.find(f => f.key === 'notes')).toBeUndefined();
+      expect(available.filter(f => f.key === 'status').map(f => f.entityType)).toEqual([
+        'repo',
+        'ticket',
+      ]);
+    });
+
+    it('matches the id path on a filtered population', async () => {
+      await seedDiverse();
+      const available = await expectPathsAgree(
+        makeGroup('AND', [
+          makeLeaf('entity_type', 'eq', 'ticket'),
+          makeLeaf('status', 'eq', 'open'),
+        ])
+      );
+      expect(available.find(f => f.key === 'starred')).toBeUndefined();
+      expect(available.find(f => f.key === 'entity_type')?.distinctValues).toEqual(['ticket']);
+    });
+
+    it('matches the id path with the distinct-value cap lifted', async () => {
+      await seedDiverse();
+      const available = await expectPathsAgree(emptyTree(), { allDistinctValues: true });
+      expect(available.find(f => f.key === 'tag')?.distinctValues).toHaveLength(25);
+    });
+
+    it('matches the id path for regex trees', async () => {
+      await seedDiverse();
+      await expectPathsAgree(makeGroup('AND', [makeLeaf('tag', 're', '^tag-0[1-3]$')]));
+    });
+
+    it('returns [] when nothing matches', async () => {
+      await seedDiverse();
+      const tree = makeGroup('AND', [makeLeaf('status', 'eq', 'nonexistent')]);
+      expect(await repo.getAvailableFiltersForTree(tree)).toEqual([]);
     });
   });
 
