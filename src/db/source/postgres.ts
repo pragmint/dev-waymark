@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import type { SourceDataAdapter, SqlParam } from './adapter';
+import type { InListFragment, SourceDataAdapter, SqlParam } from './adapter';
 
 /**
  * Transform ? positional placeholders to Postgres-style $1, $2, ... placeholders.
@@ -21,13 +21,13 @@ export class PostgresSourceAdapter implements SourceDataAdapter {
     params: SqlParam[] = []
   ): Promise<T[]> {
     const pgSql = toPgPlaceholders(sql);
-    const result = await this.pool.query(pgSql, params as (string | number | null)[]);
+    const result = await this.pool.query(pgSql, params);
     return result.rows as T[];
   }
 
   async execute(sql: string, params: SqlParam[] = []): Promise<void> {
     const pgSql = toPgPlaceholders(sql);
-    await this.pool.query(pgSql, params as (string | number | null)[]);
+    await this.pool.query(pgSql, params);
   }
 
   async validateConnection(): Promise<void> {
@@ -36,5 +36,10 @@ export class PostgresSourceAdapter implements SourceDataAdapter {
 
   async close(): Promise<void> {
     await this.pool.end();
+  }
+
+  inList(column: string, ids: number[]): InListFragment {
+    // node-pg serialises the number[] as one array parameter.
+    return { sql: `${column} = ANY(?)`, params: [ids] };
   }
 }

@@ -9,7 +9,15 @@
  * source data as strictly read-only.
  */
 
-export type SqlParam = string | number | null;
+// Scalars accepted by every driver — the common shape for individual bind values.
+export type SqlScalar = string | number | null;
+
+// The full union of things the adapter may bind. `number[]` is only produced by
+// the Postgres inList() path (bound as a single array parameter via = ANY(?));
+// SQLite's inList() stringifies the ids and binds them as a single string.
+export type SqlParam = SqlScalar | number[];
+
+export type InListFragment = { sql: string; params: SqlParam[] };
 
 export interface SourceDataAdapter {
   /**
@@ -18,6 +26,15 @@ export interface SourceDataAdapter {
    * driver's native format (e.g., $1/$2 for Postgres).
    */
   query<T extends Record<string, unknown>>(sql: string, params?: SqlParam[]): Promise<T[]>;
+
+  /**
+   * Membership test for an id list as a SINGLE bound parameter. Per-id
+   * placeholders overflow the Postgres wire protocol's Int16 parameter count
+   * (>65 535 ids) and bun:sqlite's binding layer at the same threshold. Id
+   * lists on the attach-metadata path span whole filtered populations, so
+   * they reach those sizes in production.
+   */
+  inList(column: string, ids: number[]): InListFragment;
 
   /**
    * Execute a data-modification statement (INSERT / UPDATE / DELETE).

@@ -145,10 +145,13 @@ async function attachMetadata(
 ): Promise<EntityWithMetadata[]> {
   if (entities.length === 0) return [];
 
-  const placeholders = entities.map(() => '?').join(',');
-  const metaRows = await adapter.query(
-    `SELECT * FROM entity_metadata WHERE entity_id IN (${placeholders}) ORDER BY key`,
+  const { sql: inSql, params: inParams } = adapter.inList(
+    'entity_id',
     entities.map(e => e.id)
+  );
+  const metaRows = await adapter.query(
+    `SELECT * FROM entity_metadata WHERE ${inSql} ORDER BY key`,
+    inParams
   );
   const allMetadata = metaRows.map(m => MetadataSchema.parse(m));
 

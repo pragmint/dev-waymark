@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { applySourceSchema } from './schema';
-import type { SourceDataAdapter, SqlParam } from './adapter';
+import type { InListFragment, SourceDataAdapter, SqlParam, SqlScalar } from './adapter';
 
 export class SqliteSourceAdapter implements SourceDataAdapter {
   private db: Database;
@@ -31,11 +31,14 @@ export class SqliteSourceAdapter implements SourceDataAdapter {
     sql: string,
     params: SqlParam[] = []
   ): Promise<T[]> {
-    return this.db.query(sql).all(...params) as T[];
+    // bun:sqlite only binds scalars; the number[] shape of SqlParam is
+    // exclusive to the Postgres = ANY(?) path and never reaches this adapter
+    // (sqlite inList() stringifies ids into a single scalar bind).
+    return this.db.query(sql).all(...(params as SqlScalar[])) as T[];
   }
 
   async execute(sql: string, params: SqlParam[] = []): Promise<void> {
-    this.db.query(sql).run(...params);
+    this.db.query(sql).run(...(params as SqlScalar[]));
   }
 
   async validateConnection(): Promise<void> {
@@ -44,6 +47,13 @@ export class SqliteSourceAdapter implements SourceDataAdapter {
 
   async close(): Promise<void> {
     this.db.close();
+  }
+
+  inList(column: string, ids: number[]): InListFragment {
+    return {
+      sql: `${column} IN (SELECT value FROM json_each(?))`,
+      params: [JSON.stringify(ids)],
+    };
   }
 
   /** Expose the raw Database for tests and the seed pipeline. */
