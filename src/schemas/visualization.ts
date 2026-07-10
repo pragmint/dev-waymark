@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TemplateConfigSchema } from './visualizationTemplate';
+import { MetadataValueTypeSchema } from './entity';
 
 export const ChartTypeSchema = z.enum(['line', 'bar', 'pie', 'doughnut', 'scatter']);
 export type ChartType = z.infer<typeof ChartTypeSchema>;
@@ -27,7 +28,7 @@ export type DurationUnit = z.infer<typeof DurationUnitSchema>;
 
 export const AxisConfigSchema = z.object({
   metadataKey: z.string(),
-  type: z.enum(['string', 'number', 'date', 'boolean']),
+  type: MetadataValueTypeSchema,
   timeBucket: TimeBucketSchema.optional(),
   unit: DurationUnitSchema.optional(),
   displayUnit: DurationUnitSchema.optional(),

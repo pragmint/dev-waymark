@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import type { EntityWithMetadata } from '../schemas/entity';
+import type { EntityWithMetadata, MetadataValueType } from '../schemas/entity';
 import type { VisualizationConfig } from '../schemas/visualization';
 import {
   aggregate,
@@ -18,10 +18,7 @@ import { isGroup, isLeaf } from '../schemas/filterTree';
 
 function makeEntity(
   id: number,
-  metadata: Record<
-    string,
-    { value: string | null; value_type: 'string' | 'number' | 'date' | 'boolean' }
-  >
+  metadata: Record<string, { value: string | null; value_type: MetadataValueType }>
 ): EntityWithMetadata {
   return {
     id,

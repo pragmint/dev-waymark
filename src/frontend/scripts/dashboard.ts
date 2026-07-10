@@ -1,3 +1,5 @@
+import type { MetadataValueType } from '../../schemas/entity';
+
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
@@ -502,7 +504,7 @@ interface TemplateEntry {
 }
 interface AvailableField {
   key: string;
-  value_type: 'string' | 'number' | 'date' | 'boolean';
+  value_type: MetadataValueType;
 }
 
 interface SlotFieldDef {
