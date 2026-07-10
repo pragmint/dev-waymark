@@ -57,7 +57,7 @@ export async function chartDataByIdHandler(c: Context) {
   const entityRepo = getEntityRepo();
   const entities = await entityRepo.list(preset.tree);
 
-  const chartResult = buildChartData(entities, viz.config);
+  const chartResult = buildChartData(entities, viz.config, preset.tree);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
   return c.json({
@@ -98,7 +98,7 @@ export async function chartDataPreviewHandler(c: Context) {
   const entityRepo = getEntityRepo();
   const entities = await entityRepo.list(preset.tree);
 
-  const chartResult = buildChartData(entities, config);
+  const chartResult = buildChartData(entities, config, preset.tree);
   const chartJsConfig = buildChartJsConfig(chartResult, config);
 
   return c.json({

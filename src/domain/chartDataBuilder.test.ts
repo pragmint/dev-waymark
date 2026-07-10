@@ -12,7 +12,7 @@ import {
   buildPointEntityFilters,
   validateVisualizationConfig,
 } from './chartDataBuilder';
-import { isGroup, isLeaf } from '../schemas/filterTree';
+import { isGroup, isLeaf, makeGroup, makeLeaf } from '../schemas/filterTree';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -448,6 +448,87 @@ describe('buildChartData — categorical (avg lead time by team)', () => {
     const result = buildChartData(tickets, config);
     const sorted = [...result.labels].sort();
     expect(result.labels).toEqual(sorted);
+  });
+});
+
+describe('buildChartData — categorical (list-typed key fans out per element)', () => {
+  const pr = makeEntity(1, {
+    jira_tickets: { value: 'CM-123|CM-124|CAS-3|INFRA-1225', value_type: 'list' },
+    additions: { value: '10', value_type: 'number' },
+  });
+  const countConfig: VisualizationConfig = {
+    chartType: 'bar',
+    category: { metadataKey: 'jira_tickets', sortBy: 'label_asc' },
+    aggregation: { function: 'count' },
+  };
+
+  test('canonical: CM/CAS scope counts the entity once per in-scope element', () => {
+    const tree = makeGroup('AND', [makeLeaf('jira_tickets', 're', '^(CM|CAS)-')]);
+    const result = buildChartData([pr], countConfig, tree);
+    expect(result.labels).toEqual(['CAS-3', 'CM-123', 'CM-124']);
+    expect(result.datasets[0].data).toEqual([1, 1, 1]);
+    expect(result.excludedEntityCount).toBe(0);
+  });
+
+  test('any-of eq scope narrows fan-out to the requested elements', () => {
+    const tree = makeGroup('AND', [makeLeaf('jira_tickets', 'eq', ['CM-123', 'CAS-3'])]);
+    const result = buildChartData([pr], countConfig, tree);
+    expect(result.labels).toEqual(['CAS-3', 'CM-123']);
+    expect(result.datasets[0].data).toEqual([1, 1]);
+  });
+
+  test('no scope fans out to every element', () => {
+    expect(buildChartData([pr], countConfig).labels).toEqual([
+      'CAS-3',
+      'CM-123',
+      'CM-124',
+      'INFRA-1225',
+    ]);
+    // A tree without a same-key leaf does not constrain fan-out either.
+    const unrelated = makeGroup('AND', [makeLeaf('entity_type', 'eq', '')]);
+    expect(buildChartData([pr], countConfig, unrelated).labels).toHaveLength(4);
+  });
+
+  test('sum attributes the full metric value to each in-scope element bucket', () => {
+    const sumConfig: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'jira_tickets', sortBy: 'label_asc' },
+      yAxis: { metadataKey: 'additions', type: 'number' },
+      aggregation: { function: 'sum' },
+    };
+    const other = makeEntity(2, {
+      jira_tickets: { value: 'CM-123', value_type: 'list' },
+      additions: { value: '5', value_type: 'number' },
+    });
+    const tree = makeGroup('AND', [makeLeaf('jira_tickets', 're', '^(CM|CAS)-')]);
+    const result = buildChartData([pr, other], sumConfig, tree);
+    expect(result.labels).toEqual(['CAS-3', 'CM-123', 'CM-124']);
+    expect(result.datasets[0].data).toEqual([10, 15, 10]);
+  });
+
+  test('an entity whose elements are all out of scope contributes nothing without being excluded', () => {
+    const tree = makeGroup('AND', [makeLeaf('jira_tickets', 're', '^(CM|CAS)-')]);
+    const infraOnly = makeEntity(3, {
+      jira_tickets: { value: 'INFRA-9', value_type: 'list' },
+    });
+    const result = buildChartData([infraOnly], countConfig, tree);
+    expect(result.labels).toEqual([]);
+    expect(result.excludedEntityCount).toBe(0);
+  });
+
+  test('elements stay in scope when the entity qualifies via another OR branch', () => {
+    const tree = makeGroup('AND', [
+      makeGroup('OR', [
+        makeLeaf('jira_tickets', 're', '^(CM|CAS)-'),
+        makeLeaf('additions', 'gte', '1'),
+      ]),
+    ]);
+    const infraOnly = makeEntity(3, {
+      jira_tickets: { value: 'INFRA-9', value_type: 'list' },
+      additions: { value: '2', value_type: 'number' },
+    });
+    const result = buildChartData([infraOnly], countConfig, tree);
+    expect(result.labels).toEqual(['INFRA-9']);
   });
 });
 

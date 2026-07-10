@@ -55,7 +55,7 @@ async function buildCard(
   const entityRepo = getEntityRepo();
   const entities = await entityRepo.list(filteredTree);
 
-  const chartResult = buildChartData(entities, viz.config);
+  const chartResult = buildChartData(entities, viz.config, filteredTree);
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
   const pointUrls = chartResult.labels.map(label =>

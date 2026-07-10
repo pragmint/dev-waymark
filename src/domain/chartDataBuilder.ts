@@ -1,6 +1,8 @@
+import { splitListValue } from '../schemas/entity';
 import type { EntityWithMetadata } from '../schemas/entity';
-import { makeLeaf } from '../schemas/filterTree';
-import type { FilterNode } from '../schemas/filterTree';
+import { collectLeaves, makeLeaf } from '../schemas/filterTree';
+import type { FilterNode, FilterTree } from '../schemas/filterTree';
+import { evaluateFilterTree } from './filterTreeEval';
 import type {
   VisualizationConfig,
   AggregationFunction,
@@ -274,13 +276,52 @@ export function validateVisualizationConfig(config: VisualizationConfig): string
 
 // ── Chart data builder helpers ────────────────────────────────────────────────
 
-function extractGroupLabel(entity: EntityWithMetadata, config: VisualizationConfig): string | null {
+// An element is in scope when the preset tree still matches with the entity's
+// list collapsed to just that element — same-key leaves then judge the single
+// element while unrelated leaves keep their verdict.
+function elementInScope(
+  entity: EntityWithMetadata,
+  key: string,
+  element: string,
+  tree: FilterTree
+): boolean {
+  const collapsed = {
+    ...entity,
+    metadata: entity.metadata.map(m => (m.key === key ? { ...m, value: element } : m)),
+  };
+  return evaluateFilterTree(tree, collapsed);
+}
+
+// A list-typed category key fans out to one label per element, dropping
+// elements outside the preset tree's scope. No same-key leaf in the tree →
+// every element is in scope. null → the entity lacks the field entirely.
+function extractCategoryLabels(
+  entity: EntityWithMetadata,
+  key: string,
+  presetTree: FilterTree | undefined
+): string[] | null {
+  const meta = entity.metadata.find(m => m.key === key);
+  if (meta?.value == null) return null;
+  if (meta.value_type !== 'list') return [meta.value];
+  const elements = splitListValue(meta.value);
+  if (elements.length === 0) return null;
+  if (!presetTree || !collectLeaves(presetTree).some(leaf => leaf.key === key)) return elements;
+  return elements.filter(element => elementInScope(entity, key, element, presetTree));
+}
+
+// One label per bucket the entity belongs to — scalar keys yield at most one.
+function extractGroupLabels(
+  entity: EntityWithMetadata,
+  config: VisualizationConfig,
+  presetTree: FilterTree | undefined
+): string[] | null {
   if (config.xAxis?.timeBucket) {
     const val = entity.metadata.find(m => m.key === config.xAxis!.metadataKey)?.value;
-    return val ? bucketDate(val, config.xAxis.timeBucket) : null;
+    const bucket = val ? bucketDate(val, config.xAxis.timeBucket) : null;
+    return bucket ? [bucket] : null;
   }
   if (config.category) {
-    return entity.metadata.find(m => m.key === config.category!.metadataKey)?.value ?? null;
+    return extractCategoryLabels(entity, config.category.metadataKey, presetTree);
   }
   return null;
 }
@@ -360,26 +401,44 @@ function buildExclusionWarning(count: number, config: VisualizationConfig): stri
 
 // ── Chart data builder ────────────────────────────────────────────────────────
 
-export function buildChartData(
+// List-typed category keys aggregate per element: count counts the entity
+// once per in-scope element, and value aggregations (sum/avg/…) attribute the
+// entity's full metric value to each in-scope element's bucket. An entity
+// whose elements are all out of scope contributes nothing but is not
+// "excluded" — it isn't missing the field.
+function collectRows(
   entities: EntityWithMetadata[],
-  config: VisualizationConfig
-): ChartDataResult {
-  const warnings: string[] = [];
+  config: VisualizationConfig,
+  presetTree: FilterTree | undefined
+): { rows: Array<{ label: string; value: number }>; excludedCount: number } {
   let excludedCount = 0;
   const rows: Array<{ label: string; value: number }> = [];
 
   for (const entity of entities) {
-    const label = extractGroupLabel(entity, config);
+    const labels = extractGroupLabels(entity, config, presetTree);
     const metricValue = extractMetricValue(entity, config);
 
     const missingMetric = config.aggregation.function !== 'count' && metricValue == null;
-    if (label == null || missingMetric) {
+    if (labels == null || missingMetric) {
       excludedCount++;
       continue;
     }
 
-    rows.push({ label, value: applyDisplayConversion(metricValue!, config) });
+    for (const label of labels) {
+      rows.push({ label, value: applyDisplayConversion(metricValue!, config) });
+    }
   }
+
+  return { rows, excludedCount };
+}
+
+export function buildChartData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig,
+  presetTree?: FilterTree
+): ChartDataResult {
+  const warnings: string[] = [];
+  const { rows, excludedCount } = collectRows(entities, config, presetTree);
 
   const groups = new Map<string, number[]>();
   for (const { label, value } of rows) {
