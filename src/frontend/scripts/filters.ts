@@ -3,7 +3,6 @@
 // view is driven by `state.current` and re-rendered on every change.
 
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
-import { assertNever } from '../../domain/assertNever';
 import type { MetadataValueType } from '../../schemas/entity';
 
 type LeafOp = 'eq' | 'contains' | 'gte' | 'lte' | 're';
@@ -463,34 +462,56 @@ function addLeaf(key: string) {
   commit();
 }
 
+// ── Per-value_type UI behavior ───────────────────────────────────────────────
+
+// Record over the shared union keeps compile-time exhaustiveness — a new
+// value_type is a missing-key error here — and keeps each type's default op,
+// default value, and widget render/read behaviors in one descriptor.
+type ValueTypeUi = {
+  defaultOp: (f: AvailableFilter) => LeafOp;
+  defaultValue: (f: AvailableFilter) => string | string[];
+  renderWidgetBody: (
+    leaf: FilterLeaf,
+    available: AvailableFilter,
+    body: HTMLElement
+  ) => HTMLElement;
+  readWidgetBody: (body: HTMLElement) => LeafPatch;
+};
+
+const VALUE_TYPE_UI: Record<MetadataValueType, ValueTypeUi> = {
+  string: {
+    defaultOp: f => (f.distinctValues && f.distinctValues.length > 0 ? 'eq' : 're'),
+    defaultValue: f =>
+      f.distinctValues && f.distinctValues.length > 0 ? [f.distinctValues[0]] : '',
+    renderWidgetBody: renderStringBody,
+    readWidgetBody: readStringBody,
+  },
+  number: {
+    defaultOp: () => 'gte',
+    defaultValue: () => '',
+    renderWidgetBody: (leaf, _available, body) => renderRangeBody(leaf, body, 'number'),
+    readWidgetBody: readRangeBody,
+  },
+  date: {
+    defaultOp: () => 'gte',
+    defaultValue: () => '',
+    renderWidgetBody: (leaf, _available, body) => renderRangeBody(leaf, body, 'date'),
+    readWidgetBody: readRangeBody,
+  },
+  boolean: {
+    defaultOp: () => 'eq',
+    defaultValue: () => 'true',
+    renderWidgetBody: renderBooleanBody,
+    readWidgetBody: readBooleanBody,
+  },
+};
+
 function defaultOpFor(f: AvailableFilter | undefined): LeafOp {
-  if (!f) return 'eq';
-  switch (f.value_type) {
-    case 'string':
-      return f.distinctValues && f.distinctValues.length > 0 ? 'eq' : 're';
-    case 'number':
-    case 'date':
-      return 'gte';
-    case 'boolean':
-      return 'eq';
-    default:
-      return assertNever(f.value_type);
-  }
+  return f ? VALUE_TYPE_UI[f.value_type].defaultOp(f) : 'eq';
 }
 
 function defaultValueFor(f: AvailableFilter | undefined): string | string[] {
-  if (!f) return '';
-  switch (f.value_type) {
-    case 'string':
-      return f.distinctValues && f.distinctValues.length > 0 ? [f.distinctValues[0]] : '';
-    case 'boolean':
-      return 'true';
-    case 'number':
-    case 'date':
-      return '';
-    default:
-      return assertNever(f.value_type);
-  }
+  return f ? VALUE_TYPE_UI[f.value_type].defaultValue(f) : '';
 }
 
 function removeNode(id: string) {
@@ -1339,54 +1360,58 @@ function openGroupRemoveConfirm(groupId: string, anchor: HTMLElement) {
 function renderWidgetBody(leaf: FilterLeaf, available: AvailableFilter): HTMLElement {
   const body = document.createElement('div');
   body.className = 'filter-widget-body';
+  return VALUE_TYPE_UI[available.value_type].renderWidgetBody(leaf, available, body);
+}
 
-  switch (available.value_type) {
-    case 'date': {
-      const gte = inputEl('date', 'gte', singleValue(leaf, 'gte'));
-      const sep = document.createElement('span');
-      sep.className = 'filter-sep';
-      sep.textContent = '–';
-      const lte = inputEl('date', 'lte', singleValue(leaf, 'lte'));
-      body.append(gte, sep, lte);
-      return body;
-    }
-    case 'number': {
-      const gte = inputEl('number', 'gte', singleValue(leaf, 'gte'));
-      gte.placeholder = 'min';
-      const sep = document.createElement('span');
-      sep.className = 'filter-sep';
-      sep.textContent = '–';
-      const lte = inputEl('number', 'lte', singleValue(leaf, 'lte'));
-      lte.placeholder = 'max';
-      body.append(gte, sep, lte);
-      return body;
-    }
-    case 'boolean': {
-      const sel = document.createElement('select');
-      sel.className = 'filter-select';
-      sel.dataset.op = 'eq';
-      ['true', 'false'].forEach(v => {
-        const o = document.createElement('option');
-        o.value = v;
-        o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
-        if (singleValue(leaf, 'eq') === v) o.selected = true;
-        sel.appendChild(o);
-      });
-      body.appendChild(sel);
-      return body;
-    }
-    case 'string': {
-      if (available.distinctValues && available.distinctValues.length > 0) {
-        return renderStringWidget(leaf, available, body);
-      }
-      const input = inputEl('text', 're', singleValue(leaf, 're') || singleValue(leaf, 'contains'));
-      input.placeholder = 'regex…';
-      body.appendChild(input);
-      return body;
-    }
-    default:
-      return assertNever(available.value_type);
+function renderRangeBody(
+  leaf: FilterLeaf,
+  body: HTMLElement,
+  inputType: 'date' | 'number'
+): HTMLElement {
+  const gte = inputEl(inputType, 'gte', singleValue(leaf, 'gte'));
+  const sep = document.createElement('span');
+  sep.className = 'filter-sep';
+  sep.textContent = '–';
+  const lte = inputEl(inputType, 'lte', singleValue(leaf, 'lte'));
+  if (inputType === 'number') {
+    gte.placeholder = 'min';
+    lte.placeholder = 'max';
   }
+  body.append(gte, sep, lte);
+  return body;
+}
+
+function renderBooleanBody(
+  leaf: FilterLeaf,
+  _available: AvailableFilter,
+  body: HTMLElement
+): HTMLElement {
+  const sel = document.createElement('select');
+  sel.className = 'filter-select';
+  sel.dataset.op = 'eq';
+  ['true', 'false'].forEach(v => {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+    if (singleValue(leaf, 'eq') === v) o.selected = true;
+    sel.appendChild(o);
+  });
+  body.appendChild(sel);
+  return body;
+}
+
+function renderStringBody(
+  leaf: FilterLeaf,
+  available: AvailableFilter,
+  body: HTMLElement
+): HTMLElement {
+  if (available.distinctValues && available.distinctValues.length > 0) {
+    return renderStringWidget(leaf, available, body);
+  }
+  const input = inputEl('text', 're', singleValue(leaf, 're') || singleValue(leaf, 'contains'));
+  input.placeholder = 'regex…';
+  body.appendChild(input);
+  return body;
 }
 
 function renderStringWidget(
@@ -1498,24 +1523,20 @@ function readStringModesBody(modes: HTMLElement): LeafPatch {
   return { op: 'eq', value: values.length === 1 ? values[0] : values };
 }
 
+function readBooleanBody(body: HTMLElement): LeafPatch {
+  const v = body.querySelector<HTMLSelectElement>('select')?.value ?? 'true';
+  return { op: 'eq', value: v };
+}
+
+function readStringBody(body: HTMLElement): LeafPatch {
+  const modes = body.querySelector<HTMLElement>('[data-active-mode]');
+  if (modes) return readStringModesBody(modes);
+  const v = body.querySelector<HTMLInputElement>('input[data-op="re"]')?.value ?? '';
+  return v ? { op: 're', value: v } : null;
+}
+
 function readWidgetBody(body: HTMLElement, available: AvailableFilter): LeafPatch {
-  switch (available.value_type) {
-    case 'date':
-    case 'number':
-      return readRangeBody(body);
-    case 'boolean': {
-      const v = body.querySelector<HTMLSelectElement>('select')?.value ?? 'true';
-      return { op: 'eq', value: v };
-    }
-    case 'string': {
-      const modes = body.querySelector<HTMLElement>('[data-active-mode]');
-      if (modes) return readStringModesBody(modes);
-      const v = body.querySelector<HTMLInputElement>('input[data-op="re"]')?.value ?? '';
-      return v ? { op: 're', value: v } : null;
-    }
-    default:
-      return assertNever(available.value_type);
-  }
+  return VALUE_TYPE_UI[available.value_type].readWidgetBody(body);
 }
 
 // ── Surviving helpers ────────────────────────────────────────────────────────
