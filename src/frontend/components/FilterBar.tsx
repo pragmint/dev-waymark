@@ -42,7 +42,6 @@ function leafLabel(leaf: FilterLeaf): string {
   const s = Array.isArray(v) ? v[0] : v;
   if (leaf.op === 'gte') return `≥ ${s}`;
   if (leaf.op === 'lte') return `≤ ${s}`;
-  if (leaf.op === 're') return `/${s}/`;
   if (leaf.op === 'contains') return `~${s}`;
   return String(s);
 }

@@ -1,15 +1,15 @@
 import { test, expect } from './strictTest';
 import { decodeTreeFromUrl, entitiesUrl, leaf } from './treeUrl';
 
-// Each test seeds a preset with a unique entity_name regex so the preset's
-// filter signature is one-of-a-kind across parallel runs.
+// Each test seeds a preset with a unique entity_name contains-substring so the
+// preset's filter signature is one-of-a-kind across parallel runs.
 function uniqueTag(suffix: string): string {
   return `__e2e_${suffix}_${Date.now()}_${Math.floor(Math.random() * 100000)}__`;
 }
 
 function uniqueUrl(suffix: string): string {
   const tag = uniqueTag(suffix);
-  return entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]);
+  return entitiesUrl('jira_ticket', [leaf('entity_name', 'contains', tag)]);
 }
 
 test('legacy /presets route is removed', async ({ request }) => {
@@ -156,7 +156,7 @@ test('save button is hidden when a preset is selected', async ({ page }) => {
 test('changing entity type clears other filters', async ({ page }) => {
   const tag = uniqueTag('typeswitch');
 
-  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 'contains', tag)]));
   await expect(page.locator('.filter-chip[data-filter-key="entity_name"]')).toBeVisible();
 
   await page.locator('[data-entity-type-select]').selectOption('github_pr');
@@ -195,7 +195,7 @@ test('removing a chip from a selected preset enters draft state and Apply commit
   const name = `E2E Draft ${Date.now()}`;
   const tag = uniqueTag('draft');
 
-  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 'contains', tag)]));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();
@@ -222,7 +222,7 @@ test('save as new: hidden until draft, then forks into a separate preset', async
   const fork = `${original} fork`;
   const tag = uniqueTag('saveasnew');
 
-  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 'contains', tag)]));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', original);
   await page.locator('#save-preset-panel button[type="submit"]').click();
@@ -263,7 +263,7 @@ test('save changes button has no decorative dot', async ({ page }) => {
   const name = `E2E NoDot ${Date.now()}`;
   const tag = uniqueTag('nodot');
 
-  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 're', tag)]));
+  await page.goto(entitiesUrl('jira_ticket', [leaf('entity_name', 'contains', tag)]));
   await page.click('#save-preset-btn');
   await page.fill('#save-preset-panel input[name="name"]', name);
   await page.locator('#save-preset-panel button[type="submit"]').click();

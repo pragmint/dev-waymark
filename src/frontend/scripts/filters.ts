@@ -4,7 +4,7 @@
 
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 
-type LeafOp = 'eq' | 'contains' | 'gte' | 'lte' | 're';
+type LeafOp = 'eq' | 'contains' | 'gte' | 'lte';
 type GroupOp = 'AND' | 'OR' | 'NOT';
 
 type FilterLeaf = {
@@ -431,7 +431,6 @@ function leafLabel(leaf: FilterLeaf): string {
     if (!s) return 'null';
     return leaf.op === 'gte' ? `≥ ${s}` : `≤ ${s}`;
   }
-  if (leaf.op === 're') return `/${s}/`;
   if (leaf.op === 'contains') return `~${s}`;
   return String(s);
 }
@@ -464,7 +463,7 @@ function addLeaf(key: string) {
 function defaultOpFor(f: AvailableFilter | undefined): LeafOp {
   if (!f) return 'eq';
   if (f.value_type === 'string') {
-    return f.distinctValues && f.distinctValues.length > 0 ? 'eq' : 're';
+    return f.distinctValues && f.distinctValues.length > 0 ? 'eq' : 'contains';
   }
   if (f.value_type === 'number' || f.value_type === 'date') return 'gte';
   return 'eq';
@@ -1363,8 +1362,8 @@ function renderWidgetBody(leaf: FilterLeaf, available: AvailableFilter): HTMLEle
   if (available.distinctValues && available.distinctValues.length > 0) {
     return renderStringWidget(leaf, available, body);
   }
-  const input = inputEl('text', 're', singleValue(leaf, 're') || singleValue(leaf, 'contains'));
-  input.placeholder = 'regex…';
+  const input = inputEl('text', 'contains', singleValue(leaf, 'contains'));
+  input.placeholder = 'contains…';
   body.appendChild(input);
   return body;
 }
@@ -1376,14 +1375,14 @@ function renderStringWidget(
 ): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'filter-string-modes';
-  const activeMode = leaf.op === 're' ? 'regex' : 'multi';
+  const activeMode = leaf.op === 'contains' ? 'contains' : 'multi';
   wrap.dataset.activeMode = activeMode;
 
   const tabs = document.createElement('div');
   tabs.className = 'filter-mode-tabs';
   const multiTab = modeTabBtn('multi', activeMode === 'multi');
-  const regexTab = modeTabBtn('regex', activeMode === 'regex');
-  tabs.append(multiTab, regexTab);
+  const containsTab = modeTabBtn('contains', activeMode === 'contains');
+  tabs.append(multiTab, containsTab);
   wrap.appendChild(tabs);
 
   const multiPane = document.createElement('div');
@@ -1404,29 +1403,29 @@ function renderStringWidget(
   });
   multiPane.appendChild(select);
 
-  const regexPane = document.createElement('div');
-  regexPane.dataset.modeContent = 'regex';
-  if (activeMode !== 'regex') regexPane.style.display = 'none';
-  const regexInput = inputEl(
+  const containsPane = document.createElement('div');
+  containsPane.dataset.modeContent = 'contains';
+  if (activeMode !== 'contains') containsPane.style.display = 'none';
+  const containsInput = inputEl(
     'text',
-    're',
-    leaf.op === 're' ? (Array.isArray(leaf.value) ? leaf.value[0] : leaf.value) : ''
+    'contains',
+    leaf.op === 'contains' ? (Array.isArray(leaf.value) ? leaf.value[0] : leaf.value) : ''
   );
-  regexInput.placeholder = 'regex…';
-  regexPane.appendChild(regexInput);
+  containsInput.placeholder = 'contains…';
+  containsPane.appendChild(containsInput);
 
-  wrap.append(multiPane, regexPane);
+  wrap.append(multiPane, containsPane);
   body.appendChild(wrap);
 
-  const switchMode = (mode: 'multi' | 'regex') => {
+  const switchMode = (mode: 'multi' | 'contains') => {
     wrap.dataset.activeMode = mode;
     multiPane.style.display = mode === 'multi' ? '' : 'none';
-    regexPane.style.display = mode === 'regex' ? '' : 'none';
+    containsPane.style.display = mode === 'contains' ? '' : 'none';
     multiTab.classList.toggle('filter-mode-tab--active', mode === 'multi');
-    regexTab.classList.toggle('filter-mode-tab--active', mode === 'regex');
+    containsTab.classList.toggle('filter-mode-tab--active', mode === 'contains');
   };
   multiTab.addEventListener('click', () => switchMode('multi'));
-  regexTab.addEventListener('click', () => switchMode('regex'));
+  containsTab.addEventListener('click', () => switchMode('contains'));
 
   return body;
 }
@@ -1436,7 +1435,7 @@ function modeTabBtn(mode: string, active: boolean): HTMLButtonElement {
   b.type = 'button';
   b.className = `filter-mode-tab${active ? ' filter-mode-tab--active' : ''}`;
   b.dataset.modeTab = mode;
-  b.textContent = mode === 'multi' ? 'Values' : 'Regex';
+  b.textContent = mode === 'multi' ? 'Values' : 'Contains';
   return b;
 }
 
@@ -1467,9 +1466,9 @@ function readRangeBody(body: HTMLElement): LeafPatch {
 }
 
 function readStringModesBody(modes: HTMLElement): LeafPatch {
-  if (modes.dataset.activeMode === 'regex') {
-    const v = modes.querySelector<HTMLInputElement>('input[data-op="re"]')?.value ?? '';
-    return v ? { op: 're', value: v } : null;
+  if (modes.dataset.activeMode === 'contains') {
+    const v = modes.querySelector<HTMLInputElement>('input[data-op="contains"]')?.value ?? '';
+    return v ? { op: 'contains', value: v } : null;
   }
   const select = modes.querySelector<HTMLSelectElement>('select.filter-multi-select');
   if (!select) return null;
@@ -1488,8 +1487,8 @@ function readWidgetBody(body: HTMLElement, available: AvailableFilter): LeafPatc
   }
   const modes = body.querySelector<HTMLElement>('[data-active-mode]');
   if (modes) return readStringModesBody(modes);
-  const v = body.querySelector<HTMLInputElement>('input[data-op="re"]')?.value ?? '';
-  return v ? { op: 're', value: v } : null;
+  const v = body.querySelector<HTMLInputElement>('input[data-op="contains"]')?.value ?? '';
+  return v ? { op: 'contains', value: v } : null;
 }
 
 // ── Surviving helpers ────────────────────────────────────────────────────────

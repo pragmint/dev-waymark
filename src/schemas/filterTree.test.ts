@@ -7,7 +7,6 @@ import {
   makeGroup,
   walkTree,
   cloneTree,
-  treeHasRegex,
   collectLeaves,
   isLeaf,
   isGroup,
@@ -111,20 +110,6 @@ describe('cloneTree', () => {
     expect(copy).toEqual(tree);
     if (isLeaf(copy.children[0])) copy.children[0].value = 'changed';
     if (isLeaf(tree.children[0])) expect(tree.children[0].value).toBe('x');
-  });
-});
-
-describe('treeHasRegex', () => {
-  it('returns false for trees with no regex leaves', () => {
-    expect(treeHasRegex(makeGroup('AND', [makeLeaf('k', 'eq', 'v')]))).toBe(false);
-  });
-
-  it('returns true if any leaf is a regex', () => {
-    const tree = makeGroup('AND', [
-      makeLeaf('k', 'eq', 'v'),
-      makeGroup('OR', [makeLeaf('n', 're', '.+')]),
-    ]);
-    expect(treeHasRegex(tree)).toBe(true);
   });
 });
 

@@ -68,10 +68,7 @@ export async function testSeedVisualizationHandler(c: Context) {
   if (!preset) return c.json({ error: 'preset not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.tree);
-  const fields = entities.length
-    ? await entityRepo.getAvailableFilters(entities.map(e => e.id))
-    : [];
+  const fields = await entityRepo.getAvailableFilters(preset.tree);
 
   const templateConfig = buildTemplate(templateId, fields);
   if (!templateConfig) return c.json({ error: 'no fields available to fill slots' }, 400);

@@ -30,8 +30,11 @@ describe('encodeTreeHex / decodeTreeHex', () => {
   it('round-trips a non-trivial nested tree', () => {
     const tree = makeGroup('AND', [
       makeLeaf('entity_type', 'eq', 'github_pr'),
-      makeLeaf('entity_name', 're', 'repo-020/7'),
-      makeGroup('OR', [makeLeaf('creator', 're', 'dev-002'), makeLeaf('creator', 're', 'dev-013')]),
+      makeLeaf('entity_name', 'contains', 'repo-020/7'),
+      makeGroup('OR', [
+        makeLeaf('creator', 'contains', 'dev-002'),
+        makeLeaf('creator', 'contains', 'dev-013'),
+      ]),
     ]);
     const decoded = decodeTreeHex(encodeTreeHex(tree));
     expect(decoded).not.toBeNull();
@@ -87,11 +90,11 @@ describe('encodeTreeHex / decodeTreeHex', () => {
   it('produces identical hex for trees that differ only in node ids', () => {
     const a = makeGroup('AND', [
       makeLeaf('k', 'eq', 'v'),
-      makeGroup('OR', [makeLeaf('x', 're', 'y')]),
+      makeGroup('OR', [makeLeaf('x', 'contains', 'y')]),
     ]);
     const b = makeGroup('AND', [
       makeLeaf('k', 'eq', 'v'),
-      makeGroup('OR', [makeLeaf('x', 're', 'y')]),
+      makeGroup('OR', [makeLeaf('x', 'contains', 'y')]),
     ]);
     expect(encodeTreeHex(a)).toBe(encodeTreeHex(b));
   });

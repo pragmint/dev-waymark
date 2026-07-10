@@ -38,12 +38,7 @@ export async function presetFieldsHandler(c: Context) {
   if (!preset) return c.json({ error: 'Not found' }, 404);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(preset.tree);
-  const entityIds = entities.map(e => e.id);
-
-  if (entityIds.length === 0) return c.json([]);
-
-  const fields = await entityRepo.getAvailableFilters(entityIds);
+  const fields = await entityRepo.getAvailableFilters(preset.tree);
   return c.json(fields);
 }
 

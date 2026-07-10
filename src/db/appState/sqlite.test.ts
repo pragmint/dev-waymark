@@ -179,11 +179,10 @@ describe('SqliteAppStateRepository — presets', () => {
       makeLeaf('desc', 'contains', 'bar'),
       makeLeaf('wip', 'gte', '10'),
       makeLeaf('wip', 'lte', '50'),
-      makeLeaf('name', 're', '^ENG'),
     ]);
     const id = await repo.savePreset('all ops', tree);
     const preset = await repo.getPreset(id);
-    expect(preset!.tree.children).toHaveLength(5);
+    expect(preset!.tree.children).toHaveLength(4);
   });
 });
 

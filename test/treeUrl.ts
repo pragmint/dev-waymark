@@ -7,7 +7,7 @@ type Leaf = {
   type: 'filter';
   id: string;
   key: string;
-  op: 'eq' | 'contains' | 'gte' | 'lte' | 're';
+  op: 'eq' | 'contains' | 'gte' | 'lte';
   value: string | string[];
 };
 

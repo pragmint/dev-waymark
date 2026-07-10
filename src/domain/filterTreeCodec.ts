@@ -21,7 +21,7 @@ const KIND_GROUP = 0x01;
 const VALUE_STRING = 0x00;
 const VALUE_ARRAY = 0x01;
 
-const LEAF_OPS: MetaFilterOp[] = ['eq', 'contains', 'gte', 'lte', 're'];
+const LEAF_OPS: MetaFilterOp[] = ['eq', 'contains', 'gte', 'lte'];
 const GROUP_OPS: FilterGroupOp[] = ['AND', 'OR', 'NOT'];
 
 class Writer {

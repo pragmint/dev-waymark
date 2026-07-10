@@ -120,15 +120,20 @@ test('editing a multi-select chip shows all values that would be available with 
   expect(selected).toEqual(['dev-001']);
 });
 
-test('editing a regex filter prefills the regex input and opens that mode', async ({ page }) => {
-  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 're', 'Story|Bug')]));
+test('editing a contains filter prefills the contains input and opens that mode', async ({
+  page,
+}) => {
+  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'contains', 'Story')]));
 
   const chip = page.locator('.filter-chip[data-filter-key="ticket_type"]');
   await chip.locator('.filter-chip-content').click();
 
   const editor = page.locator('[data-leaf-editor]');
-  await expect(editor.locator('[data-active-mode]')).toHaveAttribute('data-active-mode', 'regex');
-  await expect(editor.locator('input[data-op="re"]')).toHaveValue('Story|Bug');
+  await expect(editor.locator('[data-active-mode]')).toHaveAttribute(
+    'data-active-mode',
+    'contains'
+  );
+  await expect(editor.locator('input[data-op="contains"]')).toHaveValue('Story');
 });
 
 test('drag a chip onto an insertion line reorders without grouping', async ({ page }) => {

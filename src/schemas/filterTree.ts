@@ -99,11 +99,6 @@ export function cloneTree<T extends FilterNode>(tree: T): T {
   return JSON.parse(JSON.stringify(tree)) as T;
 }
 
-export function treeHasRegex(node: FilterNode): boolean {
-  if (isLeaf(node)) return node.op === 're';
-  return node.children.some(treeHasRegex);
-}
-
 export function collectLeaves(node: FilterNode): FilterLeaf[] {
   const out: FilterLeaf[] = [];
   walkTree(node, n => {

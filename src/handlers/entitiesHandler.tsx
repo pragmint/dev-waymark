@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { getEntityRepo } from '../db/source/index';
 import { getAppStateRepo } from '../db/appState/index';
-import type { EntityRepository, PagedEntities } from '../db/entityRepository';
+import type { PagedEntities } from '../db/entityRepository';
 import type { AvailableFilter } from '../schemas/entity';
 import type { PresetWithTree } from '../schemas/preset';
 import { collectLeaves, emptyTree, isLeaf, makeLeaf } from '../schemas/filterTree';
@@ -23,17 +23,6 @@ function parsePositiveInt(raw: string | undefined, fallback: number, max?: numbe
   const n = parseInt(raw, 10);
   if (isNaN(n) || n < 1) return fallback;
   return max ? Math.min(n, max) : n;
-}
-
-async function loadUnfilteredView(repo: EntityRepository): Promise<{
-  ids: number[];
-  available: AvailableFilter[];
-  entityTypes: string[];
-}> {
-  const { allIds } = await repo.listPaged(emptyTree(), { limit: 1000000, offset: 0 });
-  const available = await repo.getAvailableFilters(allIds);
-  const entityTypes = available.find(f => f.key === 'entity_type')?.distinctValues ?? [];
-  return { ids: allIds, available, entityTypes };
 }
 
 function findEntityTypeValue(tree: FilterTree): string | null {
@@ -93,14 +82,14 @@ export async function entitiesHandler(c: Context) {
   const perPage = parsePositiveInt(c.req.query('per_page'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
   const page = parsePositiveInt(c.req.query('page'), 1);
 
-  const unfiltered = await loadUnfilteredView(repo);
+  const entityTypes = await repo.listEntityTypes();
   const selectedEntityType = findEntityTypeValue(activeTree);
 
   // Redirect to the first entity type when none is selected. entity_type must
   // AND with the rest of the tree — if the user's tree is an OR root, wrap it
   // so the type filter isn't OR'd against the predicates.
-  if (!selectedEntityType && unfiltered.entityTypes.length > 0) {
-    const etLeaf = makeLeaf('entity_type', 'eq', unfiltered.entityTypes[0]);
+  if (!selectedEntityType && entityTypes.length > 0) {
+    const etLeaf = makeLeaf('entity_type', 'eq', entityTypes[0]);
     const existing = activeTree.children.filter(c => !(isLeaf(c) && c.key === 'entity_type'));
     const seededTree: FilterTree =
       activeTree.op === 'AND'
@@ -116,23 +105,25 @@ export async function entitiesHandler(c: Context) {
     return c.redirect(`/entities?${redirectParams.toString()}`, 302);
   }
 
+  // The filter editor refetches available values with the leaf-being-edited
+  // removed and needs every distinct value (not the capped initial-render set)
+  // — when `all_distinct=1` is set, lift the per-field cap.
+  const allDistinctValues = c.req.query('all_distinct') === '1';
+
   let pagedResult: PagedEntities;
+  let availableFilters: AvailableFilter[];
   if (selectedEntityType) {
     pagedResult = await repo.listPaged(activeTree, {
       limit: perPage,
       offset: (page - 1) * perPage,
     });
+    availableFilters = await repo.getAvailableFilters(activeTree, { allDistinctValues });
   } else {
-    pagedResult = { pageEntities: [], allIds: unfiltered.ids, total: 0 };
+    // No entity types means a (near-)empty entities table — the unfiltered
+    // population is the only case rendered without a type selected.
+    pagedResult = { pageEntities: [], total: 0 };
+    availableFilters = await repo.getAvailableFilters(emptyTree());
   }
-
-  // The filter editor refetches available values with the leaf-being-edited
-  // removed and needs every distinct value (not the capped initial-render set)
-  // — when `all_distinct=1` is set, lift the per-field cap.
-  const allDistinctValues = c.req.query('all_distinct') === '1';
-  const availableFilters = selectedEntityType
-    ? await repo.getAvailableFilters(pagedResult.allIds, { allDistinctValues })
-    : unfiltered.available;
 
   const presetsWithTree = await appStateRepo.listPresetsWithTree();
   const presets = presetsWithTree.map(p => ({
@@ -155,7 +146,7 @@ export async function entitiesHandler(c: Context) {
       perPage={perPage}
       activeTree={activeTree}
       availableFilters={availableFilters}
-      entityTypes={unfiltered.entityTypes}
+      entityTypes={entityTypes}
       presets={presets}
       selectedPresetId={selectedPresetId}
       selectedPresetTree={selectedPresetTree}
