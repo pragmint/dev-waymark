@@ -1,5 +1,10 @@
 import type { SourceDataAdapter, SqlParam } from './source/adapter';
-import { EntitySchema, MetadataSchema, MetadataValueTypeSchema } from '../schemas/entity';
+import {
+  EntitySchema,
+  MetadataSchema,
+  MetadataValueTypeSchema,
+  splitListValue,
+} from '../schemas/entity';
 import type {
   Entity,
   Metadata,
@@ -192,6 +197,10 @@ type MetaValueRow = {
 
 // Rows must arrive ordered by (entity_type, key): result order follows first
 // appearance, and the first row of each group decides its value_type.
+// List-typed rows contribute their elements, not the raw joined string — both
+// the SQL window-function path and the id path deliver raw values, so this is
+// the single insertion point for element enumeration. The distinct cap then
+// applies to the element count.
 function buildMetaFilters(rows: MetaValueRow[], distinctLimit: number): AvailableFilter[] {
   const byKeyAndType = new Map<
     string,
@@ -206,7 +215,12 @@ function buildMetaFilters(rows: MetaValueRow[], distinctLimit: number): Availabl
         entity_type: row.entity_type,
       });
     }
-    byKeyAndType.get(mapKey)!.values.add(row.value);
+    const values = byKeyAndType.get(mapKey)!.values;
+    if (row.value_type === 'list') {
+      for (const element of splitListValue(row.value)) values.add(element);
+    } else {
+      values.add(row.value);
+    }
   }
 
   return Array.from(byKeyAndType.entries()).map(([mapKey, { value_type, values, entity_type }]) => {
@@ -218,7 +232,7 @@ function buildMetaFilters(rows: MetaValueRow[], distinctLimit: number): Availabl
       value_type: vt,
       entityType: entity_type,
     };
-    if (vt === 'string' && values.size <= distinctLimit) {
+    if ((vt === 'string' || vt === 'list') && values.size <= distinctLimit) {
       filter.distinctValues = Array.from(values).sort();
     }
     return filter;

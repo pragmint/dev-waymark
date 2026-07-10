@@ -545,6 +545,35 @@ describe('entityRepository', () => {
       expect(available.find(f => f.key === 'date-field')?.value_type).toBe('date');
       expect(available.find(f => f.key === 'bool-field')?.value_type).toBe('boolean');
     });
+
+    it('enumerates sorted unique elements as distinctValues for a list key', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [
+        makeMetadata(1, {
+          key: 'jira_tickets',
+          value: 'CM-124|CM-123|CAS-3',
+          value_type: 'list',
+        }),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'PR-2' }), [
+        makeMetadata(2, { key: 'jira_tickets', value: 'CM-123|INFRA-1225', value_type: 'list' }),
+      ]);
+      const entities = await repo.list(emptyTree());
+      const available = await repo.getAvailableFilters(entities.map(e => e.id));
+      const filter = available.find(f => f.key === 'jira_tickets');
+      expect(filter?.value_type).toBe('list');
+      expect(filter?.distinctValues).toEqual(['CAS-3', 'CM-123', 'CM-124', 'INFRA-1225']);
+    });
+
+    it('applies the distinct cap to the element count for list keys', async () => {
+      const elements = Array.from({ length: 21 }, (_, i) => `T-${String(i + 1).padStart(2, '0')}`);
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [
+        makeMetadata(1, { key: 'jira_tickets', value: elements.join('|'), value_type: 'list' }),
+      ]);
+      const available = await repo.getAvailableFilters([1]);
+      expect(available.find(f => f.key === 'jira_tickets')?.distinctValues).toBeUndefined();
+      const uncapped = await repo.getAvailableFilters([1], { allDistinctValues: true });
+      expect(uncapped.find(f => f.key === 'jira_tickets')?.distinctValues).toEqual(elements);
+    });
   });
 
   describe('getAvailableFiltersForTree', () => {
@@ -561,6 +590,11 @@ describe('entityRepository', () => {
           }),
           makeMetadata(i, { key: 'points', value: String(i), value_type: 'number' }),
           makeMetadata(i, { key: 'status', value: i % 2 === 0 ? 'open' : 'closed' }),
+          makeMetadata(i, {
+            key: 'linked',
+            value: `CM-${(i % 3) + 1}|CAS-${(i % 2) + 1}`,
+            value_type: 'list',
+          }),
         ]);
       }
       for (let i = 1; i <= 5; i++) {
@@ -615,6 +649,26 @@ describe('entityRepository', () => {
     it('matches the id path for regex trees', async () => {
       await seedDiverse();
       await expectPathsAgree(makeGroup('AND', [makeLeaf('tag', 're', '^tag-0[1-3]$')]));
+    });
+
+    it('matches the id path for list keys and enumerates elements', async () => {
+      await seedDiverse();
+      const available = await expectPathsAgree(
+        makeGroup('AND', [makeLeaf('entity_type', 'eq', 'ticket')])
+      );
+      const linked = available.find(f => f.key === 'linked');
+      expect(linked?.value_type).toBe('list');
+      expect(linked?.distinctValues).toEqual(['CAS-1', 'CAS-2', 'CM-1', 'CM-2', 'CM-3']);
+    });
+
+    it('matches the id path when the tree filters on a list key by membership', async () => {
+      await seedDiverse();
+      // i % 3 === 0 tickets carry CM-1 — a strict subset of the population.
+      const available = await expectPathsAgree(
+        makeGroup('AND', [makeLeaf('linked', 'eq', 'CM-1')])
+      );
+      expect(available.find(f => f.key === 'linked')).toBeDefined();
+      expect(available.find(f => f.key === 'starred')).toBeUndefined();
     });
 
     it('returns [] when nothing matches', async () => {
