@@ -18,6 +18,9 @@ function n(entity_id: number, key: string, value: string): MetaRow {
 function d(entity_id: number, key: string, value: string): MetaRow {
   return { entity_id, key, value, value_type: 'date' };
 }
+function l(entity_id: number, key: string, value: string): MetaRow {
+  return { entity_id, key, value, value_type: 'list' };
+}
 
 const TICKET_TYPES = ['Story', 'Bug', 'Task', 'Spike'];
 const PRIORITIES = ['Low', 'Medium', 'High'];
@@ -66,7 +69,12 @@ for (let i = 26; i <= 25 + PR_COUNT; i++) {
     s(i, 'creator', `dev-${String(i - 25).padStart(3, '0')}`),
     n(i, 'additions', String(50 + i * 10)),
     d(i, 'pr_created_at', isoDate(i)),
-    d(i, 'pr_merged_at', isoDate(i + 2))
+    d(i, 'pr_merged_at', isoDate(i + 2)),
+    l(
+      i,
+      'jira_tickets',
+      `TH-${String(i - 25).padStart(4, '0')}|TH-${String(i - 24).padStart(4, '0')}`
+    )
   );
 }
 

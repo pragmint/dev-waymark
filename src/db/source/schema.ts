@@ -33,7 +33,8 @@ import { runSql } from '../sqliteUtils';
  * │  entity_id    INTEGER   NOT NULL  REFERENCES entities(id) ON DELETE CASCADE  │
  * │  key          TEXT      NOT NULL                                             │
  * │  value        TEXT      (nullable)                                           │
- * │  value_type   TEXT      NOT NULL  ('string' | 'number' | 'date' | 'boolean') │
+ * │  value_type   TEXT      NOT NULL  ('string' | 'number' | 'date' | 'boolean'  │
+ * │                                    | 'list' — pipe-separated elements)       │
  * │  created_at   TEXT      NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
  * │  updated_at   TEXT      NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')) │
  * │  UNIQUE(entity_id, key)                                                      │

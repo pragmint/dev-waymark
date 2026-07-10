@@ -9,8 +9,17 @@ export const EntitySchema = z.object({
 
 export type Entity = z.infer<typeof EntitySchema>;
 
-export const MetadataValueTypeSchema = z.enum(['string', 'number', 'date', 'boolean']);
+export const MetadataValueTypeSchema = z.enum(['string', 'number', 'date', 'boolean', 'list']);
 export type MetadataValueType = z.infer<typeof MetadataValueTypeSchema>;
+
+// Element grammar for value_type 'list': pipe-separated tokens that never
+// contain '|' themselves. Split on '|', trim, drop empties.
+export function splitListValue(raw: string): string[] {
+  return raw
+    .split('|')
+    .map(s => s.trim())
+    .filter(s => s !== '');
+}
 
 export const MetadataSchema = z.object({
   entity_id: z.number(),

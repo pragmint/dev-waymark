@@ -186,6 +186,57 @@ describe('entityRepository', () => {
     expect(types).toEqual(['Bug', 'Story']);
   });
 
+  describe('eq on list-typed values (membership)', () => {
+    const listMeta = (entityId: number, value: string) =>
+      makeMetadata(entityId, { key: 'jira_tickets', value, value_type: 'list' });
+
+    it('matches a mid-list element', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [
+        listMeta(1, 'CM-123|CM-124|CAS-3|INFRA-1225'),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'PR-2' }), [listMeta(2, 'LUMIO-9')]);
+      const results = await repo.list(makeGroup('AND', [makeLeaf('jira_tickets', 'eq', 'CM-124')]));
+      expect(results.map(r => r.id)).toEqual([1]);
+    });
+
+    it('matches whole elements only — CM does not match a CMS element', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [listMeta(1, 'CMS-1|OTHER-2')]);
+      expect(await repo.list(makeGroup('AND', [makeLeaf('jira_tickets', 'eq', 'CM')]))).toEqual([]);
+      expect(
+        await repo.list(makeGroup('AND', [makeLeaf('jira_tickets', 'eq', 'CMS-1')]))
+      ).toHaveLength(1);
+    });
+
+    it('escapes LIKE wildcards in requested values', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [listMeta(1, 'CMX1|A')]);
+      await repo.upsert(makeEntity({ id: 2, name: 'PR-2' }), [listMeta(2, 'CM_1|B')]);
+      const results = await repo.list(makeGroup('AND', [makeLeaf('jira_tickets', 'eq', 'CM_1')]));
+      expect(results.map(r => r.id)).toEqual([2]);
+    });
+
+    it('multi-value eq matches when any requested value is a member', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [listMeta(1, 'CM-123|CAS-3')]);
+      await repo.upsert(makeEntity({ id: 2, name: 'PR-2' }), [listMeta(2, 'INFRA-1225')]);
+      const results = await repo.list(
+        makeGroup('AND', [makeLeaf('jira_tickets', 'eq', ['ZZZ-1', 'CAS-3'])])
+      );
+      expect(results.map(r => r.id)).toEqual([1]);
+    });
+
+    it('empty eq array matches nothing', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'PR-1' }), [listMeta(1, 'CM-123')]);
+      expect(await repo.list(makeGroup('AND', [makeLeaf('jira_tickets', 'eq', [])]))).toEqual([]);
+    });
+
+    it('scalar eq stays exact — a pipe in a string value is literal', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
+        makeMetadata(1, { key: 'title', value: 'a|b', value_type: 'string' }),
+      ]);
+      expect(await repo.list(makeGroup('AND', [makeLeaf('title', 'eq', 'a')]))).toEqual([]);
+      expect(await repo.list(makeGroup('AND', [makeLeaf('title', 'eq', 'a|b')]))).toHaveLength(1);
+    });
+  });
+
   it('combines filters with OR at a group', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'A' }), [
       makeMetadata(1, { key: 'owner', value: 'Dave' }),

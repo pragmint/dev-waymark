@@ -140,4 +140,14 @@ describe('encodeTreeHex / decodeTreeHex', () => {
     const hex = encodeTreeHex(tree);
     expect(decodeTreeHex(hex + '00')).toBeNull();
   });
+
+  it('pins LEAF_OPS wire order — reordering the op table breaks every saved URL', () => {
+    const tree = makeGroup(
+      'AND',
+      (['eq', 'contains', 'gte', 'lte', 're'] as const).map(op => makeLeaf('k', op, 'v'))
+    );
+    expect(encodeTreeHex(tree)).toBe(
+      '010100050000016b0001760001016b0001760002016b0001760003016b0001760004016b000176'
+    );
+  });
 });

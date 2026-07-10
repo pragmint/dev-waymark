@@ -29,6 +29,12 @@ const ENTITY_FIELDS: Record<string, EntityFieldConfig> = {
 
 type SqlFragment = { sql: string; params: SqlParam[] };
 
+// Escape LIKE wildcards so a requested value only matches itself. Pairs with
+// the explicit ESCAPE '\' clause below (works on both bun:sqlite and postgres).
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, ch => `\\${ch}`);
+}
+
 function eqSql(leaf: FilterLeaf, entityField: EntityFieldConfig | undefined): SqlFragment {
   const values = Array.isArray(leaf.value) ? leaf.value : [leaf.value];
   if (values.length === 0) return { sql: '1=0', params: [] };
@@ -40,11 +46,15 @@ function eqSql(leaf: FilterLeaf, entityField: EntityFieldConfig | undefined): Sq
         : `e.${entityField.column} IN (${placeholders})`;
     return { sql, params: values };
   }
+  // eq on a list-typed row is membership: wrap the stored value in delimiters
+  // and match whole elements only, so 'CM' can never match a 'CMS' element.
+  // The row's own value_type picks the branch, so mixed-type keys stay correct.
+  const listMatch = values.map(() => `('|' || value || '|') LIKE ? ESCAPE '\\'`).join(' OR ');
+  const listParams = values.map(v => `%|${escapeLike(v)}|%`);
   const sql =
-    values.length === 1
-      ? `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value = ?)`
-      : `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value IN (${placeholders}))`;
-  return { sql, params: [leaf.key, ...values] };
+    `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
+    `CASE WHEN value_type = 'list' THEN (${listMatch}) ELSE value IN (${placeholders}) END)`;
+  return { sql, params: [leaf.key, ...listParams, ...values] };
 }
 
 function containsSql(

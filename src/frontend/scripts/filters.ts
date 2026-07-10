@@ -504,6 +504,16 @@ const VALUE_TYPE_UI: Record<MetadataValueType, ValueTypeUi> = {
     renderWidgetBody: renderBooleanBody,
     readWidgetBody: readBooleanBody,
   },
+  // eq on a list value means membership (the list includes the value), so the
+  // string multi-value eq editor works unchanged — distinctValues are the
+  // enumerated list elements.
+  list: {
+    defaultOp: () => 'eq',
+    defaultValue: f =>
+      f.distinctValues && f.distinctValues.length > 0 ? [f.distinctValues[0]] : '',
+    renderWidgetBody: renderStringBody,
+    readWidgetBody: readStringBody,
+  },
 };
 
 function defaultOpFor(f: AvailableFilter | undefined): LeafOp {

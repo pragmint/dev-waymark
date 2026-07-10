@@ -95,6 +95,64 @@ describe('evaluateFilterTree — leaves', () => {
   });
 });
 
+describe('evaluateFilterTree — list values', () => {
+  const withList = (value: string): EntityWithMetadata =>
+    entity({
+      metadata: [
+        {
+          entity_id: 1,
+          key: 'jira_tickets',
+          value,
+          value_type: 'list',
+          created_at: '',
+          updated_at: '',
+        },
+      ],
+    });
+
+  it('eq matches when the list includes the value (membership)', () => {
+    const e = withList('CM-123|CM-124|CAS-3|INFRA-1225');
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CM-124'), e)).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CM-999'), e)).toBe(false);
+  });
+
+  it('eq matches whole elements only — CM never matches a CMS element', () => {
+    const e = withList('CMS-1|OTHER-2');
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CM'), e)).toBe(false);
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CMS-1'), e)).toBe(true);
+  });
+
+  it('multi-value eq matches when any requested value is a member', () => {
+    const e = withList('CM-123|CAS-3');
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', ['ZZZ-1', 'CAS-3']), e)).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', ['ZZZ-1', 'ZZZ-2']), e)).toBe(false);
+  });
+
+  it('trims elements and drops empties when splitting', () => {
+    const e = withList(' CM-123 | CAS-3 ||');
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CM-123'), e)).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', 'CAS-3'), e)).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('jira_tickets', 'eq', ''), e)).toBe(false);
+  });
+
+  it('scalar eq is unaffected — a pipe in a string value is literal', () => {
+    const e = entity({
+      metadata: [
+        {
+          entity_id: 1,
+          key: 'title',
+          value: 'a|b',
+          value_type: 'string',
+          created_at: '',
+          updated_at: '',
+        },
+      ],
+    });
+    expect(evaluateFilterTree(makeLeaf('title', 'eq', 'a|b'), e)).toBe(true);
+    expect(evaluateFilterTree(makeLeaf('title', 'eq', 'a'), e)).toBe(false);
+  });
+});
+
 describe('evaluateFilterTree — groups', () => {
   it('empty group is true', () => {
     expect(evaluateFilterTree(emptyTree(), entity())).toBe(true);

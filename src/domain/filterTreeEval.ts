@@ -1,3 +1,4 @@
+import { splitListValue } from '../schemas/entity';
 import type { EntityWithMetadata } from '../schemas/entity';
 import { isGroup, isLeaf } from '../schemas/filterTree';
 import type { FilterLeaf, FilterNode } from '../schemas/filterTree';
@@ -13,16 +14,25 @@ const ENTITY_FIELD_GETTERS: Record<string, (e: EntityWithMetadata) => string> = 
   entity_created_at: e => e.created_at,
 };
 
-function leafValueFor(leaf: FilterLeaf, entity: EntityWithMetadata): string | null {
+type LeafValue = { raw: string | null; isList: boolean };
+
+function leafValueFor(leaf: FilterLeaf, entity: EntityWithMetadata): LeafValue {
   const getter = ENTITY_FIELD_GETTERS[leaf.key];
-  if (getter) return getter(entity);
+  if (getter) return { raw: getter(entity), isList: false };
   const meta = entity.metadata.find(m => m.key === leaf.key);
-  return meta?.value ?? null;
+  return { raw: meta?.value ?? null, isList: meta?.value_type === 'list' };
 }
 
-function matchesEq(raw: string | null, value: string | string[]): boolean {
+// eq against a list-typed value is membership: the list includes the value.
+// Ops other than eq keep operating on the raw joined string.
+function matchesEq({ raw, isList }: LeafValue, value: string | string[]): boolean {
   if (raw == null) return false;
-  return Array.isArray(value) ? value.includes(raw) : raw === value;
+  const requested = Array.isArray(value) ? value : [value];
+  if (isList) {
+    const elements = splitListValue(raw);
+    return requested.some(v => elements.includes(v));
+  }
+  return requested.includes(raw);
 }
 
 function compareNumOrLex(raw: string, target: string, op: 'gte' | 'lte'): boolean {
@@ -41,8 +51,9 @@ function matchesRegex(raw: string, pattern: string): boolean {
 }
 
 function leafMatches(leaf: FilterLeaf, entity: EntityWithMetadata): boolean {
-  const raw = leafValueFor(leaf, entity);
-  if (leaf.op === 'eq') return matchesEq(raw, leaf.value);
+  const leafValue = leafValueFor(leaf, entity);
+  if (leaf.op === 'eq') return matchesEq(leafValue, leaf.value);
+  const raw = leafValue.raw;
   const target = Array.isArray(leaf.value) ? leaf.value[0] : leaf.value;
   // Empty-value range filters carry IS NULL semantics — a date/number filter
   // with no bound specified matches entities whose value is unset.
