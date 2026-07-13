@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { TemplateConfigSchema } from './visualizationTemplate';
+import { NamedWindowSchema, TemplateConfigSchema } from './visualizationTemplate';
+
+export type { NamedWindow } from './visualizationTemplate';
 
 export const ChartTypeSchema = z.enum(['line', 'bar', 'pie', 'doughnut', 'scatter']);
 export type ChartType = z.infer<typeof ChartTypeSchema>;
@@ -81,6 +83,17 @@ export const RollingConfigSchema = z.object({
 });
 export type RollingConfig = z.infer<typeof RollingConfigSchema>;
 
+// Compare one measure across several named windows. `combine` sums metadataKeys
+// into one bar per window; otherwise each field is its own grouped bar series
+// (e.g. phase-by-phase comparison across windows). Membership uses `dateField`.
+export const PeriodsConfigSchema = z.object({
+  dateField: z.string(),
+  metadataKeys: z.array(z.string()).min(1),
+  windows: z.array(NamedWindowSchema).min(1),
+  combine: z.boolean(),
+});
+export type PeriodsConfig = z.infer<typeof PeriodsConfigSchema>;
+
 export const TargetConfigSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('horizontal_line'),
@@ -110,6 +123,7 @@ export const VisualizationConfigSchema = z.object({
   derivedMetric: DerivedMetricConfigSchema.optional(),
   series: SeriesConfigSchema.optional(),
   rolling: RollingConfigSchema.optional(),
+  periods: PeriodsConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
   targets: z.array(TargetConfigSchema).optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),

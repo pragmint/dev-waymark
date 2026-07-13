@@ -4,7 +4,9 @@ import {
   computeDateRange,
   DEFAULT_DATE_RANGE,
   dateRangeToQueryParts,
+  inWindow,
   parseDateRangeFromQuery,
+  resolveNamedWindow,
   resolveVizDateField,
 } from './dateRange';
 import type { VisualizationConfig } from '../schemas/visualization';
@@ -252,4 +254,49 @@ describe('buildDateRangeFilters', () => {
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({ op: 'gte' });
   });
+});
+
+describe('resolveNamedWindow', () => {
+  // Wednesday 2026-06-17 12:00 UTC
+  const now = new Date('2026-06-17T12:00:00Z');
+
+  test('all_time is unbounded', () => {
+    expect(resolveNamedWindow('all_time', now)).toEqual({
+      label: 'All time',
+      start: null,
+      end: null,
+    });
+  });
+
+  test('this_week starts on Monday and ends at now', () => {
+    const w = resolveNamedWindow('this_week', now);
+    expect(w.start?.getUTCDay()).toBe(1); // Monday
+    expect(w.end).toEqual(now);
+    expect(w.label).toBe('This week');
+  });
+
+  test('last_3_weeks is a trailing span ending now (start at day boundary)', () => {
+    const w = resolveNamedWindow('last_3_weeks', now);
+    expect(w.end).toEqual(now);
+    // 21 days before now's date, truncated to midnight UTC
+    expect(w.start).toEqual(new Date('2026-05-27T00:00:00Z'));
+  });
+
+  test('last_week is the previous Monday–Sunday', () => {
+    const w = resolveNamedWindow('last_week', now);
+    expect(w.start?.getUTCDay()).toBe(1);
+    // exactly 7 days before this week's Monday
+    const thisMon = resolveNamedWindow('this_week', now).start as Date;
+    expect(thisMon.getTime() - (w.start as Date).getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe('inWindow', () => {
+  const win = { start: new Date('2026-06-01T00:00:00Z'), end: new Date('2026-06-30T23:59:59Z') };
+  test('inside range', () => expect(inWindow('2026-06-15T10:00:00Z', win)).toBe(true));
+  test('before start', () => expect(inWindow('2026-05-31T10:00:00Z', win)).toBe(false));
+  test('after end', () => expect(inWindow('2026-07-01T10:00:00Z', win)).toBe(false));
+  test('unbounded accepts anything', () =>
+    expect(inWindow('1999-01-01', { start: null, end: null })).toBe(true));
+  test('unparsable date is excluded', () => expect(inWindow('nope', win)).toBe(false));
 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { makeLeaf } from '../schemas/filterTree';
 import type { FilterNode } from '../schemas/filterTree';
-import type { VisualizationConfig } from '../schemas/visualization';
+import type { NamedWindow, VisualizationConfig } from '../schemas/visualization';
 
 // ── Schema + types ────────────────────────────────────────────────────────────
 
@@ -183,6 +183,62 @@ export function computeDateRange(range: DateRange, now: Date): ComputedDateRange
       return { start, end, label: `${year}` };
     }
   }
+}
+
+// ── Named relative windows (compare-periods template) ─────────────────────────
+//
+// Each resolves against a caller-supplied `now` (never a hidden clock, so it
+// stays testable). `this_*` are calendar-current; `last_week`/`last_month` are
+// the previous calendar period; `last_3_weeks`/`last_3_months` are trailing
+// spans ending at now. Bounds are inclusive; null = unbounded.
+
+export type ResolvedWindow = { label: string; start: Date | null; end: Date | null };
+
+export function resolveNamedWindow(w: NamedWindow, now: Date): ResolvedWindow {
+  switch (w) {
+    case 'all_time':
+      return { label: 'All time', start: null, end: null };
+    case 'this_week':
+      return { label: 'This week', start: startOfWeekUTC(now), end: now };
+    case 'last_week': {
+      const start = addUTCDays(startOfWeekUTC(now), -7);
+      return { label: 'Last week', start, end: new Date(addUTCDays(start, 7).getTime() - 1) };
+    }
+    case 'this_mon_fri': {
+      const start = startOfWeekUTC(now);
+      return { label: 'This Mon–Fri', start, end: new Date(addUTCDays(start, 5).getTime() - 1) };
+    }
+    case 'this_month':
+      return {
+        label: 'This month',
+        start: startOfMonthUTC(now.getUTCFullYear(), now.getUTCMonth()),
+        end: now,
+      };
+    case 'last_month': {
+      const y = now.getUTCFullYear();
+      const m = now.getUTCMonth();
+      const py = m === 0 ? y - 1 : y;
+      const pm = m === 0 ? 11 : m - 1;
+      return { label: 'Last month', start: startOfMonthUTC(py, pm), end: endOfMonthUTC(py, pm) };
+    }
+    case 'last_3_weeks':
+      return { label: 'Last 3 weeks', start: addUTCDays(now, -21), end: now };
+    case 'last_3_months': {
+      const start = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate())
+      );
+      return { label: 'Last 3 months', start, end: now };
+    }
+  }
+}
+
+// Whether an ISO/parsable date string falls within an inclusive window's bounds.
+export function inWindow(dateStr: string, win: { start: Date | null; end: Date | null }): boolean {
+  const t = Date.parse(dateStr);
+  if (isNaN(t)) return false;
+  if (win.start && t < win.start.getTime()) return false;
+  if (win.end && t > win.end.getTime()) return false;
+  return true;
 }
 
 // ── Visualization date-field resolution ───────────────────────────────────────

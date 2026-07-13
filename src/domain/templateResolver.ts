@@ -10,6 +10,7 @@ import type {
   CombinedMetricTrendSlots,
   CompositionOverTimeSlots,
   RollingTrendSlots,
+  ComparePeriodsSlots,
   ReferenceLine,
 } from '../schemas/visualizationTemplate';
 
@@ -43,6 +44,8 @@ export function resolveTemplate(template: TemplateConfig): VisualizationConfig {
       return resolveCompositionOverTime(template.slots);
     case 'rolling_trend':
       return resolveRollingTrend(template.slots);
+    case 'compare_periods':
+      return resolveComparePeriods(template.slots);
   }
 }
 
@@ -181,6 +184,20 @@ function resolveRollingTrend(slots: RollingTrendSlots): VisualizationConfig {
       metadataKeys: slots.numericFields,
       windowDays: slots.windowDays,
       aggregation: slots.aggregation,
+    },
+  };
+}
+
+function resolveComparePeriods(slots: ComparePeriodsSlots): VisualizationConfig {
+  return {
+    chartType: 'bar',
+    // x-axis is the named windows (categorical), not a metadata field.
+    aggregation: { function: slots.aggregation },
+    periods: {
+      dateField: slots.dateField,
+      metadataKeys: slots.numericFields,
+      windows: slots.windows,
+      combine: slots.combine,
     },
   };
 }

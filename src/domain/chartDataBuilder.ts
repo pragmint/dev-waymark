@@ -1,6 +1,7 @@
 import type { EntityWithMetadata } from '../schemas/entity';
 import { makeLeaf } from '../schemas/filterTree';
 import type { FilterNode } from '../schemas/filterTree';
+import { inWindow, resolveNamedWindow } from './dateRange';
 import type {
   VisualizationConfig,
   AggregationFunction,
@@ -253,8 +254,10 @@ const NUMERIC_AGGS: AggregationFunction[] = [
 function validateDimensions(config: VisualizationConfig): string[] {
   const { chartType, xAxis, category } = config;
   const errors: string[] = [];
-  if (!xAxis && !category) {
-    errors.push('Visualization requires either an x-axis (with time bucket) or a category field.');
+  if (!xAxis && !category && !config.periods) {
+    errors.push(
+      'Visualization requires an x-axis (with time bucket), a category field, or periods.'
+    );
   }
   if ((chartType === 'pie' || chartType === 'doughnut') && !category) {
     errors.push('Pie and doughnut charts require a category field.');
@@ -265,7 +268,11 @@ function validateDimensions(config: VisualizationConfig): string[] {
 function validateMeasure(config: VisualizationConfig): string[] {
   const { xAxis, aggregation } = config;
   const hasMeasure =
-    !!config.yAxis || !!config.derivedMetric || !!config.series || !!config.rolling;
+    !!config.yAxis ||
+    !!config.derivedMetric ||
+    !!config.series ||
+    !!config.rolling ||
+    !!config.periods;
   const timeBucket = !!xAxis && !!xAxis.timeBucket;
   const errors: string[] = [];
   if (timeBucket && xAxis!.type !== 'date') {
@@ -341,6 +348,19 @@ function validateRolling(config: VisualizationConfig): string[] {
   return errors;
 }
 
+function validatePeriods(config: VisualizationConfig): string[] {
+  const { periods } = config;
+  if (!periods) return [];
+  const errors: string[] = [];
+  if (periods.windows.length === 0) errors.push('Compare periods requires at least one window.');
+  if (periods.metadataKeys.length === 0) {
+    errors.push('Compare periods requires at least one numeric field.');
+  }
+  if (!periods.dateField)
+    errors.push('Compare periods requires a date field for window membership.');
+  return errors;
+}
+
 export function validateVisualizationConfig(config: VisualizationConfig): string[] {
   return [
     ...validateDimensions(config),
@@ -348,6 +368,7 @@ export function validateVisualizationConfig(config: VisualizationConfig): string
     ...validateDerivedMetric(config.derivedMetric),
     ...validateSeries(config),
     ...validateRolling(config),
+    ...validatePeriods(config),
     ...validateTargets(config),
   ];
 }
@@ -424,7 +445,9 @@ function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);
-  if (config.rolling && config.xAxis) {
+  if (config.periods) {
+    keys.push(config.periods.dateField);
+  } else if (config.rolling && config.xAxis) {
     keys.push(config.xAxis.metadataKey);
   } else if (config.series) {
     // Series (composition) fields are 0-filled when missing, so only the
@@ -484,10 +507,12 @@ function collectTargetDatasets(config: VisualizationConfig, labels: string[]): C
 
 export function buildChartData(
   entities: EntityWithMetadata[],
-  config: VisualizationConfig
+  config: VisualizationConfig,
+  now: Date = new Date()
 ): ChartDataResult {
   if (config.series) return buildCompositionData(entities, config);
   if (config.rolling) return buildRollingTrendData(entities, config);
+  if (config.periods) return buildPeriodComparisonData(entities, config, now);
 
   const { rows, excludedCount } = collectMetricRows(entities, config);
   const groups = new Map<string, number[]>();
@@ -676,6 +701,60 @@ function buildRollingTrendData(
   return { labels: [], datasets, warnings, excludedEntityCount: excludedCount };
 }
 
+// Compare periods: aggregate a measure across named relative windows. Each
+// window becomes an x-axis category. `combine` sums the fields per entity into
+// one bar per window; otherwise each field is its own grouped-bar series.
+function entitiesInWindow(
+  entities: EntityWithMetadata[],
+  dateField: string,
+  win: { start: Date | null; end: Date | null }
+): EntityWithMetadata[] {
+  return entities.filter(e => {
+    const d = e.metadata.find(m => m.key === dateField)?.value;
+    return d != null && inWindow(d, win);
+  });
+}
+
+function buildPeriodComparisonData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig,
+  now: Date
+): ChartDataResult {
+  const periods = config.periods!;
+  const fn = config.aggregation.function;
+  const resolved = periods.windows.map(w => resolveNamedWindow(w, now));
+  const labels = resolved.map(r => r.label);
+  const perWindow = resolved.map(r => entitiesInWindow(entities, periods.dateField, r));
+
+  let datasets: ChartJsDataset[];
+  if (periods.combine) {
+    const sumConfig: DerivedMetricConfig = {
+      name: 'Combined metric',
+      type: 'sum',
+      metadataKeys: periods.metadataKeys,
+    };
+    const data = perWindow.map(list => {
+      const vals = list
+        .map(e => computeDerivedMetric(e, sumConfig))
+        .filter((v): v is number => v != null);
+      return aggregate(vals, fn);
+    });
+    datasets = [{ label: 'Combined metric', data }];
+  } else {
+    datasets = periods.metadataKeys.map(key => ({
+      label: key,
+      data: perWindow.map(list =>
+        aggregate(
+          list.map(e => numOrZero(e, key)),
+          fn
+        )
+      ),
+    }));
+  }
+
+  return { labels, datasets, warnings: [], excludedEntityCount: 0 };
+}
+
 function buildTargetDatasets(target: TargetConfig, labels: string[]): ChartJsDataset[] {
   if (target.type === 'horizontal_line') {
     return [
@@ -862,7 +941,7 @@ export function buildChartJsConfig(
   let styledDatasets: ChartJsDataset[];
   if (config.rolling) {
     styledDatasets = result.datasets; // already styled by the rolling builder
-  } else if (config.series) {
+  } else if (config.series || config.periods) {
     styledDatasets = result.datasets.map((ds, i) => styleSeriesDataset(ds, chartType, i));
   } else {
     styledDatasets = result.datasets.map((ds, i) =>

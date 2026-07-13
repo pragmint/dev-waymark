@@ -10,6 +10,7 @@ export const TemplateIdSchema = z.enum([
   'combined_metric_trend',
   'composition_over_time',
   'rolling_trend',
+  'compare_periods',
 ]);
 export type TemplateId = z.infer<typeof TemplateIdSchema>;
 
@@ -35,6 +36,20 @@ export const ReferenceLineSchema = z.object({
   label: z.string().optional(),
 });
 export type ReferenceLine = z.infer<typeof ReferenceLineSchema>;
+
+// Named relative windows for the compare-periods template. Defined here (the base
+// schema module) so both the template slots and the resolved config can share it.
+export const NamedWindowSchema = z.enum([
+  'all_time',
+  'this_week',
+  'last_week',
+  'this_mon_fri',
+  'this_month',
+  'last_month',
+  'last_3_weeks',
+  'last_3_months',
+]);
+export type NamedWindow = z.infer<typeof NamedWindowSchema>;
 
 // ── Slot schemas — each template defines which fields the user must fill ─────
 
@@ -118,6 +133,18 @@ export const RollingTrendSlotsSchema = z.object({
 });
 export type RollingTrendSlots = z.infer<typeof RollingTrendSlotsSchema>;
 
+// Compare a measure across named windows (all-time / this week / last 3 months / …).
+// `combine: true` sums the fields into one bar per window; `false` renders each
+// field as its own grouped bar series (phase-by-phase comparison across windows).
+export const ComparePeriodsSlotsSchema = z.object({
+  dateField: z.string().min(1),
+  numericFields: z.array(z.string().min(1)).min(1),
+  windows: z.array(NamedWindowSchema).min(1),
+  aggregation: AggregationEnum.default('median'),
+  combine: z.boolean().default(true),
+});
+export type ComparePeriodsSlots = z.infer<typeof ComparePeriodsSlotsSchema>;
+
 // ── Union of all template configs ────────────────────────────────────────────
 
 export const TemplateConfigSchema = z.discriminatedUnion('templateId', [
@@ -136,6 +163,7 @@ export const TemplateConfigSchema = z.discriminatedUnion('templateId', [
     slots: CompositionOverTimeSlotsSchema,
   }),
   z.object({ templateId: z.literal('rolling_trend'), slots: RollingTrendSlotsSchema }),
+  z.object({ templateId: z.literal('compare_periods'), slots: ComparePeriodsSlotsSchema }),
 ]);
 export type TemplateConfig = z.infer<typeof TemplateConfigSchema>;
 
@@ -210,5 +238,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     description:
       'What is the trend, and are there divergent groups or outliers? Plots every item as a point plus a trailing rolling median line — the point cloud reveals clusters and one-offs a single line hides.',
     chartType: 'scatter',
+  },
+  {
+    id: 'compare_periods',
+    name: 'Compare periods',
+    description:
+      'How does a measure compare across time windows (all-time, this week, last 3 months, …)? One bar per window — or grouped bars to compare several fields window-by-window.',
+    chartType: 'bar',
   },
 ];

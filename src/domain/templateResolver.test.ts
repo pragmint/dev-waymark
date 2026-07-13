@@ -164,3 +164,37 @@ describe('resolveTemplate rolling_trend', () => {
     expect(config.rolling?.metadataKeys.length).toBe(2);
   });
 });
+
+describe('resolveTemplate compare_periods', () => {
+  test('combine=true yields a periods config that sums the fields', () => {
+    const config = resolveTemplate({
+      templateId: 'compare_periods',
+      slots: {
+        dateField: 'computed_completed_at',
+        numericFields: ['full_total_seconds'],
+        windows: ['all_time', 'last_3_months', 'this_week'],
+        aggregation: 'median',
+        combine: true,
+      },
+    });
+    expect(config.chartType).toBe('bar');
+    expect(config.periods?.combine).toBe(true);
+    expect(config.periods?.windows).toEqual(['all_time', 'last_3_months', 'this_week']);
+    expect(config.periods?.dateField).toBe('computed_completed_at');
+  });
+
+  test('combine=false keeps fields separate (grouped comparison)', () => {
+    const config = resolveTemplate({
+      templateId: 'compare_periods',
+      slots: {
+        dateField: 'computed_completed_at',
+        numericFields: ['full_grooming_seconds', 'full_development_seconds'],
+        windows: ['all_time', 'last_3_weeks'],
+        aggregation: 'avg',
+        combine: false,
+      },
+    });
+    expect(config.periods?.combine).toBe(false);
+    expect(config.periods?.metadataKeys.length).toBe(2);
+  });
+});

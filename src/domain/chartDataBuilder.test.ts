@@ -274,7 +274,7 @@ describe('validateVisualizationConfig', () => {
       aggregation: { function: 'count' },
     };
     expect(validateVisualizationConfig(config)).toContain(
-      'Visualization requires either an x-axis (with time bucket) or a category field.'
+      'Visualization requires an x-axis (with time bucket), a category field, or periods.'
     );
   });
 
@@ -971,5 +971,59 @@ describe('buildChartData rolling trend', () => {
     const cfg = buildChartJsConfig(buildChartData(ents, rollingCfg), rollingCfg);
     const scales = (cfg.options as { scales: { x: { type?: string } } }).scales;
     expect(scales.x.type).toBe('time');
+  });
+});
+
+// ── Compare periods (named windows) ──────────────────────────────────────────────
+
+describe('buildChartData compare periods', () => {
+  const now = new Date('2026-06-17T12:00:00Z');
+  const ents: EntityWithMetadata[] = [
+    makeEntity(1, {
+      done_at: { value: '2026-06-16T00:00:00Z', value_type: 'date' }, // in last_3_weeks
+      cycle: { value: '10', value_type: 'number' },
+    }),
+    makeEntity(2, {
+      done_at: { value: '2026-06-01T00:00:00Z', value_type: 'date' }, // in last_3_weeks
+      cycle: { value: '20', value_type: 'number' },
+    }),
+    makeEntity(3, {
+      done_at: { value: '2026-01-01T00:00:00Z', value_type: 'date' }, // only all_time
+      cycle: { value: '30', value_type: 'number' },
+    }),
+  ];
+
+  test('combine: one bar per window, aggregated over in-window entities', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'median' },
+      periods: {
+        dateField: 'done_at',
+        metadataKeys: ['cycle'],
+        windows: ['all_time', 'last_3_weeks'],
+        combine: true,
+      },
+    };
+    const result = buildChartData(ents, cfg, now);
+    expect(result.labels).toEqual(['All time', 'Last 3 weeks']);
+    expect(result.datasets.length).toBe(1);
+    expect(result.datasets[0].data).toEqual([20, 15]); // median(10,20,30)=20; median(10,20)=15
+  });
+
+  test('grouped: one series per field', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'avg' },
+      periods: {
+        dateField: 'done_at',
+        metadataKeys: ['cycle', 'cycle'],
+        windows: ['all_time'],
+        combine: false,
+      },
+    };
+    const result = buildChartData(ents, cfg, now);
+    expect(result.labels).toEqual(['All time']);
+    expect(result.datasets.length).toBe(2);
+    expect(result.datasets[0].data).toEqual([20]); // avg(10,20,30)
   });
 });
