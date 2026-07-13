@@ -42,15 +42,18 @@ export type ReferenceLine = z.infer<typeof ReferenceLineSchema>;
 
 // Named relative windows for the compare-periods template. Defined here (the base
 // schema module) so both the template slots and the resolved config can share it.
+// Discrete calendar windows (not spans): a "last 3 months" comparison is built
+// from month_minus_2 + last_month + this_month as three separate bars, and
+// "last 3 weeks" from week_minus_2 + last_week + this_week.
 export const NamedWindowSchema = z.enum([
   'all_time',
   'this_week',
   'last_week',
+  'week_minus_2',
   'this_mon_fri',
   'this_month',
   'last_month',
-  'last_3_weeks',
-  'last_3_months',
+  'month_minus_2',
 ]);
 export type NamedWindow = z.infer<typeof NamedWindowSchema>;
 

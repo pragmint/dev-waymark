@@ -187,49 +187,38 @@ export function computeDateRange(range: DateRange, now: Date): ComputedDateRange
 
 // ── Named relative windows (compare-periods template) ─────────────────────────
 //
-// Each resolves against a caller-supplied `now` (never a hidden clock, so it
-// stays testable). `this_*` are calendar-current; `last_week`/`last_month` are
-// the previous calendar period; `last_3_weeks`/`last_3_months` are trailing
-// spans ending at now. Bounds are inclusive; null = unbounded.
+// Discrete calendar periods resolved against a caller-supplied `now` (never a
+// hidden clock, so it stays testable). Week/month windows reuse computeDateRange
+// with an offset so the bounds match the dashboard range control exactly. A
+// multi-period comparison is expressed as several discrete windows (e.g.
+// month_minus_2 + last_month + this_month), not a single span.
 
 export type ResolvedWindow = { label: string; start: Date | null; end: Date | null };
 
+const CALENDAR_WINDOW_SPEC: Record<
+  Exclude<NamedWindow, 'all_time' | 'this_mon_fri'>,
+  { period: 'week' | 'month'; offset: number; label: string }
+> = {
+  this_week: { period: 'week', offset: 0, label: 'This week' },
+  last_week: { period: 'week', offset: -1, label: 'Last week' },
+  week_minus_2: { period: 'week', offset: -2, label: '2 weeks ago' },
+  this_month: { period: 'month', offset: 0, label: 'This month' },
+  last_month: { period: 'month', offset: -1, label: 'Last month' },
+  month_minus_2: { period: 'month', offset: -2, label: '2 months ago' },
+};
+
 export function resolveNamedWindow(w: NamedWindow, now: Date): ResolvedWindow {
-  switch (w) {
-    case 'all_time':
-      return { label: 'All time', start: null, end: null };
-    case 'this_week':
-      return { label: 'This week', start: startOfWeekUTC(now), end: now };
-    case 'last_week': {
-      const start = addUTCDays(startOfWeekUTC(now), -7);
-      return { label: 'Last week', start, end: new Date(addUTCDays(start, 7).getTime() - 1) };
-    }
-    case 'this_mon_fri': {
-      const start = startOfWeekUTC(now);
-      return { label: 'This Mon–Fri', start, end: new Date(addUTCDays(start, 5).getTime() - 1) };
-    }
-    case 'this_month':
-      return {
-        label: 'This month',
-        start: startOfMonthUTC(now.getUTCFullYear(), now.getUTCMonth()),
-        end: now,
-      };
-    case 'last_month': {
-      const y = now.getUTCFullYear();
-      const m = now.getUTCMonth();
-      const py = m === 0 ? y - 1 : y;
-      const pm = m === 0 ? 11 : m - 1;
-      return { label: 'Last month', start: startOfMonthUTC(py, pm), end: endOfMonthUTC(py, pm) };
-    }
-    case 'last_3_weeks':
-      return { label: 'Last 3 weeks', start: addUTCDays(now, -21), end: now };
-    case 'last_3_months': {
-      const start = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate())
-      );
-      return { label: 'Last 3 months', start, end: now };
-    }
+  if (w === 'all_time') return { label: 'All time', start: null, end: null };
+  if (w === 'this_mon_fri') {
+    const start = startOfWeekUTC(now);
+    return { label: 'This Mon–Fri', start, end: new Date(addUTCDays(start, 5).getTime() - 1) };
   }
+  const spec = CALENDAR_WINDOW_SPEC[w];
+  const r = computeDateRange(
+    { period: spec.period, offset: spec.offset, customStart: null, customEnd: null },
+    now
+  );
+  return { label: spec.label, start: r.start, end: r.end };
 }
 
 // Whether an ISO/parsable date string falls within an inclusive window's bounds.

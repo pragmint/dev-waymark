@@ -268,24 +268,28 @@ describe('resolveNamedWindow', () => {
     });
   });
 
-  test('this_week starts on Monday and ends at now', () => {
+  test('this_week is the current calendar week starting Monday', () => {
     const w = resolveNamedWindow('this_week', now);
     expect(w.start?.getUTCDay()).toBe(1); // Monday
-    expect(w.end).toEqual(now);
     expect(w.label).toBe('This week');
   });
 
-  test('last_3_weeks is a trailing span ending now (start at day boundary)', () => {
-    const w = resolveNamedWindow('last_3_weeks', now);
-    expect(w.end).toEqual(now);
-    // 21 days before now's date, truncated to midnight UTC
-    expect(w.start).toEqual(new Date('2026-05-27T00:00:00Z'));
+  test('week_minus_2 is two calendar weeks before this week', () => {
+    const w = resolveNamedWindow('week_minus_2', now);
+    expect(w.label).toBe('2 weeks ago');
+    const thisMon = resolveNamedWindow('this_week', now).start as Date;
+    expect(thisMon.getTime() - (w.start as Date).getTime()).toBe(14 * 24 * 60 * 60 * 1000);
   });
 
-  test('last_week is the previous Monday–Sunday', () => {
+  test('month_minus_2 is two calendar months back with a short label', () => {
+    const w = resolveNamedWindow('month_minus_2', now); // now = June → April
+    expect(w.label).toBe('2 months ago');
+    expect(w.start).toEqual(new Date('2026-04-01T00:00:00Z'));
+  });
+
+  test('last_week is the previous calendar week (Monday start)', () => {
     const w = resolveNamedWindow('last_week', now);
     expect(w.start?.getUTCDay()).toBe(1);
-    // exactly 7 days before this week's Monday
     const thisMon = resolveNamedWindow('this_week', now).start as Date;
     expect(thisMon.getTime() - (w.start as Date).getTime()).toBe(7 * 24 * 60 * 60 * 1000);
   });

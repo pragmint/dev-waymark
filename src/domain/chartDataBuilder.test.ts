@@ -980,34 +980,35 @@ describe('buildChartData compare periods', () => {
   const now = new Date('2026-06-17T12:00:00Z');
   const ents: EntityWithMetadata[] = [
     makeEntity(1, {
-      done_at: { value: '2026-06-16T00:00:00Z', value_type: 'date' }, // in last_3_weeks
+      done_at: { value: '2026-06-16T00:00:00Z', value_type: 'date' }, // June → this_month
       cycle: { value: '10', value_type: 'number' },
     }),
     makeEntity(2, {
-      done_at: { value: '2026-06-01T00:00:00Z', value_type: 'date' }, // in last_3_weeks
+      done_at: { value: '2026-06-01T00:00:00Z', value_type: 'date' }, // June → this_month
       cycle: { value: '20', value_type: 'number' },
     }),
     makeEntity(3, {
-      done_at: { value: '2026-01-01T00:00:00Z', value_type: 'date' }, // only all_time
+      done_at: { value: '2026-01-01T00:00:00Z', value_type: 'date' }, // Jan → only all_time
       cycle: { value: '30', value_type: 'number' },
     }),
   ];
 
-  test('combine: one bar per window, aggregated over in-window entities', () => {
+  test('combine: one bar per discrete calendar window', () => {
     const cfg: VisualizationConfig = {
       chartType: 'bar',
       aggregation: { function: 'median' },
       periods: {
         dateField: 'done_at',
         metadataKeys: ['cycle'],
-        windows: ['all_time', 'last_3_weeks'],
+        windows: ['all_time', 'this_month', 'last_month'],
         combine: true,
       },
     };
-    const result = buildChartData(ents, cfg, now);
-    expect(result.labels).toEqual(['All time', 'Last 3 weeks']);
+    const result = buildChartData(ents, cfg, now); // now = 2026-06-17
+    expect(result.labels).toEqual(['All time', 'This month', 'Last month']);
     expect(result.datasets.length).toBe(1);
-    expect(result.datasets[0].data).toEqual([20, 15]); // median(10,20,30)=20; median(10,20)=15
+    // all: median(10,20,30)=20; June: median(10,20)=15; May: none → 0
+    expect(result.datasets[0].data).toEqual([20, 15, 0]);
   });
 
   test('grouped: one series per field', () => {

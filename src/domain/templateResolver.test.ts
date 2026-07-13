@@ -175,7 +175,7 @@ describe('resolveTemplate compare_periods', () => {
       slots: {
         dateField: 'computed_completed_at',
         numericFields: ['full_total_seconds'],
-        windows: ['all_time', 'last_3_months', 'this_week'],
+        windows: ['all_time', 'month_minus_2', 'last_month', 'this_month'],
         aggregation: 'median',
         unit: 'days',
         combine: true,
@@ -183,7 +183,12 @@ describe('resolveTemplate compare_periods', () => {
     });
     expect(config.chartType).toBe('bar');
     expect(config.periods?.combine).toBe(true);
-    expect(config.periods?.windows).toEqual(['all_time', 'last_3_months', 'this_week']);
+    expect(config.periods?.windows).toEqual([
+      'all_time',
+      'month_minus_2',
+      'last_month',
+      'this_month',
+    ]);
     expect(config.periods?.dateField).toBe('computed_completed_at');
   });
 
@@ -193,7 +198,7 @@ describe('resolveTemplate compare_periods', () => {
       slots: {
         dateField: 'computed_completed_at',
         numericFields: ['full_grooming_seconds', 'full_development_seconds'],
-        windows: ['all_time', 'last_3_weeks'],
+        windows: ['week_minus_2', 'last_week', 'this_week'],
         aggregation: 'avg',
         unit: 'days',
         combine: false,
