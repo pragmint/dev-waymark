@@ -144,3 +144,23 @@ describe('resolveTemplate new templates', () => {
     expect(config.series?.mode).toBe('percent');
   });
 });
+
+describe('resolveTemplate rolling_trend', () => {
+  test('produces a scatter with a rolling config and no time bucket', () => {
+    const config = resolveTemplate({
+      templateId: 'rolling_trend',
+      slots: {
+        dateField: 'computed_completed_at',
+        numericFields: ['full_development_seconds', 'full_review_seconds'],
+        windowDays: 28,
+        aggregation: 'median',
+      },
+    });
+    expect(config.chartType).toBe('scatter');
+    expect(config.xAxis?.type).toBe('date');
+    expect(config.xAxis?.timeBucket).toBeUndefined();
+    expect(config.rolling?.windowDays).toBe(28);
+    expect(config.rolling?.aggregation).toBe('median');
+    expect(config.rolling?.metadataKeys.length).toBe(2);
+  });
+});

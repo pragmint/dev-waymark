@@ -9,6 +9,7 @@ export const TemplateIdSchema = z.enum([
   'category_comparison',
   'combined_metric_trend',
   'composition_over_time',
+  'rolling_trend',
 ]);
 export type TemplateId = z.infer<typeof TemplateIdSchema>;
 
@@ -104,6 +105,19 @@ export const CompositionOverTimeSlotsSchema = z.object({
 });
 export type CompositionOverTimeSlots = z.infer<typeof CompositionOverTimeSlotsSchema>;
 
+// Rolling trend = plot every entity as an individual point (value vs. its date),
+// overlaid with a trailing-window rolling aggregate line (median by default).
+// The point cloud exposes divergent groups and one-off outliers that a single
+// bucketed line hides; the rolling line shows the underlying trend. The value is
+// the sum of the chosen numeric fields per entity (one field = that field alone).
+export const RollingTrendSlotsSchema = z.object({
+  dateField: z.string().min(1),
+  numericFields: z.array(z.string().min(1)).min(1),
+  windowDays: z.number().int().positive().default(28),
+  aggregation: AggregationEnum.default('median'),
+});
+export type RollingTrendSlots = z.infer<typeof RollingTrendSlotsSchema>;
+
 // ── Union of all template configs ────────────────────────────────────────────
 
 export const TemplateConfigSchema = z.discriminatedUnion('templateId', [
@@ -121,6 +135,7 @@ export const TemplateConfigSchema = z.discriminatedUnion('templateId', [
     templateId: z.literal('composition_over_time'),
     slots: CompositionOverTimeSlotsSchema,
   }),
+  z.object({ templateId: z.literal('rolling_trend'), slots: RollingTrendSlotsSchema }),
 ]);
 export type TemplateConfig = z.infer<typeof TemplateConfigSchema>;
 
@@ -188,5 +203,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     description:
       'Where does the time (or value) go, and how does the mix change? Stacks several numeric fields as bands per period — stack height is the total, each band its share.',
     chartType: 'bar',
+  },
+  {
+    id: 'rolling_trend',
+    name: 'Trend with data points',
+    description:
+      'What is the trend, and are there divergent groups or outliers? Plots every item as a point plus a trailing rolling median line — the point cloud reveals clusters and one-offs a single line hides.',
+    chartType: 'scatter',
   },
 ];

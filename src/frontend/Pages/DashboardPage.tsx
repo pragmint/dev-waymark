@@ -8,6 +8,10 @@ import { TEMPLATES } from '../../schemas/visualizationTemplate';
 import { Layout } from '../components/Layout';
 
 const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+// Date adapter for the time x-axis used by the rolling-trend (scatter) template.
+// Bundled build includes date-fns, so no separate date library is needed.
+const CHART_JS_DATE_ADAPTER_CDN =
+  'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js';
 
 export type DashboardCard = {
   id: number;
@@ -47,7 +51,10 @@ export const DashboardPage: FC<Props> = ({
   const savedVizIds = selectedDashboard?.visualizationIds ?? [];
 
   return (
-    <Layout title="Visualizations" extraScripts={[CHART_JS_CDN, '/dashboard.js']}>
+    <Layout
+      title="Visualizations"
+      extraScripts={[CHART_JS_CDN, CHART_JS_DATE_ADAPTER_CDN, '/dashboard.js']}
+    >
       <div class="page-header">
         <h1>Visualizations</h1>
       </div>

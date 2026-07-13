@@ -9,6 +9,7 @@ import type {
   CategoryComparisonSlots,
   CombinedMetricTrendSlots,
   CompositionOverTimeSlots,
+  RollingTrendSlots,
   ReferenceLine,
 } from '../schemas/visualizationTemplate';
 
@@ -40,6 +41,8 @@ export function resolveTemplate(template: TemplateConfig): VisualizationConfig {
       return resolveCombinedMetricTrend(template.slots);
     case 'composition_over_time':
       return resolveCompositionOverTime(template.slots);
+    case 'rolling_trend':
+      return resolveRollingTrend(template.slots);
   }
 }
 
@@ -164,6 +167,20 @@ function resolveCompositionOverTime(slots: CompositionOverTimeSlots): Visualizat
     series: {
       metadataKeys: slots.numericFields,
       mode: slots.mode,
+    },
+  };
+}
+
+function resolveRollingTrend(slots: RollingTrendSlots): VisualizationConfig {
+  return {
+    chartType: 'scatter',
+    // No timeBucket: points are plotted individually on a time axis.
+    xAxis: { metadataKey: slots.dateField, type: 'date' },
+    aggregation: { function: slots.aggregation },
+    rolling: {
+      metadataKeys: slots.numericFields,
+      windowDays: slots.windowDays,
+      aggregation: slots.aggregation,
     },
   };
 }

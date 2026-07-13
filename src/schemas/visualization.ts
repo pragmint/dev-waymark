@@ -72,6 +72,15 @@ export const SeriesConfigSchema = z.object({
 });
 export type SeriesConfig = z.infer<typeof SeriesConfigSchema>;
 
+// Individual entities plotted as points (value = sum of metadataKeys) plus a
+// trailing rolling aggregate line over `windowDays`. Renders on a time x-axis.
+export const RollingConfigSchema = z.object({
+  metadataKeys: z.array(z.string()).min(1),
+  windowDays: z.number().int().positive(),
+  aggregation: AggregationFunctionSchema,
+});
+export type RollingConfig = z.infer<typeof RollingConfigSchema>;
+
 export const TargetConfigSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('horizontal_line'),
@@ -100,6 +109,7 @@ export const VisualizationConfigSchema = z.object({
   aggregation: AggregationConfigSchema,
   derivedMetric: DerivedMetricConfigSchema.optional(),
   series: SeriesConfigSchema.optional(),
+  rolling: RollingConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
   targets: z.array(TargetConfigSchema).optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),

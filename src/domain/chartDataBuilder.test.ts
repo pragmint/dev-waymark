@@ -417,7 +417,7 @@ describe('buildChartData — categorical (count by issue_type)', () => {
 
   test('sorts value_desc: highest count first', () => {
     const result = buildChartData(tickets, config);
-    const data = result.datasets[0].data;
+    const data = result.datasets[0].data as number[];
     for (let i = 0; i < data.length - 1; i++) {
       expect(data[i]).toBeGreaterThanOrEqual(data[i + 1]);
     }
@@ -909,5 +909,67 @@ describe('validateVisualizationConfig new shapes', () => {
       derivedMetric: { name: 'Cycle', type: 'sum', metadataKeys: ['dev', 'review'] },
     };
     expect(validateVisualizationConfig(ok)).toEqual([]);
+  });
+});
+
+// ── Rolling trend (points + trailing median) ─────────────────────────────────────
+
+describe('buildChartData rolling trend', () => {
+  const rollingCfg: VisualizationConfig = {
+    chartType: 'scatter',
+    xAxis: { metadataKey: 'done_at', type: 'date' },
+    aggregation: { function: 'median' },
+    rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median' },
+  };
+  const ents: EntityWithMetadata[] = [
+    makeEntity(1, {
+      done_at: { value: '2026-01-01T00:00:00Z', value_type: 'date' },
+      cycle: { value: '10', value_type: 'number' },
+    }),
+    makeEntity(2, {
+      done_at: { value: '2026-01-10T00:00:00Z', value_type: 'date' },
+      cycle: { value: '20', value_type: 'number' },
+    }),
+    makeEntity(3, {
+      done_at: { value: '2026-01-20T00:00:00Z', value_type: 'date' },
+      cycle: { value: '30', value_type: 'number' },
+    }),
+  ];
+
+  test('emits a scatter points dataset and a rolling-median line', () => {
+    const result = buildChartData(ents, rollingCfg);
+    expect(result.datasets.length).toBe(2);
+    const [points, line] = result.datasets;
+    expect(points.type).toBe('scatter');
+    expect(points.showLine).toBe(false);
+    expect(points.data.length).toBe(3);
+    expect(line.type).toBe('line');
+    // trailing 28-day medians: [median(10), median(10,20), median(10,20,30)]
+    expect((line.data as Array<{ y: number }>).map(p => p.y)).toEqual([10, 15, 20]);
+  });
+
+  test('points carry x/y with ISO dates in sorted order', () => {
+    const shuffled = [ents[2], ents[0], ents[1]];
+    const result = buildChartData(shuffled, rollingCfg);
+    const xs = (result.datasets[0].data as Array<{ x: string }>).map(p => p.x);
+    expect(xs).toEqual([...xs].sort());
+    expect(xs[0]).toContain('2026-01-01');
+  });
+
+  test('excludes entities missing a date or value', () => {
+    const withGaps = [
+      ...ents,
+      makeEntity(4, { cycle: { value: '99', value_type: 'number' } }), // no date
+      makeEntity(5, { done_at: { value: '2026-02-01T00:00:00Z', value_type: 'date' } }), // no value
+    ];
+    const result = buildChartData(withGaps, rollingCfg);
+    expect(result.datasets[0].data.length).toBe(3);
+    expect(result.excludedEntityCount).toBe(2);
+  });
+
+  test('config builder marks x-axis as a time scale', () => {
+    const cfg = buildChartJsConfig(buildChartData(ents, rollingCfg), rollingCfg);
+    const scales = (cfg.options as { scales: { x: { type?: string } } }).scales;
+    expect(scales.x.type).toBe('time');
   });
 });

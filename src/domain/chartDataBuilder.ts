@@ -13,15 +13,18 @@ import type {
 
 // ── Output types ──────────────────────────────────────────────────────────────
 
+export type XYPoint = { x: string | number; y: number };
+
 export type ChartJsDataset = {
   label: string;
-  data: number[];
+  data: Array<number | XYPoint>;
   borderColor?: string;
   backgroundColor?: string | string[];
   fill?: boolean | string;
   tension?: number;
   borderDash?: number[];
   pointRadius?: number;
+  showLine?: boolean;
   type?: string;
   order?: number;
 };
@@ -261,7 +264,8 @@ function validateDimensions(config: VisualizationConfig): string[] {
 
 function validateMeasure(config: VisualizationConfig): string[] {
   const { xAxis, aggregation } = config;
-  const hasMeasure = !!config.yAxis || !!config.derivedMetric || !!config.series;
+  const hasMeasure =
+    !!config.yAxis || !!config.derivedMetric || !!config.series || !!config.rolling;
   const timeBucket = !!xAxis && !!xAxis.timeBucket;
   const errors: string[] = [];
   if (timeBucket && xAxis!.type !== 'date') {
@@ -324,12 +328,26 @@ function validateTargets(config: VisualizationConfig): string[] {
   return errors;
 }
 
+function validateRolling(config: VisualizationConfig): string[] {
+  const { rolling, xAxis } = config;
+  if (!rolling) return [];
+  const errors: string[] = [];
+  if (!xAxis || xAxis.type !== 'date') {
+    errors.push('Rolling trend requires a date x-axis field.');
+  }
+  if (rolling.metadataKeys.length === 0) {
+    errors.push('Rolling trend requires at least one numeric field.');
+  }
+  return errors;
+}
+
 export function validateVisualizationConfig(config: VisualizationConfig): string[] {
   return [
     ...validateDimensions(config),
     ...validateMeasure(config),
     ...validateDerivedMetric(config.derivedMetric),
     ...validateSeries(config),
+    ...validateRolling(config),
     ...validateTargets(config),
   ];
 }
@@ -406,7 +424,9 @@ function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);
-  if (config.series) {
+  if (config.rolling && config.xAxis) {
+    keys.push(config.xAxis.metadataKey);
+  } else if (config.series) {
     // Series (composition) fields are 0-filled when missing, so only the
     // date-bucket field is genuinely required.
   } else if (config.derivedMetric) {
@@ -467,6 +487,7 @@ export function buildChartData(
   config: VisualizationConfig
 ): ChartDataResult {
   if (config.series) return buildCompositionData(entities, config);
+  if (config.rolling) return buildRollingTrendData(entities, config);
 
   const { rows, excludedCount } = collectMetricRows(entities, config);
   const groups = new Map<string, number[]>();
@@ -567,6 +588,92 @@ function buildCompositionData(
   }
 
   return { labels, datasets, warnings, excludedEntityCount: excludedCount };
+}
+
+// Rolling trend: individual points (value = sum of the chosen fields) plus a
+// trailing rolling aggregate line, both on a time x-axis.
+function collectRollingPoints(
+  entities: EntityWithMetadata[],
+  dateKey: string,
+  keys: string[]
+): { points: Array<{ t: number; y: number }>; excludedCount: number } {
+  const sumConfig: DerivedMetricConfig = { name: '', type: 'sum', metadataKeys: keys };
+  const points: Array<{ t: number; y: number }> = [];
+  let excludedCount = 0;
+  for (const entity of entities) {
+    const dateVal = entity.metadata.find(m => m.key === dateKey)?.value;
+    const value = computeDerivedMetric(entity, sumConfig);
+    const t = dateVal ? Date.parse(dateVal) : NaN;
+    if (isNaN(t) || value == null) {
+      excludedCount++;
+      continue;
+    }
+    points.push({ t, y: value });
+  }
+  points.sort((a, b) => a.t - b.t);
+  return { points, excludedCount };
+}
+
+// Trailing rolling aggregate. Points are pre-sorted by time, so a single
+// forward-moving left pointer keeps the window in O(n) sweeps.
+function rollingAggregateLine(
+  points: Array<{ t: number; y: number }>,
+  windowMs: number,
+  agg: AggregationFunction
+): XYPoint[] {
+  let left = 0;
+  return points.map((p, i) => {
+    const lo = p.t - windowMs;
+    while (points[left].t <= lo) left++;
+    const vals: number[] = [];
+    for (let j = left; j <= i; j++) vals.push(points[j].y);
+    return { x: new Date(p.t).toISOString(), y: aggregate(vals, agg) };
+  });
+}
+
+function buildRollingTrendData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig
+): ChartDataResult {
+  const rolling = config.rolling!;
+  const dateKey = config.xAxis!.metadataKey;
+  const { points, excludedCount } = collectRollingPoints(entities, dateKey, rolling.metadataKeys);
+  const pointData: XYPoint[] = points.map(p => ({ x: new Date(p.t).toISOString(), y: p.y }));
+  const lineData = rollingAggregateLine(
+    points,
+    rolling.windowDays * 86_400_000,
+    rolling.aggregation
+  );
+
+  const datasets: ChartJsDataset[] = [
+    {
+      label: 'Items',
+      data: pointData,
+      type: 'scatter',
+      showLine: false,
+      pointRadius: 3,
+      backgroundColor: 'rgba(59, 130, 246, 0.35)',
+      borderColor: 'rgba(59, 130, 246, 0.5)',
+    },
+    {
+      label: `${rolling.windowDays}-day ${rolling.aggregation}`,
+      data: lineData,
+      type: 'line',
+      showLine: true,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.2,
+      borderColor: 'rgba(239, 68, 68, 0.9)',
+      backgroundColor: 'transparent',
+    },
+  ];
+
+  const warnings: string[] = [];
+  if (excludedCount > 0) {
+    const noun = excludedCount === 1 ? 'entity was' : 'entities were';
+    warnings.push(`${excludedCount} ${noun} excluded because they were missing a date or value.`);
+  }
+  return { labels: [], datasets, warnings, excludedEntityCount: excludedCount };
 }
 
 function buildTargetDatasets(target: TargetConfig, labels: string[]): ChartJsDataset[] {
@@ -698,8 +805,11 @@ function buildScales(
 ): Record<string, unknown> {
   const stacked = !!config.series;
   const isPercent = config.series?.mode === 'percent';
+  const x = config.rolling
+    ? { type: 'time', title: { display: !!xAxisLabel, text: xAxisLabel } }
+    : { title: { display: !!xAxisLabel, text: xAxisLabel }, stacked };
   return {
-    x: { title: { display: !!xAxisLabel, text: xAxisLabel }, stacked },
+    x,
     y: {
       title: { display: !!yAxisLabel, text: yAxisLabel },
       beginAtZero: stacked,
@@ -749,11 +859,16 @@ export function buildChartJsConfig(
 ): ChartJsConfig {
   const { chartType } = config;
   const isCircular = chartType === 'pie' || chartType === 'doughnut';
-  const styledDatasets = config.series
-    ? result.datasets.map((ds, i) => styleSeriesDataset(ds, chartType, i))
-    : result.datasets.map((ds, i) =>
-        i === 0 ? styleMainDataset(ds, chartType, result.labels.length) : ds
-      );
+  let styledDatasets: ChartJsDataset[];
+  if (config.rolling) {
+    styledDatasets = result.datasets; // already styled by the rolling builder
+  } else if (config.series) {
+    styledDatasets = result.datasets.map((ds, i) => styleSeriesDataset(ds, chartType, i));
+  } else {
+    styledDatasets = result.datasets.map((ds, i) =>
+      i === 0 ? styleMainDataset(ds, chartType, result.labels.length) : ds
+    );
+  }
   const options = buildChartOptions(result, config, isCircular);
   return { type: chartType, data: { labels: result.labels, datasets: styledDatasets }, options };
 }
