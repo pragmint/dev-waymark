@@ -135,6 +135,9 @@ export const RollingTrendSlotsSchema = z.object({
   windowDays: z.number().int().positive().default(28),
   aggregation: AggregationEnum.default('median'),
   unit: DurationUnitEnum.default('days'),
+  showPoints: z.boolean().default(true),
+  trailingDays: z.number().int().positive().optional(),
+  referenceLines: z.array(ReferenceLineSchema).optional(),
 });
 export type RollingTrendSlots = z.infer<typeof RollingTrendSlotsSchema>;
 

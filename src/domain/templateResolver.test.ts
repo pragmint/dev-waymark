@@ -156,6 +156,7 @@ describe('resolveTemplate rolling_trend', () => {
         windowDays: 28,
         aggregation: 'median',
         unit: 'days',
+        showPoints: true,
       },
     });
     expect(config.chartType).toBe('scatter');

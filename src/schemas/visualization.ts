@@ -80,6 +80,11 @@ export const RollingConfigSchema = z.object({
   metadataKeys: z.array(z.string()).min(1),
   windowDays: z.number().int().positive(),
   aggregation: AggregationFunctionSchema,
+  // Hide the individual points to show just the trend line + targets.
+  showPoints: z.boolean(),
+  // Restrict the *displayed* range to the trailing N days (the rolling line is
+  // still computed over full history, so the left edge isn't truncated).
+  trailingDays: z.number().int().positive().optional(),
 });
 export type RollingConfig = z.infer<typeof RollingConfigSchema>;
 

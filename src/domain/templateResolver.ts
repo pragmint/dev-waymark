@@ -186,7 +186,10 @@ function resolveRollingTrend(slots: RollingTrendSlots): VisualizationConfig {
       metadataKeys: slots.numericFields,
       windowDays: slots.windowDays,
       aggregation: slots.aggregation,
+      showPoints: slots.showPoints,
+      trailingDays: slots.trailingDays,
     },
+    targets: referenceLinesToTargets(slots.referenceLines),
   };
 }
 

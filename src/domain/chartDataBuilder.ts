@@ -321,12 +321,13 @@ function validateSeries(config: VisualizationConfig): string[] {
 }
 
 function validateTargets(config: VisualizationConfig): string[] {
-  const { target, targets, yAxis, derivedMetric, series, xAxis } = config;
+  const { target, targets, yAxis, derivedMetric, series, rolling, periods, xAxis } = config;
   const all: TargetConfig[] = [...(target ? [target] : []), ...(targets ?? [])];
+  const hasNumericMeasure = !!yAxis || !!derivedMetric || !!series || !!rolling || !!periods;
   const errors: string[] = [];
   for (const t of all) {
-    if (t.type === 'horizontal_line' && !yAxis && !derivedMetric && !series) {
-      errors.push('Horizontal target line requires a numeric y-axis, derived metric, or series.');
+    if (t.type === 'horizontal_line' && !hasNumericMeasure) {
+      errors.push('Horizontal target line requires a numeric measure.');
     }
     if (t.type === 'vertical_line' && !xAxis) {
       errors.push('Vertical target line requires an x-axis.');
@@ -517,7 +518,7 @@ export function buildChartData(
   now: Date = new Date()
 ): ChartDataResult {
   if (config.series) return buildCompositionData(entities, config);
-  if (config.rolling) return buildRollingTrendData(entities, config);
+  if (config.rolling) return buildRollingTrendData(entities, config, now);
   if (config.periods) return buildPeriodComparisonData(entities, config, now);
 
   const { rows, excludedCount } = collectMetricRows(entities, config);
@@ -662,52 +663,95 @@ function rollingAggregateLine(
   });
 }
 
+// Horizontal reference lines drawn as 2-point line datasets spanning the visible
+// time extent (buildTargetDatasets is label-indexed, which doesn't fit a time axis).
+function rollingTargetLines(config: VisualizationConfig, x0: string, x1: string): ChartJsDataset[] {
+  const out: ChartJsDataset[] = [];
+  for (const t of config.targets ?? []) {
+    if (t.type !== 'horizontal_line') continue;
+    out.push({
+      label: t.label ?? 'Target',
+      data: [
+        { x: x0, y: t.value },
+        { x: x1, y: t.value },
+      ],
+      type: 'line',
+      showLine: true,
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+      borderColor: 'rgba(239, 68, 68, 0.85)',
+      backgroundColor: 'transparent',
+      borderDash: [6, 4],
+    });
+  }
+  return out;
+}
+
 function buildRollingTrendData(
   entities: EntityWithMetadata[],
-  config: VisualizationConfig
+  config: VisualizationConfig,
+  now: Date
 ): ChartDataResult {
   const rolling = config.rolling!;
   const dateKey = config.xAxis!.metadataKey;
   const raw = collectRollingPoints(entities, dateKey, rolling.metadataKeys);
-  const excludedCount = raw.excludedCount;
   // Convert seconds → display unit once; median/etc. are linear so order is moot.
   const points = raw.points.map(p => ({ t: p.t, y: toDisplay(p.y, config) }));
-  const pointData: XYPoint[] = points.map(p => ({ x: new Date(p.t).toISOString(), y: p.y }));
-  const lineData = rollingAggregateLine(
+  const fullLine = rollingAggregateLine(
     points,
     rolling.windowDays * 86_400_000,
     rolling.aggregation
   );
 
-  const datasets: ChartJsDataset[] = [
-    {
+  // Focus on a trailing window if requested — slice AFTER computing the rolling
+  // line so its left edge still reflects the full history.
+  let startIdx = 0;
+  if (rolling.trailingDays) {
+    const cutoff = now.getTime() - rolling.trailingDays * 86_400_000;
+    const found = points.findIndex(p => p.t >= cutoff);
+    startIdx = found < 0 ? points.length : found;
+  }
+  const visPoints = points.slice(startIdx);
+  const visLine = fullLine.slice(startIdx);
+
+  const datasets: ChartJsDataset[] = [];
+  if (rolling.showPoints) {
+    datasets.push({
       label: 'Items',
-      data: pointData,
+      data: visPoints.map(p => ({ x: new Date(p.t).toISOString(), y: p.y })),
       type: 'scatter',
       showLine: false,
       pointRadius: 3,
       backgroundColor: 'rgba(59, 130, 246, 0.35)',
       borderColor: 'rgba(59, 130, 246, 0.5)',
-    },
-    {
-      label: `${rolling.windowDays}-day ${rolling.aggregation}`,
-      data: lineData,
-      type: 'line',
-      showLine: true,
-      pointRadius: 0,
-      fill: false,
-      tension: 0.2,
-      borderColor: 'rgba(239, 68, 68, 0.9)',
-      backgroundColor: 'transparent',
-    },
-  ];
+    });
+  }
+  datasets.push({
+    label: `${rolling.windowDays}-day ${rolling.aggregation}`,
+    data: visLine,
+    type: 'line',
+    showLine: true,
+    pointRadius: 0,
+    fill: false,
+    tension: 0.2,
+    borderColor: 'rgba(37, 99, 235, 1)',
+    backgroundColor: 'transparent',
+  });
+  if (visPoints.length > 0) {
+    const x0 = new Date(visPoints[0].t).toISOString();
+    const x1 = new Date(visPoints[visPoints.length - 1].t).toISOString();
+    datasets.push(...rollingTargetLines(config, x0, x1));
+  }
 
   const warnings: string[] = [];
-  if (excludedCount > 0) {
-    const noun = excludedCount === 1 ? 'entity was' : 'entities were';
-    warnings.push(`${excludedCount} ${noun} excluded because they were missing a date or value.`);
+  if (raw.excludedCount > 0) {
+    const noun = raw.excludedCount === 1 ? 'entity was' : 'entities were';
+    warnings.push(
+      `${raw.excludedCount} ${noun} excluded because they were missing a date or value.`
+    );
   }
-  return { labels: [], datasets, warnings, excludedEntityCount: excludedCount };
+  return { labels: [], datasets, warnings, excludedEntityCount: raw.excludedCount };
 }
 
 // Compare periods: aggregate a measure across named relative windows. Each

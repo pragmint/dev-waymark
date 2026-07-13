@@ -919,7 +919,7 @@ describe('buildChartData rolling trend', () => {
     chartType: 'scatter',
     xAxis: { metadataKey: 'done_at', type: 'date' },
     aggregation: { function: 'median' },
-    rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median' },
+    rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median', showPoints: true },
   };
   const ents: EntityWithMetadata[] = [
     makeEntity(1, {
@@ -1054,7 +1054,7 @@ describe('displayUnit conversion', () => {
       xAxis: { metadataKey: 'done_at', type: 'date' },
       aggregation: { function: 'median' },
       displayUnit: 'days',
-      rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median' },
+      rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median', showPoints: true },
     };
     const e = makeEntity(1, {
       done_at: { value: '2026-04-27T00:00:00Z', value_type: 'date' },
@@ -1065,5 +1065,51 @@ describe('displayUnit conversion', () => {
     const cjs = buildChartJsConfig(result, cfg);
     const y = (cjs.options as { scales: { y: { title: { text: string } } } }).scales.y.title.text;
     expect(y).toBe('days');
+  });
+});
+
+// ── Rolling trend enhancements (points off, trailing focus, goal line) ───────────
+
+describe('buildChartData rolling trend enhancements', () => {
+  const now = new Date('2026-06-17T12:00:00Z');
+  const ents: EntityWithMetadata[] = [
+    makeEntity(1, {
+      done_at: { value: '2026-01-01T00:00:00Z', value_type: 'date' },
+      cycle: { value: '30', value_type: 'number' },
+    }),
+    makeEntity(2, {
+      done_at: { value: '2026-06-01T00:00:00Z', value_type: 'date' },
+      cycle: { value: '20', value_type: 'number' },
+    }),
+    makeEntity(3, {
+      done_at: { value: '2026-06-16T00:00:00Z', value_type: 'date' },
+      cycle: { value: '10', value_type: 'number' },
+    }),
+  ];
+
+  test('showPoints=false drops the scatter; trailingDays focuses display; goal line spans extent', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'scatter',
+      xAxis: { metadataKey: 'done_at', type: 'date' },
+      aggregation: { function: 'median' },
+      rolling: {
+        metadataKeys: ['cycle'],
+        windowDays: 28,
+        aggregation: 'median',
+        showPoints: false,
+        trailingDays: 7,
+      },
+      targets: [{ type: 'horizontal_line', value: 5, label: 'Goal' }],
+    };
+    const result = buildChartData(ents, cfg, now);
+    // no scatter dataset
+    expect(result.datasets.some(d => d.type === 'scatter')).toBe(false);
+    // trailing 7 days → only the 2026-06-16 point is visible on the line
+    const line = result.datasets.find(d => d.label === '28-day median')!;
+    expect(line.data.length).toBe(1);
+    // goal line present, spanning 2 x points at y=5
+    const goal = result.datasets.find(d => d.label === 'Goal')!;
+    expect(goal.data.length).toBe(2);
+    expect((goal.data as Array<{ y: number }>).every(p => p.y === 5)).toBe(true);
   });
 });
