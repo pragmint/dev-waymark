@@ -304,3 +304,18 @@ describe('inWindow', () => {
     expect(inWindow('1999-01-01', { start: null, end: null })).toBe(true));
   test('unparsable date is excluded', () => expect(inWindow('nope', win)).toBe(false));
 });
+
+describe('resolveNamedWindow weekdays', () => {
+  const now = new Date('2026-06-17T12:00:00Z'); // Wednesday; week Monday = 2026-06-15
+  test('wed resolves to Wednesday of the current week', () => {
+    const w = resolveNamedWindow('wed', now);
+    expect(w.label).toBe('Wed');
+    expect(w.start).toEqual(new Date('2026-06-17T00:00:00Z'));
+    expect(w.start?.getUTCDay()).toBe(3);
+  });
+  test('mon resolves to the week Monday', () => {
+    const w = resolveNamedWindow('mon', now);
+    expect(w.label).toBe('Mon');
+    expect(w.start).toEqual(new Date('2026-06-15T00:00:00Z'));
+  });
+});

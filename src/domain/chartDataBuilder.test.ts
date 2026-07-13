@@ -1114,3 +1114,60 @@ describe('buildChartData rolling trend enhancements', () => {
     expect((goal.data as Array<{ y: number }>).every(p => p.y === 5)).toBe(true);
   });
 });
+
+// ── Compare periods weekday fallback ─────────────────────────────────────────────
+
+describe('buildChartData weekday fallback', () => {
+  const now = new Date('2026-06-17T12:00:00Z'); // this week Mon = 2026-06-15
+  // Data only in LAST week (Mon 2026-06-08, Wed 2026-06-10); nothing this week.
+  const ents: EntityWithMetadata[] = [
+    makeEntity(1, {
+      done_at: { value: '2026-06-08T09:00:00Z', value_type: 'date' },
+      cycle: { value: '10', value_type: 'number' },
+    }),
+    makeEntity(2, {
+      done_at: { value: '2026-06-10T09:00:00Z', value_type: 'date' },
+      cycle: { value: '20', value_type: 'number' },
+    }),
+  ];
+
+  test('empty current-week weekdays step back one week', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'median' },
+      periods: {
+        dateField: 'done_at',
+        metadataKeys: ['cycle'],
+        windows: ['mon', 'wed'],
+        combine: true,
+      },
+    };
+    const result = buildChartData(ents, cfg, now);
+    expect(result.labels).toEqual(['Mon', 'Wed']);
+    // fell back to last week → Mon=2026-06-08 (10), Wed=2026-06-10 (20)
+    expect(result.datasets[0].data).toEqual([10, 20]);
+  });
+
+  test('no fallback when current week has data', () => {
+    const thisWeek = [
+      makeEntity(3, {
+        done_at: { value: '2026-06-15T09:00:00Z', value_type: 'date' }, // this Mon
+        cycle: { value: '99', value_type: 'number' },
+      }),
+      ...ents,
+    ];
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'median' },
+      periods: {
+        dateField: 'done_at',
+        metadataKeys: ['cycle'],
+        windows: ['mon', 'wed'],
+        combine: true,
+      },
+    };
+    const result = buildChartData(thisWeek, cfg, now);
+    // this-week Mon has data (99) → no step-back; Wed this week empty → 0
+    expect(result.datasets[0].data).toEqual([99, 0]);
+  });
+});

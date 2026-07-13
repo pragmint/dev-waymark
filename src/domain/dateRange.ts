@@ -195,8 +195,17 @@ export function computeDateRange(range: DateRange, now: Date): ComputedDateRange
 
 export type ResolvedWindow = { label: string; start: Date | null; end: Date | null };
 
+type WeekdayWindow = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+const WEEKDAY_SPEC: Record<WeekdayWindow, { offset: number; label: string }> = {
+  mon: { offset: 0, label: 'Mon' },
+  tue: { offset: 1, label: 'Tue' },
+  wed: { offset: 2, label: 'Wed' },
+  thu: { offset: 3, label: 'Thu' },
+  fri: { offset: 4, label: 'Fri' },
+};
+
 const CALENDAR_WINDOW_SPEC: Record<
-  Exclude<NamedWindow, 'all_time' | 'this_mon_fri'>,
+  Exclude<NamedWindow, 'all_time' | 'this_mon_fri' | WeekdayWindow>,
   { period: 'week' | 'month'; offset: number; label: string }
 > = {
   this_week: { period: 'week', offset: 0, label: 'This week' },
@@ -213,13 +222,27 @@ export function resolveNamedWindow(w: NamedWindow, now: Date): ResolvedWindow {
     const start = startOfWeekUTC(now);
     return { label: 'This Mon–Fri', start, end: new Date(addUTCDays(start, 5).getTime() - 1) };
   }
-  const spec = CALENDAR_WINDOW_SPEC[w];
+  const weekday = WEEKDAY_SPEC[w as WeekdayWindow];
+  if (weekday) {
+    const start = addUTCDays(startOfWeekUTC(now), weekday.offset);
+    return { label: weekday.label, start, end: new Date(addUTCDays(start, 1).getTime() - 1) };
+  }
+  const spec =
+    CALENDAR_WINDOW_SPEC[w as Exclude<NamedWindow, 'all_time' | 'this_mon_fri' | WeekdayWindow>];
   const r = computeDateRange(
     { period: spec.period, offset: spec.offset, customStart: null, customEnd: null },
     now
   );
   return { label: spec.label, start: r.start, end: r.end };
 }
+
+export const WEEKDAY_WINDOWS: ReadonlySet<NamedWindow> = new Set<NamedWindow>([
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+]);
 
 // Whether an ISO/parsable date string falls within an inclusive window's bounds.
 export function inWindow(dateStr: string, win: { start: Date | null; end: Date | null }): boolean {

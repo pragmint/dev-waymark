@@ -1,7 +1,8 @@
 import type { EntityWithMetadata } from '../schemas/entity';
 import { makeLeaf } from '../schemas/filterTree';
 import type { FilterNode } from '../schemas/filterTree';
-import { inWindow, resolveNamedWindow } from './dateRange';
+import { inWindow, resolveNamedWindow, WEEKDAY_WINDOWS } from './dateRange';
+import type { ResolvedWindow } from './dateRange';
 import type {
   VisualizationConfig,
   AggregationFunction,
@@ -10,6 +11,7 @@ import type {
   DerivedMetricConfig,
   TargetConfig,
   ChartType,
+  NamedWindow,
 } from '../schemas/visualization';
 
 // ── Output types ──────────────────────────────────────────────────────────────
@@ -768,6 +770,30 @@ function entitiesInWindow(
   });
 }
 
+// Resolve each window and bucket its entities. If every weekday window (Mon–Fri)
+// is empty this week, step the whole weekday group back one week so the daily
+// bars show the most recent week that has data.
+function resolveWindowsWithEntities(
+  windows: NamedWindow[],
+  entities: EntityWithMetadata[],
+  dateField: string,
+  now: Date
+): { resolved: ResolvedWindow[]; perWindow: EntityWithMetadata[][] } {
+  const resolved = windows.map(w => resolveNamedWindow(w, now));
+  const perWindow = resolved.map(r => entitiesInWindow(entities, dateField, r));
+  const weekdayIdx = windows.map((w, i) => (WEEKDAY_WINDOWS.has(w) ? i : -1)).filter(i => i >= 0);
+  const allWeekdaysEmpty =
+    weekdayIdx.length > 0 && weekdayIdx.every(i => perWindow[i].length === 0);
+  if (allWeekdaysEmpty) {
+    const priorWeek = new Date(now.getTime() - 7 * 86_400_000);
+    for (const i of weekdayIdx) {
+      resolved[i] = resolveNamedWindow(windows[i], priorWeek);
+      perWindow[i] = entitiesInWindow(entities, dateField, resolved[i]);
+    }
+  }
+  return { resolved, perWindow };
+}
+
 function buildPeriodComparisonData(
   entities: EntityWithMetadata[],
   config: VisualizationConfig,
@@ -775,9 +801,13 @@ function buildPeriodComparisonData(
 ): ChartDataResult {
   const periods = config.periods!;
   const fn = config.aggregation.function;
-  const resolved = periods.windows.map(w => resolveNamedWindow(w, now));
+  const { resolved, perWindow } = resolveWindowsWithEntities(
+    periods.windows,
+    entities,
+    periods.dateField,
+    now
+  );
   const labels = resolved.map(r => r.label);
-  const perWindow = resolved.map(r => entitiesInWindow(entities, periods.dateField, r));
 
   let datasets: ChartJsDataset[];
   if (periods.combine) {

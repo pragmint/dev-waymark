@@ -54,6 +54,13 @@ export const NamedWindowSchema = z.enum([
   'this_month',
   'last_month',
   'month_minus_2',
+  // Individual weekdays of the current week (Mon–Fri). If every weekday window
+  // in a chart is empty, the builder steps back one week (see buildChartData).
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
 ]);
 export type NamedWindow = z.infer<typeof NamedWindowSchema>;
 
