@@ -356,8 +356,8 @@ function validatePeriods(config: VisualizationConfig): string[] {
   if (!periods) return [];
   const errors: string[] = [];
   if (periods.windows.length === 0) errors.push('Compare periods requires at least one window.');
-  if (periods.metadataKeys.length === 0) {
-    errors.push('Compare periods requires at least one numeric field.');
+  if (periods.metadataKeys.length === 0 && !periods.duration) {
+    errors.push('Compare periods requires numeric fields or a duration measure.');
   }
   if (!periods.dateField)
     errors.push('Compare periods requires a date field for window membership.');
@@ -794,6 +794,21 @@ function resolveWindowsWithEntities(
   return { resolved, perWindow };
 }
 
+function periodMeasureConfig(
+  periods: NonNullable<VisualizationConfig['periods']>
+): DerivedMetricConfig {
+  if (periods.duration) {
+    return {
+      name: 'Duration',
+      type: 'duration',
+      startMetadataKey: periods.duration.startMetadataKey,
+      endMetadataKey: periods.duration.endMetadataKey,
+      unit: 'seconds',
+    };
+  }
+  return { name: 'Combined metric', type: 'sum', metadataKeys: periods.metadataKeys };
+}
+
 function buildPeriodComparisonData(
   entities: EntityWithMetadata[],
   config: VisualizationConfig,
@@ -809,20 +824,19 @@ function buildPeriodComparisonData(
   );
   const labels = resolved.map(r => r.label);
 
+  // Single-series when combining fields into one measure or measuring a duration;
+  // multi-series (grouped bars) when comparing several fields window-by-window.
+  const singleSeries = periods.combine || !!periods.duration;
   let datasets: ChartJsDataset[];
-  if (periods.combine) {
-    const sumConfig: DerivedMetricConfig = {
-      name: 'Combined metric',
-      type: 'sum',
-      metadataKeys: periods.metadataKeys,
-    };
+  if (singleSeries) {
+    const measure = periodMeasureConfig(periods);
     const data = perWindow.map(list => {
       const vals = list
-        .map(e => computeDerivedMetric(e, sumConfig))
+        .map(e => computeDerivedMetric(e, measure))
         .filter((v): v is number => v != null);
       return toDisplay(aggregate(vals, fn), config);
     });
-    datasets = [{ label: 'Combined metric', data }];
+    datasets = [{ label: periods.duration ? 'Duration' : 'Combined metric', data }];
   } else {
     datasets = periods.metadataKeys.map(key => ({
       label: key,

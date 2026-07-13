@@ -93,7 +93,9 @@ export type RollingConfig = z.infer<typeof RollingConfigSchema>;
 // (e.g. phase-by-phase comparison across windows). Membership uses `dateField`.
 export const PeriodsConfigSchema = z.object({
   dateField: z.string(),
-  metadataKeys: z.array(z.string()).min(1),
+  // Measure is EITHER a sum of these fields, OR a duration between two dates.
+  metadataKeys: z.array(z.string()),
+  duration: z.object({ startMetadataKey: z.string(), endMetadataKey: z.string() }).optional(),
   windows: z.array(NamedWindowSchema).min(1),
   combine: z.boolean(),
 });

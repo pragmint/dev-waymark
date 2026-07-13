@@ -194,6 +194,10 @@ function resolveRollingTrend(slots: RollingTrendSlots): VisualizationConfig {
 }
 
 function resolveComparePeriods(slots: ComparePeriodsSlots): VisualizationConfig {
+  const duration =
+    slots.durationStart && slots.durationEnd
+      ? { startMetadataKey: slots.durationStart, endMetadataKey: slots.durationEnd }
+      : undefined;
   return {
     chartType: 'bar',
     // x-axis is the named windows (categorical), not a metadata field.
@@ -202,6 +206,7 @@ function resolveComparePeriods(slots: ComparePeriodsSlots): VisualizationConfig 
     periods: {
       dateField: slots.dateField,
       metadataKeys: slots.numericFields,
+      duration,
       windows: slots.windows,
       combine: slots.combine,
     },

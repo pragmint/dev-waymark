@@ -156,7 +156,10 @@ export type RollingTrendSlots = z.infer<typeof RollingTrendSlotsSchema>;
 // field as its own grouped bar series (phase-by-phase comparison across windows).
 export const ComparePeriodsSlotsSchema = z.object({
   dateField: z.string().min(1),
-  numericFields: z.array(z.string().min(1)).min(1),
+  // Provide numericFields (summed) OR a duration date-pair as the measure.
+  numericFields: z.array(z.string().min(1)).default([]),
+  durationStart: z.string().optional(),
+  durationEnd: z.string().optional(),
   windows: z.array(NamedWindowSchema).min(1),
   aggregation: AggregationEnum.default('median'),
   unit: DurationUnitEnum.default('days'),

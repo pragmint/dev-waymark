@@ -1171,3 +1171,54 @@ describe('buildChartData weekday fallback', () => {
     expect(result.datasets[0].data).toEqual([99, 0]);
   });
 });
+
+// ── Compare periods with a duration measure ──────────────────────────────────────
+
+describe('buildChartData compare periods (duration measure)', () => {
+  const now = new Date('2026-06-20T12:00:00Z');
+  const ents: EntityWithMetadata[] = [
+    makeEntity(1, {
+      created_at: { value: '2026-06-10T00:00:00Z', value_type: 'date' },
+      reviewed_at: { value: '2026-06-10T02:00:00Z', value_type: 'date' }, // 2h
+    }),
+    makeEntity(2, {
+      created_at: { value: '2026-06-11T00:00:00Z', value_type: 'date' },
+      reviewed_at: { value: '2026-06-11T05:00:00Z', value_type: 'date' }, // 5h
+    }),
+  ];
+
+  test('aggregates a start→end duration per window, in the display unit', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'median' },
+      displayUnit: 'hours',
+      periods: {
+        dateField: 'created_at',
+        metadataKeys: [],
+        duration: { startMetadataKey: 'created_at', endMetadataKey: 'reviewed_at' },
+        windows: ['all_time'],
+        combine: false,
+      },
+    };
+    const result = buildChartData(ents, cfg, now);
+    expect(result.labels).toEqual(['All time']);
+    expect(result.datasets.length).toBe(1);
+    expect(result.datasets[0].label).toBe('Duration');
+    expect(result.datasets[0].data).toEqual([3.5]); // median(2h, 5h)
+  });
+
+  test('validates clean with a duration and no numeric fields', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'bar',
+      aggregation: { function: 'median' },
+      periods: {
+        dateField: 'created_at',
+        metadataKeys: [],
+        duration: { startMetadataKey: 'created_at', endMetadataKey: 'reviewed_at' },
+        windows: ['this_week'],
+        combine: false,
+      },
+    };
+    expect(validateVisualizationConfig(cfg)).toEqual([]);
+  });
+});
