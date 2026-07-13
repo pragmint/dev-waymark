@@ -401,7 +401,13 @@ function extractMetricValue(
   return null;
 }
 
+// Second-valued measures are stored raw but rendered in config.displayUnit.
+function toDisplay(value: number, config: VisualizationConfig): number {
+  return config.displayUnit ? convertUnit(value, 'seconds', config.displayUnit) : value;
+}
+
 function applyDisplayConversion(value: number, config: VisualizationConfig): number {
+  if (config.displayUnit) return convertUnit(value, 'seconds', config.displayUnit);
   if (config.derivedMetric?.type === 'duration' && config.yAxis?.displayUnit) {
     return convertUnit(value, config.derivedMetric.unit, config.yAxis.displayUnit);
   }
@@ -662,7 +668,10 @@ function buildRollingTrendData(
 ): ChartDataResult {
   const rolling = config.rolling!;
   const dateKey = config.xAxis!.metadataKey;
-  const { points, excludedCount } = collectRollingPoints(entities, dateKey, rolling.metadataKeys);
+  const raw = collectRollingPoints(entities, dateKey, rolling.metadataKeys);
+  const excludedCount = raw.excludedCount;
+  // Convert seconds → display unit once; median/etc. are linear so order is moot.
+  const points = raw.points.map(p => ({ t: p.t, y: toDisplay(p.y, config) }));
   const pointData: XYPoint[] = points.map(p => ({ x: new Date(p.t).toISOString(), y: p.y }));
   const lineData = rollingAggregateLine(
     points,
@@ -737,16 +746,19 @@ function buildPeriodComparisonData(
       const vals = list
         .map(e => computeDerivedMetric(e, sumConfig))
         .filter((v): v is number => v != null);
-      return aggregate(vals, fn);
+      return toDisplay(aggregate(vals, fn), config);
     });
     datasets = [{ label: 'Combined metric', data }];
   } else {
     datasets = periods.metadataKeys.map(key => ({
       label: key,
       data: perWindow.map(list =>
-        aggregate(
-          list.map(e => numOrZero(e, key)),
-          fn
+        toDisplay(
+          aggregate(
+            list.map(e => numOrZero(e, key)),
+            fn
+          ),
+          config
         )
       ),
     }));
@@ -867,14 +879,15 @@ function buildChartPlugins(
 function resolveDisplayUnit(config: VisualizationConfig): DurationUnit | undefined {
   const derivedUnit =
     config.derivedMetric?.type === 'duration' ? config.derivedMetric.unit : undefined;
-  return config.yAxis?.displayUnit ?? derivedUnit;
+  return config.displayUnit ?? config.yAxis?.displayUnit ?? derivedUnit;
 }
 
 function resolveYAxisLabel(config: VisualizationConfig, mainLabel: string): string {
   if (config.series?.mode === 'percent') return 'Share (%)';
   if (config.series) return '';
-  const displayUnit = resolveDisplayUnit(config);
-  return displayUnit ? `${mainLabel} (${displayUnit})` : mainLabel;
+  const unit = resolveDisplayUnit(config);
+  if (config.rolling) return unit ?? mainLabel; // point cloud: unit alone reads cleaner
+  return unit ? `${mainLabel} (${unit})` : mainLabel;
 }
 
 function buildScales(

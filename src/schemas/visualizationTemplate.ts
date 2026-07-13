@@ -28,6 +28,9 @@ const AggregationEnum = z.enum([
   'p95',
   'p99',
 ]);
+// Display unit for second-valued measures (durations). Charts store raw seconds
+// but render in this unit (default days for lead-time work).
+const DurationUnitEnum = z.enum(['seconds', 'minutes', 'hours', 'days', 'weeks']);
 
 // An optional constant line (goal, baseline, …) drawn across a time-trend chart.
 // Exposed as a repeatable slot on the numeric over-time templates.
@@ -104,6 +107,7 @@ export const CombinedMetricTrendSlotsSchema = z.object({
   numericFields: z.array(z.string().min(1)).min(1),
   timeBucket: TimeBucketEnum,
   aggregation: AggregationEnum,
+  unit: DurationUnitEnum.default('days'),
   referenceLines: z.array(ReferenceLineSchema).optional(),
 });
 export type CombinedMetricTrendSlots = z.infer<typeof CombinedMetricTrendSlotsSchema>;
@@ -130,6 +134,7 @@ export const RollingTrendSlotsSchema = z.object({
   numericFields: z.array(z.string().min(1)).min(1),
   windowDays: z.number().int().positive().default(28),
   aggregation: AggregationEnum.default('median'),
+  unit: DurationUnitEnum.default('days'),
 });
 export type RollingTrendSlots = z.infer<typeof RollingTrendSlotsSchema>;
 
@@ -141,6 +146,7 @@ export const ComparePeriodsSlotsSchema = z.object({
   numericFields: z.array(z.string().min(1)).min(1),
   windows: z.array(NamedWindowSchema).min(1),
   aggregation: AggregationEnum.default('median'),
+  unit: DurationUnitEnum.default('days'),
   combine: z.boolean().default(true),
 });
 export type ComparePeriodsSlots = z.infer<typeof ComparePeriodsSlotsSchema>;

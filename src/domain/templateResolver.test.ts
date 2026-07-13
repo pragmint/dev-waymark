@@ -104,6 +104,7 @@ describe('resolveTemplate new templates', () => {
         numericFields: ['full_development_seconds', 'full_review_seconds'],
         timeBucket: 'week',
         aggregation: 'median',
+        unit: 'days',
         referenceLines: [{ value: 30, label: 'Goal' }],
       },
     });
@@ -154,6 +155,7 @@ describe('resolveTemplate rolling_trend', () => {
         numericFields: ['full_development_seconds', 'full_review_seconds'],
         windowDays: 28,
         aggregation: 'median',
+        unit: 'days',
       },
     });
     expect(config.chartType).toBe('scatter');
@@ -174,6 +176,7 @@ describe('resolveTemplate compare_periods', () => {
         numericFields: ['full_total_seconds'],
         windows: ['all_time', 'last_3_months', 'this_week'],
         aggregation: 'median',
+        unit: 'days',
         combine: true,
       },
     });
@@ -191,6 +194,7 @@ describe('resolveTemplate compare_periods', () => {
         numericFields: ['full_grooming_seconds', 'full_development_seconds'],
         windows: ['all_time', 'last_3_weeks'],
         aggregation: 'avg',
+        unit: 'days',
         combine: false,
       },
     });

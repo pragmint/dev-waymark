@@ -1027,3 +1027,43 @@ describe('buildChartData compare periods', () => {
     expect(result.datasets[0].data).toEqual([20]); // avg(10,20,30)
   });
 });
+
+// ── Display-unit conversion (seconds → days) ─────────────────────────────────────
+
+describe('displayUnit conversion', () => {
+  test('combined metric converts summed seconds to days', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'median' },
+      displayUnit: 'days',
+      derivedMetric: { name: 'Cycle', type: 'sum', metadataKeys: ['a', 'b'] },
+    };
+    const e = makeEntity(1, {
+      done_at: { value: '2026-04-27T00:00:00Z', value_type: 'date' },
+      a: { value: '86400', value_type: 'number' }, // 1 day
+      b: { value: '86400', value_type: 'number' }, // 1 day
+    });
+    const result = buildChartData([e], cfg);
+    expect(result.datasets[0].data[0]).toBe(2); // 172800s → 2 days
+  });
+
+  test('rolling trend converts to days and labels the axis by unit', () => {
+    const cfg: VisualizationConfig = {
+      chartType: 'scatter',
+      xAxis: { metadataKey: 'done_at', type: 'date' },
+      aggregation: { function: 'median' },
+      displayUnit: 'days',
+      rolling: { metadataKeys: ['cycle'], windowDays: 28, aggregation: 'median' },
+    };
+    const e = makeEntity(1, {
+      done_at: { value: '2026-04-27T00:00:00Z', value_type: 'date' },
+      cycle: { value: '432000', value_type: 'number' }, // 5 days
+    });
+    const result = buildChartData([e], cfg);
+    expect((result.datasets[0].data[0] as { y: number }).y).toBe(5);
+    const cjs = buildChartJsConfig(result, cfg);
+    const y = (cjs.options as { scales: { y: { title: { text: string } } } }).scales.y.title.text;
+    expect(y).toBe('days');
+  });
+});

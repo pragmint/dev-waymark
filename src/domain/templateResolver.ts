@@ -149,6 +149,7 @@ function resolveCombinedMetricTrend(slots: CombinedMetricTrendSlots): Visualizat
       timeBucket: slots.timeBucket,
     },
     aggregation: { function: slots.aggregation },
+    displayUnit: slots.unit,
     derivedMetric: {
       name: 'Combined metric',
       type: 'sum',
@@ -180,6 +181,7 @@ function resolveRollingTrend(slots: RollingTrendSlots): VisualizationConfig {
     // No timeBucket: points are plotted individually on a time axis.
     xAxis: { metadataKey: slots.dateField, type: 'date' },
     aggregation: { function: slots.aggregation },
+    displayUnit: slots.unit,
     rolling: {
       metadataKeys: slots.numericFields,
       windowDays: slots.windowDays,
@@ -193,6 +195,7 @@ function resolveComparePeriods(slots: ComparePeriodsSlots): VisualizationConfig 
     chartType: 'bar',
     // x-axis is the named windows (categorical), not a metadata field.
     aggregation: { function: slots.aggregation },
+    displayUnit: slots.unit,
     periods: {
       dateField: slots.dateField,
       metadataKeys: slots.numericFields,

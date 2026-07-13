@@ -120,6 +120,8 @@ export const VisualizationConfigSchema = z.object({
   yAxis: AxisConfigSchema.optional(),
   category: CategoryConfigSchema.optional(),
   aggregation: AggregationConfigSchema,
+  // Render second-valued measures in this unit (raw data stays seconds).
+  displayUnit: DurationUnitSchema.optional(),
   derivedMetric: DerivedMetricConfigSchema.optional(),
   series: SeriesConfigSchema.optional(),
   rolling: RollingConfigSchema.optional(),
