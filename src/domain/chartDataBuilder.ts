@@ -210,6 +210,19 @@ export function computeDerivedMetric(
   entity: EntityWithMetadata,
   config: DerivedMetricConfig
 ): number | null {
+  if (config.type === 'sum') {
+    let sum = 0;
+    let sawValue = false;
+    for (const key of config.metadataKeys) {
+      const raw = entity.metadata.find(m => m.key === key)?.value;
+      if (raw == null) continue; // missing field contributes 0
+      const n = Number(raw);
+      if (isNaN(n)) continue;
+      sum += n;
+      sawValue = true;
+    }
+    return sawValue ? sum : null; // all fields missing → exclude the entity
+  }
   const startVal = entity.metadata.find(m => m.key === config.startMetadataKey)?.value;
   const endVal = entity.metadata.find(m => m.key === config.endMetadataKey)?.value;
   if (!startVal || !endVal) return null;
@@ -234,42 +247,91 @@ const NUMERIC_AGGS: AggregationFunction[] = [
   'p99',
 ];
 
-export function validateVisualizationConfig(config: VisualizationConfig): string[] {
+function validateDimensions(config: VisualizationConfig): string[] {
+  const { chartType, xAxis, category } = config;
   const errors: string[] = [];
-  const { chartType, xAxis, yAxis, category, aggregation, derivedMetric, target } = config;
-
   if (!xAxis && !category) {
     errors.push('Visualization requires either an x-axis (with time bucket) or a category field.');
-  }
-  if (xAxis?.timeBucket && xAxis.type !== 'date') {
-    errors.push('Time bucket requires a date x-axis field.');
-  }
-  if (NUMERIC_AGGS.includes(aggregation.function) && !yAxis && !derivedMetric) {
-    errors.push(
-      `Aggregation "${aggregation.function}" requires a numeric y-axis field or derived metric.`
-    );
-  }
-  if (xAxis?.timeBucket && aggregation.function !== 'count' && !yAxis && !derivedMetric) {
-    errors.push(
-      'Time-series chart with non-count aggregation requires a y-axis field or derived metric.'
-    );
   }
   if ((chartType === 'pie' || chartType === 'doughnut') && !category) {
     errors.push('Pie and doughnut charts require a category field.');
   }
-  if (
-    derivedMetric?.type === 'duration' &&
-    (!derivedMetric.startMetadataKey || !derivedMetric.endMetadataKey)
-  ) {
-    errors.push('Derived duration metric requires start and end metadata keys.');
+  return errors;
+}
+
+function validateMeasure(config: VisualizationConfig): string[] {
+  const { xAxis, aggregation } = config;
+  const hasMeasure = !!config.yAxis || !!config.derivedMetric || !!config.series;
+  const timeBucket = !!xAxis && !!xAxis.timeBucket;
+  const errors: string[] = [];
+  if (timeBucket && xAxis!.type !== 'date') {
+    errors.push('Time bucket requires a date x-axis field.');
   }
-  if (target?.type === 'horizontal_line' && !yAxis && !derivedMetric) {
-    errors.push('Horizontal target line requires a numeric y-axis or derived metric.');
+  if (NUMERIC_AGGS.includes(aggregation.function) && !hasMeasure) {
+    errors.push(
+      `Aggregation "${aggregation.function}" requires a numeric y-axis field, derived metric, or series.`
+    );
   }
-  if (target?.type === 'vertical_line' && !xAxis) {
-    errors.push('Vertical target line requires an x-axis.');
+  if (timeBucket && aggregation.function !== 'count' && !hasMeasure) {
+    errors.push(
+      'Time-series chart with non-count aggregation requires a y-axis field, derived metric, or series.'
+    );
   }
   return errors;
+}
+
+function validateDerivedMetric(dm: DerivedMetricConfig | undefined): string[] {
+  if (!dm) return [];
+  if (dm.type === 'duration' && (!dm.startMetadataKey || !dm.endMetadataKey)) {
+    return ['Derived duration metric requires start and end metadata keys.'];
+  }
+  if (dm.type === 'sum' && dm.metadataKeys.length === 0) {
+    return ['Combined (sum) metric requires at least one numeric field.'];
+  }
+  return [];
+}
+
+function validateSeries(config: VisualizationConfig): string[] {
+  const { series, xAxis, aggregation } = config;
+  if (!series) return [];
+  const errors: string[] = [];
+  if (!xAxis || !xAxis.timeBucket) {
+    errors.push('Composition (series) requires a date x-axis with a time bucket.');
+  }
+  if (series.metadataKeys.length < 2) {
+    errors.push('Composition (series) requires at least two numeric fields to stack.');
+  }
+  if (aggregation.function !== 'avg' && aggregation.function !== 'sum') {
+    errors.push(
+      'Composition (series) supports only avg or sum aggregation (medians do not stack).'
+    );
+  }
+  return errors;
+}
+
+function validateTargets(config: VisualizationConfig): string[] {
+  const { target, targets, yAxis, derivedMetric, series, xAxis } = config;
+  const all: TargetConfig[] = [...(target ? [target] : []), ...(targets ?? [])];
+  const errors: string[] = [];
+  for (const t of all) {
+    if (t.type === 'horizontal_line' && !yAxis && !derivedMetric && !series) {
+      errors.push('Horizontal target line requires a numeric y-axis, derived metric, or series.');
+    }
+    if (t.type === 'vertical_line' && !xAxis) {
+      errors.push('Vertical target line requires an x-axis.');
+    }
+  }
+  return errors;
+}
+
+export function validateVisualizationConfig(config: VisualizationConfig): string[] {
+  return [
+    ...validateDimensions(config),
+    ...validateMeasure(config),
+    ...validateDerivedMetric(config.derivedMetric),
+    ...validateSeries(config),
+    ...validateTargets(config),
+  ];
 }
 
 // ── Chart data builder helpers ────────────────────────────────────────────────
@@ -301,7 +363,7 @@ function extractMetricValue(
 }
 
 function applyDisplayConversion(value: number, config: VisualizationConfig): number {
-  if (config.derivedMetric && config.yAxis?.displayUnit) {
+  if (config.derivedMetric?.type === 'duration' && config.yAxis?.displayUnit) {
     return convertUnit(value, config.derivedMetric.unit, config.yAxis.displayUnit);
   }
   if (config.yAxis?.unit && config.yAxis.displayUnit) {
@@ -344,8 +406,15 @@ function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);
-  if (config.derivedMetric) {
-    keys.push(config.derivedMetric.startMetadataKey, config.derivedMetric.endMetadataKey);
+  if (config.series) {
+    // Series (composition) fields are 0-filled when missing, so only the
+    // date-bucket field is genuinely required.
+  } else if (config.derivedMetric) {
+    if (config.derivedMetric.type === 'duration') {
+      keys.push(config.derivedMetric.startMetadataKey, config.derivedMetric.endMetadataKey);
+    } else {
+      keys.push(...config.derivedMetric.metadataKeys);
+    }
   } else if (config.yAxis && config.aggregation.function !== 'count') {
     keys.push(config.yAxis.metadataKey);
   }
@@ -360,27 +429,46 @@ function buildExclusionWarning(count: number, config: VisualizationConfig): stri
 
 // ── Chart data builder ────────────────────────────────────────────────────────
 
-export function buildChartData(
+function collectMetricRows(
   entities: EntityWithMetadata[],
   config: VisualizationConfig
-): ChartDataResult {
-  const warnings: string[] = [];
-  let excludedCount = 0;
+): { rows: Array<{ label: string; value: number }>; excludedCount: number } {
   const rows: Array<{ label: string; value: number }> = [];
-
+  let excludedCount = 0;
   for (const entity of entities) {
     const label = extractGroupLabel(entity, config);
     const metricValue = extractMetricValue(entity, config);
-
     const missingMetric = config.aggregation.function !== 'count' && metricValue == null;
     if (label == null || missingMetric) {
       excludedCount++;
       continue;
     }
-
     rows.push({ label, value: applyDisplayConversion(metricValue!, config) });
   }
+  return { rows, excludedCount };
+}
 
+function resolveMainLabel(config: VisualizationConfig): string {
+  if (config.derivedMetric) return config.derivedMetric.name;
+  if (config.yAxis) return config.yAxis.metadataKey;
+  return config.aggregation.function === 'count' ? 'Count' : 'Value';
+}
+
+function collectTargetDatasets(config: VisualizationConfig, labels: string[]): ChartJsDataset[] {
+  const all: TargetConfig[] = [
+    ...(config.target ? [config.target] : []),
+    ...(config.targets ?? []),
+  ];
+  return all.flatMap(t => buildTargetDatasets(t, labels));
+}
+
+export function buildChartData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig
+): ChartDataResult {
+  if (config.series) return buildCompositionData(entities, config);
+
+  const { rows, excludedCount } = collectMetricRows(entities, config);
   const groups = new Map<string, number[]>();
   for (const { label, value } of rows) {
     if (!groups.has(label)) groups.set(label, []);
@@ -390,14 +478,93 @@ export function buildChartData(
   const labels = sortGroupLabels(groups, config);
   const data = labels.map(l => aggregate(groups.get(l)!, config.aggregation.function));
 
-  const mainLabel =
-    config.derivedMetric?.name ??
-    config.yAxis?.metadataKey ??
-    (config.aggregation.function === 'count' ? 'Count' : 'Value');
+  const datasets: ChartJsDataset[] = [{ label: resolveMainLabel(config), data }];
+  datasets.push(...collectTargetDatasets(config, labels));
 
-  const datasets: ChartJsDataset[] = [{ label: mainLabel, data }];
-  if (config.target) datasets.push(...buildTargetDatasets(config.target, labels));
+  const warnings: string[] = [];
   if (excludedCount > 0) warnings.push(buildExclusionWarning(excludedCount, config));
+
+  return { labels, datasets, warnings, excludedEntityCount: excludedCount };
+}
+
+// Composition: one dataset per series field, each aggregated per time bucket, so
+// the datasets stack. Missing field values are treated as 0 (a phase the item
+// never entered contributes nothing). `percent` mode normalizes each bucket to
+// 100% so the chart shows share-of-total rather than absolute magnitude.
+function numOrZero(entity: EntityWithMetadata, key: string): number {
+  const raw = entity.metadata.find(m => m.key === key)?.value;
+  if (raw == null) return 0; // missing field contributes nothing to the stack
+  const n = Number(raw);
+  return isNaN(n) ? 0 : n;
+}
+
+function groupSeriesValues(
+  entities: EntityWithMetadata[],
+  keys: string[],
+  dateKey: string,
+  bucket: TimeBucket
+): { groups: Map<string, Map<string, number[]>>; excludedCount: number } {
+  const groups = new Map<string, Map<string, number[]>>();
+  let excludedCount = 0;
+  for (const entity of entities) {
+    const dateVal = entity.metadata.find(m => m.key === dateKey)?.value;
+    const label = dateVal ? bucketDate(dateVal, bucket) : null;
+    if (label == null) {
+      excludedCount++;
+      continue;
+    }
+    if (!groups.has(label)) groups.set(label, new Map());
+    const byKey = groups.get(label)!;
+    for (const key of keys) {
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push(numOrZero(entity, key));
+    }
+  }
+  return { groups, excludedCount };
+}
+
+function normalizePercent(perKeyData: number[][], labelCount: number): void {
+  for (let li = 0; li < labelCount; li++) {
+    let total = 0;
+    for (let s = 0; s < perKeyData.length; s++) total += perKeyData[s][li];
+    if (total <= 0) continue;
+    for (let s = 0; s < perKeyData.length; s++)
+      perKeyData[s][li] = (perKeyData[s][li] / total) * 100;
+  }
+}
+
+function buildCompositionData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig
+): ChartDataResult {
+  const series = config.series!;
+  const xAxis = config.xAxis!;
+  const fn = config.aggregation.function;
+  const { groups, excludedCount } = groupSeriesValues(
+    entities,
+    series.metadataKeys,
+    xAxis.metadataKey,
+    xAxis.timeBucket!
+  );
+
+  const labels = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+  const perKeyData = series.metadataKeys.map(key =>
+    labels.map(l => aggregate(groups.get(l)!.get(key) ?? [], fn))
+  );
+  if (series.mode === 'percent') normalizePercent(perKeyData, labels.length);
+
+  const datasets: ChartJsDataset[] = series.metadataKeys.map((key, i) => ({
+    label: key,
+    data: perKeyData[i],
+  }));
+
+  const warnings: string[] = [];
+  if (excludedCount > 0) {
+    const noun = excludedCount === 1 ? 'entity was' : 'entities were';
+    warnings.push(
+      `${excludedCount} ${noun} excluded because they were missing ${xAxis.metadataKey}.`
+    );
+  }
 
   return { labels, datasets, warnings, excludedEntityCount: excludedCount };
 }
@@ -511,22 +678,47 @@ function buildChartPlugins(
   return plugins;
 }
 
+function resolveDisplayUnit(config: VisualizationConfig): DurationUnit | undefined {
+  const derivedUnit =
+    config.derivedMetric?.type === 'duration' ? config.derivedMetric.unit : undefined;
+  return config.yAxis?.displayUnit ?? derivedUnit;
+}
+
+function resolveYAxisLabel(config: VisualizationConfig, mainLabel: string): string {
+  if (config.series?.mode === 'percent') return 'Share (%)';
+  if (config.series) return '';
+  const displayUnit = resolveDisplayUnit(config);
+  return displayUnit ? `${mainLabel} (${displayUnit})` : mainLabel;
+}
+
+function buildScales(
+  config: VisualizationConfig,
+  xAxisLabel: string,
+  yAxisLabel: string
+): Record<string, unknown> {
+  const stacked = !!config.series;
+  const isPercent = config.series?.mode === 'percent';
+  return {
+    x: { title: { display: !!xAxisLabel, text: xAxisLabel }, stacked },
+    y: {
+      title: { display: !!yAxisLabel, text: yAxisLabel },
+      beginAtZero: stacked,
+      stacked,
+      ...(isPercent ? { max: 100 } : {}),
+    },
+  };
+}
+
 function buildChartOptions(
   result: ChartDataResult,
   config: VisualizationConfig,
   isCircular: boolean
 ): Record<string, unknown> {
-  const displayUnit = config.yAxis?.displayUnit ?? config.derivedMetric?.unit;
   const mainLabel = result.datasets[0]?.label ?? '';
-  const yAxisLabel = displayUnit ? `${mainLabel} (${displayUnit})` : mainLabel;
+  const yAxisLabel = resolveYAxisLabel(config, mainLabel);
   const xAxisLabel = config.xAxis?.metadataKey ?? config.category?.metadataKey ?? '';
   const plugins = buildChartPlugins(config, result.datasets.length, isCircular);
-  const scalesConfig = isCircular
-    ? undefined
-    : {
-        x: { title: { display: !!xAxisLabel, text: xAxisLabel } },
-        y: { title: { display: !!yAxisLabel, text: yAxisLabel }, beginAtZero: false },
-      };
+  const scalesConfig = isCircular ? undefined : buildScales(config, xAxisLabel, yAxisLabel);
   return {
     responsive: true,
     maintainAspectRatio: true,
@@ -536,15 +728,32 @@ function buildChartOptions(
   };
 }
 
+function styleSeriesDataset(ds: ChartJsDataset, chartType: ChartType, i: number): ChartJsDataset {
+  const color = CHART_COLORS[i % CHART_COLORS.length];
+  if (chartType === 'line') {
+    return {
+      ...ds,
+      borderColor: color,
+      backgroundColor: color,
+      fill: true,
+      tension: 0.2,
+      pointRadius: 2,
+    };
+  }
+  return { ...ds, backgroundColor: color, borderColor: color };
+}
+
 export function buildChartJsConfig(
   result: ChartDataResult,
   config: VisualizationConfig
 ): ChartJsConfig {
   const { chartType } = config;
   const isCircular = chartType === 'pie' || chartType === 'doughnut';
-  const styledDatasets = result.datasets.map((ds, i) =>
-    i === 0 ? styleMainDataset(ds, chartType, result.labels.length) : ds
-  );
+  const styledDatasets = config.series
+    ? result.datasets.map((ds, i) => styleSeriesDataset(ds, chartType, i))
+    : result.datasets.map((ds, i) =>
+        i === 0 ? styleMainDataset(ds, chartType, result.labels.length) : ds
+      );
   const options = buildChartOptions(result, config, isCircular);
   return { type: chartType, data: { labels: result.labels, datasets: styledDatasets }, options };
 }

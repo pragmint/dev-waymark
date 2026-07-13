@@ -17,9 +17,12 @@ describe('resolveTemplate', () => {
     expect(config.xAxis?.metadataKey).toBe('completed_at');
     expect(config.xAxis?.timeBucket).toBe('week');
     expect(config.aggregation.function).toBe('avg');
-    expect(config.derivedMetric?.startMetadataKey).toBe('started_at');
-    expect(config.derivedMetric?.endMetadataKey).toBe('completed_at');
-    expect(config.derivedMetric?.unit).toBe('days');
+    expect(config.derivedMetric?.type).toBe('duration');
+    if (config.derivedMetric?.type === 'duration') {
+      expect(config.derivedMetric.startMetadataKey).toBe('started_at');
+      expect(config.derivedMetric.endMetadataKey).toBe('completed_at');
+      expect(config.derivedMetric.unit).toBe('days');
+    }
   });
 
   test('category_breakdown produces pie chart', () => {
@@ -89,5 +92,55 @@ describe('resolveTemplate', () => {
     expect(config.category?.metadataKey).toBe('team');
     expect(config.yAxis?.metadataKey).toBe('lead_time');
     expect(config.aggregation.function).toBe('p90');
+  });
+});
+
+describe('resolveTemplate new templates', () => {
+  test('combined_metric_trend produces a line with a sum derived metric', () => {
+    const config = resolveTemplate({
+      templateId: 'combined_metric_trend',
+      slots: {
+        dateField: 'computed_completed_at',
+        numericFields: ['full_development_seconds', 'full_review_seconds'],
+        timeBucket: 'week',
+        aggregation: 'median',
+        referenceLines: [{ value: 30, label: 'Goal' }],
+      },
+    });
+
+    expect(config.chartType).toBe('line');
+    expect(config.xAxis?.metadataKey).toBe('computed_completed_at');
+    expect(config.aggregation.function).toBe('median');
+    expect(config.derivedMetric?.type).toBe('sum');
+    if (config.derivedMetric?.type === 'sum') {
+      expect(config.derivedMetric.metadataKeys).toEqual([
+        'full_development_seconds',
+        'full_review_seconds',
+      ]);
+    }
+    expect(config.targets?.[0]).toMatchObject({
+      type: 'horizontal_line',
+      value: 30,
+      label: 'Goal',
+    });
+  });
+
+  test('composition_over_time produces a stacked series config', () => {
+    const config = resolveTemplate({
+      templateId: 'composition_over_time',
+      slots: {
+        dateField: 'computed_completed_at',
+        numericFields: ['full_grooming_seconds', 'full_development_seconds', 'full_review_seconds'],
+        timeBucket: 'month',
+        aggregation: 'avg',
+        mode: 'percent',
+      },
+    });
+
+    expect(config.chartType).toBe('bar');
+    expect(config.xAxis?.timeBucket).toBe('month');
+    expect(config.aggregation.function).toBe('avg');
+    expect(config.series?.metadataKeys.length).toBe(3);
+    expect(config.series?.mode).toBe('percent');
   });
 });

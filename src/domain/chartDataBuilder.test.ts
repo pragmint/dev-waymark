@@ -763,3 +763,151 @@ describe('buildPointEntityFilters', () => {
     expect(buildPointEntityFilters('2024-13', timeConfig('quarter'))).toEqual([]);
   });
 });
+
+// ── Combined (sum) derived metric ───────────────────────────────────────────────
+
+describe('computeDerivedMetric (sum)', () => {
+  const sumConfig = {
+    name: 'Cycle',
+    type: 'sum' as const,
+    metadataKeys: ['dev_seconds', 'review_seconds', 'qi_seconds'],
+  };
+
+  test('sums the listed numeric fields', () => {
+    const e = makeEntity(1, {
+      dev_seconds: { value: '100', value_type: 'number' },
+      review_seconds: { value: '50', value_type: 'number' },
+      qi_seconds: { value: '25', value_type: 'number' },
+    });
+    expect(computeDerivedMetric(e, sumConfig)).toBe(175);
+  });
+
+  test('treats missing fields as zero when at least one is present', () => {
+    const e = makeEntity(2, { dev_seconds: { value: '100', value_type: 'number' } });
+    expect(computeDerivedMetric(e, sumConfig)).toBe(100);
+  });
+
+  test('returns null when every field is missing (entity excluded)', () => {
+    const e = makeEntity(3, { other: { value: '9', value_type: 'number' } });
+    expect(computeDerivedMetric(e, sumConfig)).toBeNull();
+  });
+});
+
+// ── Composition (stacked series) ────────────────────────────────────────────────
+
+describe('buildChartData composition', () => {
+  const phaseEntities: EntityWithMetadata[] = [
+    makeEntity(1, {
+      done_at: { value: '2026-04-27T10:00:00Z', value_type: 'date' }, // Week of 2026-04-27
+      dev: { value: '60', value_type: 'number' },
+      review: { value: '40', value_type: 'number' },
+    }),
+    makeEntity(2, {
+      done_at: { value: '2026-04-28T10:00:00Z', value_type: 'date' }, // same week
+      dev: { value: '20', value_type: 'number' },
+      review: { value: '80', value_type: 'number' },
+    }),
+  ];
+
+  const baseSeriesConfig: VisualizationConfig = {
+    chartType: 'bar',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+    aggregation: { function: 'avg' },
+    series: { metadataKeys: ['dev', 'review'], mode: 'absolute' },
+  };
+
+  test('absolute mode emits one dataset per field, aggregated per bucket', () => {
+    const result = buildChartData(phaseEntities, baseSeriesConfig);
+    expect(result.labels).toEqual(['Week of 2026-04-27']);
+    expect(result.datasets.map(d => d.label)).toEqual(['dev', 'review']);
+    expect(result.datasets[0].data).toEqual([40]); // avg(60,20)
+    expect(result.datasets[1].data).toEqual([60]); // avg(40,80)
+  });
+
+  test('percent mode normalizes each bucket to 100', () => {
+    const result = buildChartData(phaseEntities, {
+      ...baseSeriesConfig,
+      series: { metadataKeys: ['dev', 'review'], mode: 'percent' },
+    });
+    expect(result.datasets[0].data[0]).toBeCloseTo(40); // 40 / (40+60) * 100
+    expect(result.datasets[1].data[0]).toBeCloseTo(60);
+  });
+
+  test('missing series field counts as zero', () => {
+    const withGap = [
+      ...phaseEntities,
+      makeEntity(3, {
+        done_at: { value: '2026-04-29T10:00:00Z', value_type: 'date' },
+        dev: { value: '30', value_type: 'number' },
+      }),
+    ];
+    const result = buildChartData(withGap, baseSeriesConfig);
+    // review for entity 3 is absent → 0; avg(40,80,0) = 40
+    expect(result.datasets[1].data).toEqual([40]);
+  });
+
+  test('stacked scales are set on the chart config', () => {
+    const cfg = buildChartJsConfig(
+      buildChartData(phaseEntities, baseSeriesConfig),
+      baseSeriesConfig
+    );
+    const scales = (cfg.options as { scales: { x: { stacked: boolean }; y: { stacked: boolean } } })
+      .scales;
+    expect(scales.x.stacked).toBe(true);
+    expect(scales.y.stacked).toBe(true);
+  });
+});
+
+// ── Multiple reference lines ────────────────────────────────────────────────────
+
+describe('buildChartData multiple targets', () => {
+  test('renders one dashed dataset per target line', () => {
+    const config: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'median' },
+      derivedMetric: { name: 'Cycle', type: 'sum', metadataKeys: ['dev'] },
+      targets: [
+        { type: 'horizontal_line', value: 30, label: 'Goal' },
+        { type: 'horizontal_line', value: 45, label: 'Baseline' },
+      ],
+    };
+    const e = makeEntity(1, {
+      done_at: { value: '2026-04-27T10:00:00Z', value_type: 'date' },
+      dev: { value: '50', value_type: 'number' },
+    });
+    const result = buildChartData([e], config);
+    const labels = result.datasets.map(d => d.label);
+    expect(labels).toContain('Goal');
+    expect(labels).toContain('Baseline');
+    const goal = result.datasets.find(d => d.label === 'Goal')!;
+    expect(goal.data).toEqual([30]);
+    expect(goal.borderDash).toBeDefined();
+  });
+});
+
+// ── Validation for new shapes ────────────────────────────────────────────────────
+
+describe('validateVisualizationConfig new shapes', () => {
+  test('composition requires >= 2 fields and avg/sum aggregation', () => {
+    const bad: VisualizationConfig = {
+      chartType: 'bar',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'median' },
+      series: { metadataKeys: ['dev'], mode: 'absolute' },
+    };
+    const errors = validateVisualizationConfig(bad);
+    expect(errors.some(e => /at least two/.test(e))).toBe(true);
+    expect(errors.some(e => /avg or sum/.test(e))).toBe(true);
+  });
+
+  test('combined sum metric with a date bucket validates clean', () => {
+    const ok: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      aggregation: { function: 'median' },
+      derivedMetric: { name: 'Cycle', type: 'sum', metadataKeys: ['dev', 'review'] },
+    };
+    expect(validateVisualizationConfig(ok)).toEqual([]);
+  });
+});

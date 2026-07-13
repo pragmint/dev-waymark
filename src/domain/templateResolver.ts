@@ -1,4 +1,4 @@
-import type { VisualizationConfig } from '../schemas/visualization';
+import type { TargetConfig, VisualizationConfig } from '../schemas/visualization';
 import type {
   TemplateConfig,
   DurationTrendSlots,
@@ -7,7 +7,16 @@ import type {
   ThroughputOverTimeSlots,
   FieldTrendSlots,
   CategoryComparisonSlots,
+  CombinedMetricTrendSlots,
+  CompositionOverTimeSlots,
+  ReferenceLine,
 } from '../schemas/visualizationTemplate';
+
+// Reference lines become horizontal-line targets on the resolved config.
+function referenceLinesToTargets(lines: ReferenceLine[] | undefined): TargetConfig[] | undefined {
+  if (!lines || lines.length === 0) return undefined;
+  return lines.map(l => ({ type: 'horizontal_line' as const, value: l.value, label: l.label }));
+}
 
 /**
  * Converts a template selection + filled slots into a VisualizationConfig
@@ -27,6 +36,10 @@ export function resolveTemplate(template: TemplateConfig): VisualizationConfig {
       return resolveFieldTrend(template.slots);
     case 'category_comparison':
       return resolveCategoryComparison(template.slots);
+    case 'combined_metric_trend':
+      return resolveCombinedMetricTrend(template.slots);
+    case 'composition_over_time':
+      return resolveCompositionOverTime(template.slots);
   }
 }
 
@@ -46,6 +59,7 @@ function resolveDurationTrend(slots: DurationTrendSlots): VisualizationConfig {
       endMetadataKey: slots.endDateField,
       unit: slots.unit,
     },
+    targets: referenceLinesToTargets(slots.referenceLines),
   };
 }
 
@@ -100,6 +114,7 @@ function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
       type: 'number',
     },
     aggregation: { function: slots.aggregation },
+    targets: referenceLinesToTargets(slots.referenceLines),
   };
 }
 
@@ -115,5 +130,40 @@ function resolveCategoryComparison(slots: CategoryComparisonSlots): Visualizatio
       type: 'number',
     },
     aggregation: { function: slots.aggregation },
+    targets: referenceLinesToTargets(slots.referenceLines),
+  };
+}
+
+function resolveCombinedMetricTrend(slots: CombinedMetricTrendSlots): VisualizationConfig {
+  return {
+    chartType: 'line',
+    xAxis: {
+      metadataKey: slots.dateField,
+      type: 'date',
+      timeBucket: slots.timeBucket,
+    },
+    aggregation: { function: slots.aggregation },
+    derivedMetric: {
+      name: 'Combined metric',
+      type: 'sum',
+      metadataKeys: slots.numericFields,
+    },
+    targets: referenceLinesToTargets(slots.referenceLines),
+  };
+}
+
+function resolveCompositionOverTime(slots: CompositionOverTimeSlots): VisualizationConfig {
+  return {
+    chartType: 'bar',
+    xAxis: {
+      metadataKey: slots.dateField,
+      type: 'date',
+      timeBucket: slots.timeBucket,
+    },
+    aggregation: { function: slots.aggregation },
+    series: {
+      metadataKeys: slots.numericFields,
+      mode: slots.mode,
+    },
   };
 }

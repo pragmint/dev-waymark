@@ -45,14 +45,32 @@ export const AggregationConfigSchema = z.object({
 });
 export type AggregationConfig = z.infer<typeof AggregationConfigSchema>;
 
-export const DerivedMetricConfigSchema = z.object({
-  name: z.string(),
-  type: z.literal('duration'),
-  startMetadataKey: z.string(),
-  endMetadataKey: z.string(),
-  unit: DurationUnitSchema,
-});
+// A metric computed per entity before aggregation. `duration` = end − start
+// between two date fields; `sum` = the sum of several numeric fields (used to
+// build composite measures like Cycle Time without a precomputed column).
+export const DerivedMetricConfigSchema = z.discriminatedUnion('type', [
+  z.object({
+    name: z.string(),
+    type: z.literal('duration'),
+    startMetadataKey: z.string(),
+    endMetadataKey: z.string(),
+    unit: DurationUnitSchema,
+  }),
+  z.object({
+    name: z.string(),
+    type: z.literal('sum'),
+    metadataKeys: z.array(z.string()).min(1),
+  }),
+]);
 export type DerivedMetricConfig = z.infer<typeof DerivedMetricConfigSchema>;
+
+// Several numeric fields plotted as separate stacked series over the x-axis.
+// `percent` normalizes each bucket to 100% (share-of-total).
+export const SeriesConfigSchema = z.object({
+  metadataKeys: z.array(z.string()).min(1),
+  mode: z.enum(['absolute', 'percent']).default('absolute'),
+});
+export type SeriesConfig = z.infer<typeof SeriesConfigSchema>;
 
 export const TargetConfigSchema = z.discriminatedUnion('type', [
   z.object({
@@ -81,7 +99,9 @@ export const VisualizationConfigSchema = z.object({
   category: CategoryConfigSchema.optional(),
   aggregation: AggregationConfigSchema,
   derivedMetric: DerivedMetricConfigSchema.optional(),
+  series: SeriesConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
+  targets: z.array(TargetConfigSchema).optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),
   _templateConfig: TemplateConfigSchema.optional(),
 });
