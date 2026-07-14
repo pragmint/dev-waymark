@@ -273,6 +273,23 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
       return rows.map(r => r.type);
     },
 
+    // Every metadata key that exists for an entity type, regardless of whether
+    // the current filter population happens to have non-null values for it.
+    // This drives the entity-list columns: a key present on the type stays a
+    // column even when every row in view is null (e.g. filtering to `key: null`).
+    // Scoped to the type only — unaffected by the rest of the filter tree.
+    async listMetadataKeys(entityType: string): Promise<string[]> {
+      const rows = await adapter.query<{ key: string }>(
+        `SELECT DISTINCT em.key AS key
+         FROM entity_metadata em
+         JOIN entities e ON e.id = em.entity_id
+         WHERE e.type = ?
+         ORDER BY em.key`,
+        [entityType]
+      );
+      return rows.map(r => r.key);
+    },
+
     // Paginated variant: returns one page of entities (with metadata) plus a
     // total count. Pagination and count happen in SQL — no id list crosses the
     // wire.

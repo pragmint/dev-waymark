@@ -31,6 +31,30 @@ test('unknown entity id returns 404', async ({ page }) => {
   expect(response?.status()).toBe(404);
 });
 
+test('metadata column stays visible when every result on the page is null for it', async ({
+  page,
+}) => {
+  // last_ready_at is populated only on even github_pr rows in the seed. An
+  // empty-bound gte filter carries IS NULL semantics, so this narrows the page
+  // to the odd rows — every one of which is null for last_ready_at. The column
+  // must still render (a column of em-dashes) because it's a valid key for the
+  // github_pr type; it should not vanish just because no row in view has a value.
+  await page.goto(entitiesUrl('github_pr', [leaf('last_ready_at', 'gte', '')]));
+
+  const rows = page.locator('table.entity-table tbody tr');
+  await expect(rows.first()).toBeVisible();
+
+  const headers = page.locator('table.entity-table thead th');
+  await expect(headers.filter({ hasText: 'last_ready_at' })).toHaveCount(1);
+
+  // Sanity: the column exists but is entirely null in this view.
+  const colIndex = (await headers.allTextContents()).indexOf('last_ready_at');
+  const cells = rows.locator(`td:nth-child(${colIndex + 1})`);
+  const values = await cells.allTextContents();
+  expect(values.length).toBeGreaterThan(0);
+  expect(values.every(v => v.trim() === '—')).toBe(true);
+});
+
 test('filter chip: click opens popover editor, × auto-applies the removal', async ({ page }) => {
   await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'eq', 'Story')]));
 

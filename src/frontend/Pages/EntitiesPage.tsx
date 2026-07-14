@@ -14,6 +14,7 @@ type EntitiesPageProps = {
   perPage: number;
   activeTree: FilterTree;
   availableFilters: AvailableFilter[];
+  metadataKeys: string[];
   entityTypes: string[];
   presets: PresetWithUrl[];
   selectedPresetId: number | null;
@@ -44,6 +45,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   perPage,
   activeTree,
   availableFilters,
+  metadataKeys,
   entityTypes,
   presets,
   selectedPresetId,
@@ -51,7 +53,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   selectedEntityType,
   isDraft,
 }) => {
-  const extraKeys = [...new Set(availableFilters.filter(f => f.entityType !== '').map(f => f.key))];
+  const extraKeys = metadataKeys;
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;

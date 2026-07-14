@@ -112,17 +112,22 @@ export async function entitiesHandler(c: Context) {
 
   let pagedResult: PagedEntities;
   let availableFilters: AvailableFilter[];
+  let metadataKeys: string[];
   if (selectedEntityType) {
     pagedResult = await repo.listPaged(activeTree, {
       limit: perPage,
       offset: (page - 1) * perPage,
     });
     availableFilters = await repo.getAvailableFilters(activeTree, { allDistinctValues });
+    // Columns reflect every key the type defines, not just keys with non-null
+    // values in the current (possibly null-filtered) population.
+    metadataKeys = await repo.listMetadataKeys(selectedEntityType);
   } else {
     // No entity types means a (near-)empty entities table — the unfiltered
     // population is the only case rendered without a type selected.
     pagedResult = { pageEntities: [], total: 0 };
     availableFilters = await repo.getAvailableFilters(emptyTree());
+    metadataKeys = [];
   }
 
   const presetsWithTree = await appStateRepo.listPresetsWithTree();
@@ -146,6 +151,7 @@ export async function entitiesHandler(c: Context) {
       perPage={perPage}
       activeTree={activeTree}
       availableFilters={availableFilters}
+      metadataKeys={metadataKeys}
       entityTypes={entityTypes}
       presets={presets}
       selectedPresetId={selectedPresetId}

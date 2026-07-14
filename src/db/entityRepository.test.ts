@@ -321,6 +321,46 @@ describe('entityRepository', () => {
     });
   });
 
+  describe('listMetadataKeys', () => {
+    it('returns every key for the type, including keys whose values are all null', async () => {
+      // last_ready_at exists on the type but is null on entity 1 and absent on
+      // entity 2. It must still be reported so its column survives even when
+      // every row in view is null for it.
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'github_pr' }), [
+        makeMetadata(1, { key: 'creator', value: 'dave', value_type: 'string' }),
+        makeMetadata(1, { key: 'last_ready_at', value: null, value_type: 'date' }),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'github_pr' }), [
+        makeMetadata(2, { key: 'creator', value: 'sam', value_type: 'string' }),
+      ]);
+      expect(await repo.listMetadataKeys('github_pr')).toEqual(['creator', 'last_ready_at']);
+    });
+
+    it('is scoped to the type — keys from other types are excluded', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'github_pr' }), [
+        makeMetadata(1, { key: 'creator', value: 'dave', value_type: 'string' }),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'jira_ticket' }), [
+        makeMetadata(2, { key: 'assignee', value: 'sam', value_type: 'string' }),
+      ]);
+      expect(await repo.listMetadataKeys('github_pr')).toEqual(['creator']);
+    });
+
+    it('returns distinct keys even when many entities share them', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'github_pr' }), [
+        makeMetadata(1, { key: 'creator', value: 'dave', value_type: 'string' }),
+      ]);
+      await repo.upsert(makeEntity({ id: 2, name: 'B', type: 'github_pr' }), [
+        makeMetadata(2, { key: 'creator', value: 'sam', value_type: 'string' }),
+      ]);
+      expect(await repo.listMetadataKeys('github_pr')).toEqual(['creator']);
+    });
+
+    it('returns empty for a type with no entities', async () => {
+      expect(await repo.listMetadataKeys('nonexistent')).toEqual([]);
+    });
+  });
+
   describe('getAvailableFilters', () => {
     it('returns all metadata keys when no filters active', async () => {
       await repo.upsert(makeEntity({ id: 1, name: 'A' }), [

@@ -68,6 +68,10 @@ for (let i = 26; i <= 25 + PR_COUNT; i++) {
     d(i, 'pr_created_at', isoDate(i)),
     d(i, 'pr_merged_at', isoDate(i + 2))
   );
+  // last_ready_at is populated only on even PRs. It's still a valid column for
+  // the github_pr type, so filtering to the odd (null) rows must keep the
+  // column visible even though every result on the page is null.
+  if (i % 2 === 0) metadata.push(d(i, 'last_ready_at', isoDate(i + 1)));
 }
 
 export async function seedE2EData(adapter: SourceDataAdapter): Promise<void> {
