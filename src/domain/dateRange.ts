@@ -193,7 +193,7 @@ export function computeDateRange(range: DateRange, now: Date): ComputedDateRange
 
 export function resolveVizDateField(config: VisualizationConfig): string | null {
   if (config.xAxis?.type === 'date') return config.xAxis.metadataKey;
-  if (config.derivedMetric) return config.derivedMetric.startMetadataKey;
+  if (config.derivedMetric?.type === 'duration') return config.derivedMetric.startMetadataKey;
   return null;
 }
 

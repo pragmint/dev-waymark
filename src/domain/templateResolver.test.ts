@@ -17,9 +17,14 @@ describe('resolveTemplate', () => {
     expect(config.xAxis?.metadataKey).toBe('completed_at');
     expect(config.xAxis?.timeBucket).toBe('week');
     expect(config.aggregation.function).toBe('avg');
-    expect(config.derivedMetric?.startMetadataKey).toBe('started_at');
-    expect(config.derivedMetric?.endMetadataKey).toBe('completed_at');
-    expect(config.derivedMetric?.unit).toBe('days');
+    expect(config.derivedMetric?.type).toBe('duration');
+    expect(config.derivedMetric?.type === 'duration' && config.derivedMetric.startMetadataKey).toBe(
+      'started_at'
+    );
+    expect(config.derivedMetric?.type === 'duration' && config.derivedMetric.endMetadataKey).toBe(
+      'completed_at'
+    );
+    expect(config.derivedMetric?.type === 'duration' && config.derivedMetric.unit).toBe('days');
   });
 
   test('category_breakdown produces pie chart', () => {
@@ -62,7 +67,7 @@ describe('resolveTemplate', () => {
       templateId: 'field_trend',
       slots: {
         dateField: 'created_at',
-        numericField: 'story_points',
+        numericFields: ['story_points'],
         timeBucket: 'week',
         aggregation: 'median',
       },
@@ -71,8 +76,30 @@ describe('resolveTemplate', () => {
     expect(config.chartType).toBe('line');
     expect(config.xAxis?.metadataKey).toBe('created_at');
     expect(config.xAxis?.timeBucket).toBe('week');
-    expect(config.yAxis?.metadataKey).toBe('story_points');
+    expect(config.derivedMetric?.type).toBe('sum');
+    expect(config.derivedMetric?.type === 'sum' && config.derivedMetric.metadataKeys).toEqual([
+      'story_points',
+    ]);
     expect(config.aggregation.function).toBe('median');
+  });
+
+  test('field_trend sums multiple numeric fields via derived metric', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['story_points', 'bonus_points'],
+        timeBucket: 'week',
+        aggregation: 'sum',
+      },
+    });
+
+    expect(config.derivedMetric?.type).toBe('sum');
+    expect(config.derivedMetric?.type === 'sum' && config.derivedMetric.metadataKeys).toEqual([
+      'story_points',
+      'bonus_points',
+    ]);
+    expect(config.derivedMetric?.name).toBe('story_points + bonus_points');
   });
 
   test('category_comparison produces bar chart with numeric field', () => {

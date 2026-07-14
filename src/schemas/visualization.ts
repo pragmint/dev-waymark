@@ -45,13 +45,20 @@ export const AggregationConfigSchema = z.object({
 });
 export type AggregationConfig = z.infer<typeof AggregationConfigSchema>;
 
-export const DerivedMetricConfigSchema = z.object({
-  name: z.string(),
-  type: z.literal('duration'),
-  startMetadataKey: z.string(),
-  endMetadataKey: z.string(),
-  unit: DurationUnitSchema,
-});
+export const DerivedMetricConfigSchema = z.discriminatedUnion('type', [
+  z.object({
+    name: z.string(),
+    type: z.literal('duration'),
+    startMetadataKey: z.string(),
+    endMetadataKey: z.string(),
+    unit: DurationUnitSchema,
+  }),
+  z.object({
+    name: z.string(),
+    type: z.literal('sum'),
+    metadataKeys: z.array(z.string()).min(1),
+  }),
+]);
 export type DerivedMetricConfig = z.infer<typeof DerivedMetricConfigSchema>;
 
 export const TargetConfigSchema = z.discriminatedUnion('type', [

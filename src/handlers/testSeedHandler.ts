@@ -130,7 +130,7 @@ function buildTemplate(templateId: TemplateId, fields: AvailableFilter[]) {
         templateId,
         slots: {
           dateField,
-          numericField,
+          numericFields: [numericField],
           timeBucket: 'week' as const,
           aggregation: 'avg' as const,
         },

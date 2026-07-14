@@ -95,9 +95,10 @@ function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
       type: 'date',
       timeBucket: slots.timeBucket,
     },
-    yAxis: {
-      metadataKey: slots.numericField,
-      type: 'number',
+    derivedMetric: {
+      name: slots.numericFields.join(' + '),
+      type: 'sum',
+      metadataKeys: slots.numericFields,
     },
     aggregation: { function: slots.aggregation },
   };

@@ -210,13 +210,25 @@ export function computeDerivedMetric(
   entity: EntityWithMetadata,
   config: DerivedMetricConfig
 ): number | null {
-  const startVal = entity.metadata.find(m => m.key === config.startMetadataKey)?.value;
-  const endVal = entity.metadata.find(m => m.key === config.endMetadataKey)?.value;
-  if (!startVal || !endVal) return null;
-  const start = new Date(startVal);
-  const end = new Date(endVal);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-  return convertUnit((end.getTime() - start.getTime()) / 1000, 'seconds', config.unit);
+  if (config.type === 'duration') {
+    const startVal = entity.metadata.find(m => m.key === config.startMetadataKey)?.value;
+    const endVal = entity.metadata.find(m => m.key === config.endMetadataKey)?.value;
+    if (!startVal || !endVal) return null;
+    const start = new Date(startVal);
+    const end = new Date(endVal);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    return convertUnit((end.getTime() - start.getTime()) / 1000, 'seconds', config.unit);
+  }
+
+  const values: number[] = [];
+  for (const key of config.metadataKeys) {
+    const raw = entity.metadata.find(m => m.key === key)?.value;
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (isNaN(n)) return null;
+    values.push(n);
+  }
+  return values.reduce((a, b) => a + b, 0);
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -263,6 +275,9 @@ export function validateVisualizationConfig(config: VisualizationConfig): string
   ) {
     errors.push('Derived duration metric requires start and end metadata keys.');
   }
+  if (derivedMetric?.type === 'sum' && derivedMetric.metadataKeys.length === 0) {
+    errors.push('Derived sum metric requires at least one metadata key.');
+  }
   if (target?.type === 'horizontal_line' && !yAxis && !derivedMetric) {
     errors.push('Horizontal target line requires a numeric y-axis or derived metric.');
   }
@@ -301,7 +316,7 @@ function extractMetricValue(
 }
 
 function applyDisplayConversion(value: number, config: VisualizationConfig): number {
-  if (config.derivedMetric && config.yAxis?.displayUnit) {
+  if (config.derivedMetric?.type === 'duration' && config.yAxis?.displayUnit) {
     return convertUnit(value, config.derivedMetric.unit, config.yAxis.displayUnit);
   }
   if (config.yAxis?.unit && config.yAxis.displayUnit) {
@@ -344,8 +359,10 @@ function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);
-  if (config.derivedMetric) {
+  if (config.derivedMetric?.type === 'duration') {
     keys.push(config.derivedMetric.startMetadataKey, config.derivedMetric.endMetadataKey);
+  } else if (config.derivedMetric?.type === 'sum') {
+    keys.push(...config.derivedMetric.metadataKeys);
   } else if (config.yAxis && config.aggregation.function !== 'count') {
     keys.push(config.yAxis.metadataKey);
   }
@@ -516,7 +533,9 @@ function buildChartOptions(
   config: VisualizationConfig,
   isCircular: boolean
 ): Record<string, unknown> {
-  const displayUnit = config.yAxis?.displayUnit ?? config.derivedMetric?.unit;
+  const displayUnit =
+    config.yAxis?.displayUnit ??
+    (config.derivedMetric?.type === 'duration' ? config.derivedMetric.unit : undefined);
   const mainLabel = result.datasets[0]?.label ?? '';
   const yAxisLabel = displayUnit ? `${mainLabel} (${displayUnit})` : mainLabel;
   const xAxisLabel = config.xAxis?.metadataKey ?? config.category?.metadataKey ?? '';

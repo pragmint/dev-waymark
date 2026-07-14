@@ -229,6 +229,44 @@ describe('computeDerivedMetric', () => {
       })
     ).toBeNull();
   });
+
+  test('sums multiple numeric fields', () => {
+    const entity = makeEntity(1, {
+      story_points: { value: '3', value_type: 'number' },
+      bonus_points: { value: '2', value_type: 'number' },
+    });
+    const result = computeDerivedMetric(entity, {
+      name: 'total_points',
+      type: 'sum',
+      metadataKeys: ['story_points', 'bonus_points'],
+    });
+    expect(result).toBe(5);
+  });
+
+  test('sum returns null when any field is missing', () => {
+    const entity = makeEntity(1, {
+      story_points: { value: '3', value_type: 'number' },
+    });
+    const result = computeDerivedMetric(entity, {
+      name: 'total_points',
+      type: 'sum',
+      metadataKeys: ['story_points', 'bonus_points'],
+    });
+    expect(result).toBeNull();
+  });
+
+  test('sum returns null when any field is non-numeric', () => {
+    const entity = makeEntity(1, {
+      story_points: { value: '3', value_type: 'number' },
+      bonus_points: { value: 'not-a-number', value_type: 'number' },
+    });
+    const result = computeDerivedMetric(entity, {
+      name: 'total_points',
+      type: 'sum',
+      metadataKeys: ['story_points', 'bonus_points'],
+    });
+    expect(result).toBeNull();
+  });
 });
 
 // ── Validation tests ──────────────────────────────────────────────────────────

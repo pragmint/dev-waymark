@@ -509,7 +509,7 @@ interface SlotFieldDef {
   slotKey: string;
   formName: string;
   label: string;
-  kind: 'field' | 'time_bucket' | 'aggregation' | 'unit';
+  kind: 'field' | 'multi_field' | 'time_bucket' | 'aggregation' | 'unit';
   primaryType?: 'string' | 'number' | 'date';
   defaultValue?: string;
 }
@@ -589,10 +589,10 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       primaryType: 'date',
     },
     {
-      slotKey: 'numericField',
-      formName: 'numeric_field',
-      label: 'Numeric field',
-      kind: 'field',
+      slotKey: 'numericFields',
+      formName: 'numeric_fields',
+      label: 'Numeric field(s) — select multiple to sum',
+      kind: 'multi_field',
       primaryType: 'number',
     },
     {
@@ -643,7 +643,7 @@ interface ModalState {
   templateId: string | null;
   name: string;
   description: string;
-  slots: Record<string, string>;
+  slots: Record<string, string | string[]>;
   availableFields: AvailableField[];
   warnings: string[];
 }
@@ -719,7 +719,7 @@ async function openEditModal(vizId: number): Promise<void> {
     name: string;
     description: string | null;
     presetId: number;
-    templateConfig: { templateId: string; slots: Record<string, string> } | null;
+    templateConfig: { templateId: string; slots: Record<string, string | string[]> } | null;
   };
   if (!detail.templateConfig) {
     showModalWarnings(['This visualization has no template config and cannot be edited here.']);
@@ -1005,7 +1005,50 @@ function field(
   return wrap;
 }
 
-function buildSlotField(def: SlotFieldDef, value: string): HTMLElement {
+const AGGREGATION_OPTIONS: [string, string][] = [
+  ['avg', 'Average'],
+  ['sum', 'Sum'],
+  ['min', 'Min'],
+  ['max', 'Max'],
+  ['median', 'Median'],
+  ['p75', 'P75'],
+  ['p85', 'P85'],
+  ['p90', 'P90'],
+  ['p95', 'P95'],
+  ['p99', 'P99'],
+];
+
+function populateMultiFieldOptions(
+  select: HTMLSelectElement,
+  def: SlotFieldDef,
+  selected: string[]
+): void {
+  if (!def.primaryType) return;
+  const matching = modalState.availableFields.filter(f => f.value_type === def.primaryType);
+  for (const f of matching) select.appendChild(opt(f.key, f.key, selected.includes(f.key)));
+}
+
+function populateSingleSlotOptions(
+  select: HTMLSelectElement,
+  def: SlotFieldDef,
+  single: string
+): void {
+  if (def.kind === 'field' && def.primaryType) {
+    const matching = modalState.availableFields.filter(f => f.value_type === def.primaryType);
+    select.appendChild(opt('', '-- select --'));
+    for (const f of matching) select.appendChild(opt(f.key, f.key, single === f.key));
+  } else if (def.kind === 'time_bucket') {
+    for (const b of ['day', 'week', 'month', 'quarter', 'year'])
+      select.appendChild(opt(b, b, single === b));
+  } else if (def.kind === 'aggregation') {
+    for (const [v, lbl] of AGGREGATION_OPTIONS) select.appendChild(opt(v, lbl, single === v));
+  } else if (def.kind === 'unit') {
+    for (const u of ['seconds', 'minutes', 'hours', 'days', 'weeks'])
+      select.appendChild(opt(u, u, single === u));
+  }
+}
+
+function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'form-field';
   const lab = document.createElement('label');
@@ -1017,30 +1060,13 @@ function buildSlotField(def: SlotFieldDef, value: string): HTMLElement {
   select.className = 'filter-select';
   select.name = def.formName;
 
-  if (def.kind === 'field' && def.primaryType) {
-    const matching = modalState.availableFields.filter(f => f.value_type === def.primaryType);
-    select.appendChild(opt('', '-- select --'));
-    for (const f of matching) select.appendChild(opt(f.key, f.key, value === f.key));
-  } else if (def.kind === 'time_bucket') {
-    for (const b of ['day', 'week', 'month', 'quarter', 'year'])
-      select.appendChild(opt(b, b, value === b));
-  } else if (def.kind === 'aggregation') {
-    const aggs: [string, string][] = [
-      ['avg', 'Average'],
-      ['sum', 'Sum'],
-      ['min', 'Min'],
-      ['max', 'Max'],
-      ['median', 'Median'],
-      ['p75', 'P75'],
-      ['p85', 'P85'],
-      ['p90', 'P90'],
-      ['p95', 'P95'],
-      ['p99', 'P99'],
-    ];
-    for (const [v, lbl] of aggs) select.appendChild(opt(v, lbl, value === v));
-  } else if (def.kind === 'unit') {
-    for (const u of ['seconds', 'minutes', 'hours', 'days', 'weeks'])
-      select.appendChild(opt(u, u, value === u));
+  if (def.kind === 'multi_field') {
+    select.multiple = true;
+    const selected = Array.isArray(value) ? value : value ? [value] : [];
+    populateMultiFieldOptions(select, def, selected);
+  } else {
+    const single = Array.isArray(value) ? (value[0] ?? '') : value;
+    populateSingleSlotOptions(select, def, single);
   }
   wrap.appendChild(select);
   return wrap;
@@ -1057,7 +1083,7 @@ function opt(value: string, label: string, selected = false): HTMLOptionElement 
 function readModalForm(): {
   name: string;
   description: string;
-  slots: Record<string, string>;
+  slots: Record<string, string | string[]>;
 } | null {
   const form = document.getElementById('viz-modal-form') as HTMLFormElement | null;
   if (!form) return null;
@@ -1067,12 +1093,20 @@ function readModalForm(): {
   ).trim();
   const tid = modalState.templateId;
   if (!tid) return null;
-  const slots: Record<string, string> = {};
+  const slots: Record<string, string | string[]> = {};
   for (const def of TEMPLATE_SLOT_DEFS[tid] ?? []) {
     const el = form.elements.namedItem(def.formName) as HTMLSelectElement | null;
-    slots[def.slotKey] = el?.value || def.defaultValue || '';
+    if (def.kind === 'multi_field') {
+      slots[def.slotKey] = el ? Array.from(el.selectedOptions).map(o => o.value) : [];
+    } else {
+      slots[def.slotKey] = el?.value || def.defaultValue || '';
+    }
   }
   return { name, description, slots };
+}
+
+function isSlotEmpty(value: string | string[]): boolean {
+  return Array.isArray(value) ? value.length === 0 : !value;
 }
 
 function scheduleModalPreview(): void {
@@ -1089,7 +1123,7 @@ async function runModalPreview(): Promise<void> {
   modalState.name = form.name;
   modalState.description = form.description;
   modalState.slots = form.slots;
-  if (Object.values(form.slots).some(v => !v)) return;
+  if (Object.values(form.slots).some(isSlotEmpty)) return;
 
   const warningsEl = document.getElementById('viz-modal-warnings');
   if (warningsEl) warningsEl.innerHTML = '';
@@ -1101,7 +1135,7 @@ async function runModalPreview(): Promise<void> {
   }
 }
 
-async function fetchAndRenderModalPreview(slots: Record<string, string>): Promise<void> {
+async function fetchAndRenderModalPreview(slots: Record<string, string | string[]>): Promise<void> {
   const resp = await fetch('/api/chart-data/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1157,7 +1191,7 @@ function showModalWarnings(details: unknown, excludedEntitiesUrl: string | null 
 function validateAndReadForm(): {
   name: string;
   description: string;
-  slots: Record<string, string>;
+  slots: Record<string, string | string[]>;
 } | null {
   if (modalState.presetId == null) {
     alert('Pick a dataset first.');
@@ -1173,7 +1207,7 @@ function validateAndReadForm(): {
     showModalWarnings(['Name is required.']);
     return null;
   }
-  if (Object.values(form.slots).some(v => !v)) {
+  if (Object.values(form.slots).some(isSlotEmpty)) {
     showModalWarnings(['Fill in every configuration field.']);
     return null;
   }

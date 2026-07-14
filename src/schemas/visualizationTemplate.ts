@@ -39,7 +39,7 @@ export type ThroughputOverTimeSlots = z.infer<typeof ThroughputOverTimeSlotsSche
 
 export const FieldTrendSlotsSchema = z.object({
   dateField: z.string().min(1),
-  numericField: z.string().min(1),
+  numericFields: z.array(z.string().min(1)).min(1),
   timeBucket: z.enum(['day', 'week', 'month', 'quarter', 'year']),
   aggregation: z.enum(['avg', 'sum', 'min', 'max', 'median', 'p75', 'p85', 'p90', 'p95', 'p99']),
 });

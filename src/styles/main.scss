@@ -572,6 +572,18 @@ form {
   background-size: 10px 6px;
 }
 
+// A multiple-select renders as a listbox, not a dropdown, so the single-select
+// chevron/fixed-height styling above doesn't apply — restore native sizing.
+.filter-select[multiple] {
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  height: auto;
+  min-height: calc(var(--control-height) * 3);
+  padding: 4px;
+  background-image: none;
+}
+
 // Multi-select renders as a list, not a dropdown — keep the native chevron
 // off but don't reserve right-padding for one.
 .filter-multi-select {

@@ -400,12 +400,12 @@ test.describe('create-viz modal', () => {
     await page.selectOption('[data-add-viz]', '__new__');
     await page.selectOption('.viz-modal-body select', { label: presetName });
 
-    // Field trend has both a date_field and a numeric_field slot on the same
+    // Field trend has both a date_field and a numeric_fields slot on the same
     // template, so it exercises both filters at once.
     await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
 
     const dateSelect = page.locator('#viz-modal-form select[name="date_field"]');
-    const numericSelect = page.locator('#viz-modal-form select[name="numeric_field"]');
+    const numericSelect = page.locator('#viz-modal-form select[name="numeric_fields"]');
 
     // The date dropdown must contain only date fields — no string/number fields.
     await expect(dateSelect.locator('option[value="jira_created_at"]')).toHaveCount(1);

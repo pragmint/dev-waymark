@@ -168,7 +168,7 @@ describe('TemplateConfigSchema — throughput_over_time', () => {
 describe('TemplateConfigSchema — field_trend', () => {
   const validSlots = {
     dateField: 'created_at',
-    numericField: 'story_points',
+    numericFields: ['story_points'],
     timeBucket: 'week',
     aggregation: 'avg',
   };
@@ -177,6 +177,14 @@ describe('TemplateConfigSchema — field_trend', () => {
     const result = TemplateConfigSchema.safeParse({
       templateId: 'field_trend',
       slots: validSlots,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts multiple numeric fields to sum', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'field_trend',
+      slots: { ...validSlots, numericFields: ['story_points', 'bonus_points'] },
     });
     expect(result.success).toBe(true);
   });
@@ -197,7 +205,7 @@ describe('TemplateConfigSchema — field_trend', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects a missing numericField', () => {
+  it('rejects a missing numericFields', () => {
     const result = TemplateConfigSchema.safeParse({
       templateId: 'field_trend',
       slots: {
@@ -205,6 +213,14 @@ describe('TemplateConfigSchema — field_trend', () => {
         timeBucket: validSlots.timeBucket,
         aggregation: validSlots.aggregation,
       },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty numericFields array', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'field_trend',
+      slots: { ...validSlots, numericFields: [] },
     });
     expect(result.success).toBe(false);
   });
