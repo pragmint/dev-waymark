@@ -512,6 +512,7 @@ interface SlotFieldDef {
   kind: 'field' | 'multi_field' | 'time_bucket' | 'aggregation' | 'unit';
   primaryType?: 'string' | 'number' | 'date';
   defaultValue?: string;
+  description?: string;
 }
 
 const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
@@ -522,6 +523,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Start date field',
       kind: 'field',
       primaryType: 'date',
+      description: 'The earlier date — marks when the phase begins.',
     },
     {
       slotKey: 'endDateField',
@@ -529,6 +531,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'End date field',
       kind: 'field',
       primaryType: 'date',
+      description:
+        'The later date — marks when the phase ends. Also sets the x-axis: entities are bucketed by this date.',
     },
     {
       slotKey: 'timeBucket',
@@ -536,8 +540,16 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Time bucket',
       kind: 'time_bucket',
       defaultValue: 'week',
+      description: 'Groups entities into day/week/month/etc. buckets along the x-axis.',
     },
-    { slotKey: 'unit', formName: 'unit', label: 'Unit', kind: 'unit', defaultValue: 'days' },
+    {
+      slotKey: 'unit',
+      formName: 'unit',
+      label: 'Unit',
+      kind: 'unit',
+      defaultValue: 'days',
+      description: 'Units the duration (end minus start) is displayed in.',
+    },
   ],
   category_breakdown: [
     {
@@ -546,6 +558,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Category field',
       kind: 'field',
       primaryType: 'string',
+      description:
+        "Entities are counted and grouped by this field's value — one slice per distinct value.",
     },
   ],
   phase_snapshot: [
@@ -555,6 +569,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Phase / category field',
       kind: 'field',
       primaryType: 'string',
+      description: "Entities are grouped into bars by this field's value.",
     },
     {
       slotKey: 'dateField',
@@ -562,6 +577,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Date field',
       kind: 'field',
       primaryType: 'date',
+      description:
+        'Sets the x-axis — entities are compared across time windows based on this date.',
     },
   ],
   throughput_over_time: [
@@ -571,6 +588,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Date field',
       kind: 'field',
       primaryType: 'date',
+      description: 'Sets the x-axis — entities are counted per time bucket based on this date.',
     },
     {
       slotKey: 'timeBucket',
@@ -578,6 +596,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Time bucket',
       kind: 'time_bucket',
       defaultValue: 'week',
+      description: 'Groups entities into day/week/month/etc. buckets along the x-axis.',
     },
   ],
   field_trend: [
@@ -587,6 +606,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Date field',
       kind: 'field',
       primaryType: 'date',
+      description:
+        'Sets the x-axis — entities are grouped into time buckets based on this date, then the numeric field(s) are aggregated within each bucket.',
     },
     {
       slotKey: 'numericFields',
@@ -594,6 +615,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Numeric field(s) — select multiple to sum',
       kind: 'multi_field',
       primaryType: 'number',
+      description:
+        'The value plotted on the y-axis. Selecting multiple fields sums them per entity before aggregating.',
     },
     {
       slotKey: 'timeBucket',
@@ -601,6 +624,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Time bucket',
       kind: 'time_bucket',
       defaultValue: 'week',
+      description: 'Groups entities into day/week/month/etc. buckets along the x-axis.',
     },
     {
       slotKey: 'aggregation',
@@ -608,6 +632,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Aggregation',
       kind: 'aggregation',
       defaultValue: 'avg',
+      description:
+        'How values within each time bucket are combined into a single point (e.g. average, sum, median).',
     },
   ],
   category_comparison: [
@@ -617,6 +643,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Category field',
       kind: 'field',
       primaryType: 'string',
+      description: "Entities are grouped into bars by this field's value.",
     },
     {
       slotKey: 'numericField',
@@ -624,6 +651,7 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Numeric field',
       kind: 'field',
       primaryType: 'number',
+      description: 'The value plotted on the y-axis, aggregated within each category.',
     },
     {
       slotKey: 'aggregation',
@@ -631,6 +659,8 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       label: 'Aggregation',
       kind: 'aggregation',
       defaultValue: 'avg',
+      description:
+        'How values within each category are combined into a single bar (e.g. average, sum, median).',
     },
   ],
 };
@@ -1053,7 +1083,16 @@ function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElemen
   wrap.className = 'form-field';
   const lab = document.createElement('label');
   lab.className = 'filter-widget-label';
-  lab.textContent = def.label;
+  const title = document.createElement('span');
+  title.className = 'form-field-title';
+  title.textContent = def.label;
+  lab.appendChild(title);
+  if (def.description) {
+    const hint = document.createElement('span');
+    hint.className = 'form-field-hint';
+    hint.textContent = ` - ${def.description}`;
+    lab.appendChild(hint);
+  }
   wrap.appendChild(lab);
 
   const select = document.createElement('select');
@@ -1069,6 +1108,7 @@ function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElemen
     populateSingleSlotOptions(select, def, single);
   }
   wrap.appendChild(select);
+
   return wrap;
 }
 
