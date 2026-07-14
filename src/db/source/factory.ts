@@ -45,6 +45,8 @@ function isCacheValid(expectedHash: string): boolean {
 async function buildSeedCache(hash: string): Promise<SqliteSourceAdapter> {
   // Seed into an in-memory DB, snapshot the bytes to disk, then keep using
   // the same in-memory DB for this process.
+  const t0 = performance.now();
+  console.error('[dev-waymark] Building golden dataset snapshot (first run / cache miss)…');
   const adapter = new SqliteSourceAdapter(':memory:', true);
   await seedGoldenData(adapter);
 
@@ -60,6 +62,8 @@ async function buildSeedCache(hash: string): Promise<SqliteSourceAdapter> {
   }
   writeFileSync(SEED_CACHE_PATH, adapter.getDb().serialize());
   writeFileSync(SEED_HASH_PATH, hash);
+  const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+  console.error(`[dev-waymark] Snapshot ready in ${elapsed}s — cached to ${SEED_CACHE_PATH}`);
   return adapter;
 }
 
@@ -99,18 +103,26 @@ export async function createSourceAdapter(config: Config['sourceDb']): Promise<S
       const applySchema = path === ':memory:' || config.seed !== 'none';
       const adapter = new SqliteSourceAdapter(path, applySchema);
       if (config.seed !== 'none') {
+        const t0 = performance.now();
+        console.error(`[dev-waymark] Seeding source DB (adapter=sqlite, seed=${config.seed})…`);
         await adapter.execute('DELETE FROM entity_metadata');
         await adapter.execute('DELETE FROM entities');
         await seedInto(adapter, config.seed);
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+        console.error(`[dev-waymark] Seed complete in ${elapsed}s`);
       }
       return adapter;
     }
     case 'postgres': {
       const adapter = new PostgresSourceAdapter(config.url);
       if (config.seed !== 'none') {
+        const t0 = performance.now();
+        console.error(`[dev-waymark] Seeding source DB (adapter=postgres, seed=${config.seed})…`);
         await adapter.execute(POSTGRES_SOURCE_SCHEMA_DDL);
         await adapter.execute('TRUNCATE entities, entity_metadata RESTART IDENTITY CASCADE');
         await seedInto(adapter, config.seed);
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+        console.error(`[dev-waymark] Seed complete in ${elapsed}s`);
       }
       return adapter;
     }
