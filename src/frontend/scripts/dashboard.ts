@@ -1018,13 +1018,9 @@ function buildSlotField(def: SlotFieldDef, value: string): HTMLElement {
   select.name = def.formName;
 
   if (def.kind === 'field' && def.primaryType) {
-    const fields = modalState.availableFields;
-    const primary = fields.filter(f => f.value_type === def.primaryType);
-    const others = fields.filter(f => f.value_type !== def.primaryType);
+    const matching = modalState.availableFields.filter(f => f.value_type === def.primaryType);
     select.appendChild(opt('', '-- select --'));
-    for (const f of primary) select.appendChild(opt(f.key, f.key, value === f.key));
-    for (const f of others)
-      select.appendChild(opt(f.key, `${f.key} (${f.value_type})`, value === f.key));
+    for (const f of matching) select.appendChild(opt(f.key, f.key, value === f.key));
   } else if (def.kind === 'time_bucket') {
     for (const b of ['day', 'week', 'month', 'quarter', 'year'])
       select.appendChild(opt(b, b, value === b));

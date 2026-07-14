@@ -386,6 +386,58 @@ test.describe('create-viz modal', () => {
       page.locator('.viz-modal-template-card.is-selected:has-text("Throughput over time")')
     ).toBeVisible();
   });
+
+  test('a slot dropdown only lists fields matching its required type', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetTyped');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('TypedD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+
+    // Field trend has both a date_field and a numeric_field slot on the same
+    // template, so it exercises both filters at once.
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    const dateSelect = page.locator('#viz-modal-form select[name="date_field"]');
+    const numericSelect = page.locator('#viz-modal-form select[name="numeric_field"]');
+
+    // The date dropdown must contain only date fields — no string/number fields.
+    await expect(dateSelect.locator('option[value="jira_created_at"]')).toHaveCount(1);
+    await expect(dateSelect.locator('option[value="ticket_type"]')).toHaveCount(0);
+    await expect(dateSelect.locator('option[value="total_lead_time_seconds"]')).toHaveCount(0);
+
+    // The numeric dropdown must contain only number fields — no string/date fields.
+    await expect(numericSelect.locator('option[value="total_lead_time_seconds"]')).toHaveCount(1);
+    await expect(numericSelect.locator('option[value="ticket_type"]')).toHaveCount(0);
+    await expect(numericSelect.locator('option[value="jira_created_at"]')).toHaveCount(0);
+  });
+
+  test('the category field dropdown on category breakdown only lists string fields', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetCatTyped');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('CatTypedD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+
+    const categorySelect = page.locator('#viz-modal-form select[name="category_field"]');
+
+    await expect(categorySelect.locator('option[value="ticket_type"]')).toHaveCount(1);
+    await expect(categorySelect.locator('option[value="total_lead_time_seconds"]')).toHaveCount(0);
+    await expect(categorySelect.locator('option[value="jira_created_at"]')).toHaveCount(0);
+  });
 });
 
 // ── Edit modal (pencil) ─────────────────────────────────────────────────────
