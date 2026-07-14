@@ -21,7 +21,7 @@ import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
 import { DashboardPage } from '../frontend/Pages/DashboardPage';
 import type { DashboardCard } from '../frontend/Pages/DashboardPage';
 import type { FilterNode, FilterTree } from '../schemas/filterTree';
-import type { VisualizationSummary } from '../schemas/visualization';
+import type { VisualizationConfig, VisualizationSummary } from '../schemas/visualization';
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
 // under a fresh root AND group, so click-through URLs narrow the entity list
@@ -148,8 +148,20 @@ export async function dashboardRemoveVisualizationHandler(c: Context) {
   return c.redirect(`/visualizations?dashboard=${dashboardId}`);
 }
 
-export async function visualizationCreateApiHandler(c: Context) {
-  const repo = getAppStateRepo();
+// Shared by create and update: parses name/description/presetId/templateConfig from the
+// request body and validates each. Returns `response` (an error to return as-is) on failure.
+async function parseVisualizationInput(
+  c: Context,
+  repo: ReturnType<typeof getAppStateRepo>
+): Promise<
+  | { response: Response }
+  | {
+      name: string;
+      description: string | null;
+      presetId: number;
+      configWithTemplate: VisualizationConfig;
+    }
+> {
   const body = await c.req.json<{
     name?: unknown;
     description?: unknown;
@@ -158,7 +170,7 @@ export async function visualizationCreateApiHandler(c: Context) {
   }>();
 
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!name) return c.json({ error: 'Name required' }, 400);
+  if (!name) return { response: c.json({ error: 'Name required' }, 400) };
 
   const description =
     typeof body.description === 'string' && body.description.trim().length > 0
@@ -166,25 +178,42 @@ export async function visualizationCreateApiHandler(c: Context) {
       : null;
 
   if (typeof body.presetId !== 'number') {
-    return c.json({ error: 'presetId required' }, 400);
-  }
-
-  const tcParsed = TemplateConfigSchema.safeParse(body.templateConfig);
-  if (!tcParsed.success) {
-    return c.json({ error: 'Invalid template config', details: tcParsed.error.issues }, 400);
+    return { response: c.json({ error: 'presetId required' }, 400) };
   }
 
   const preset = await repo.getPreset(body.presetId);
-  if (!preset) return c.json({ error: 'Preset not found' }, 404);
+  if (!preset) return { response: c.json({ error: 'Preset not found' }, 404) };
+
+  const tcParsed = TemplateConfigSchema.safeParse(body.templateConfig);
+  if (!tcParsed.success) {
+    return {
+      response: c.json({ error: 'Invalid template config', details: tcParsed.error.issues }, 400),
+    };
+  }
 
   const config = resolveTemplate(tcParsed.data);
   const validationErrors = validateVisualizationConfig(config);
   if (validationErrors.length > 0) {
-    return c.json({ error: 'Config validation failed', details: validationErrors }, 400);
+    return {
+      response: c.json({ error: 'Config validation failed', details: validationErrors }, 400),
+    };
   }
 
   const configWithTemplate = { ...config, _templateConfig: tcParsed.data };
-  const id = await repo.saveVisualization(name, description, body.presetId, configWithTemplate);
+  return { name, description, presetId: body.presetId, configWithTemplate };
+}
+
+export async function visualizationCreateApiHandler(c: Context) {
+  const repo = getAppStateRepo();
+  const parsed = await parseVisualizationInput(c, repo);
+  if ('response' in parsed) return parsed.response;
+
+  const id = await repo.saveVisualization(
+    parsed.name,
+    parsed.description,
+    parsed.presetId,
+    parsed.configWithTemplate
+  );
   return c.json({ id });
 }
 
@@ -229,32 +258,16 @@ export async function visualizationUpdateApiHandler(c: Context) {
   const existing = await repo.getVisualization(id);
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
-  const body = await c.req.json<{
-    name?: unknown;
-    description?: unknown;
-    templateConfig?: unknown;
-  }>();
+  const parsed = await parseVisualizationInput(c, repo);
+  if ('response' in parsed) return parsed.response;
 
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!name) return c.json({ error: 'Name required' }, 400);
-  const description =
-    typeof body.description === 'string' && body.description.trim().length > 0
-      ? body.description.trim()
-      : null;
-
-  const tcParsed = TemplateConfigSchema.safeParse(body.templateConfig);
-  if (!tcParsed.success) {
-    return c.json({ error: 'Invalid template config', details: tcParsed.error.issues }, 400);
-  }
-
-  const config = resolveTemplate(tcParsed.data);
-  const validationErrors = validateVisualizationConfig(config);
-  if (validationErrors.length > 0) {
-    return c.json({ error: 'Config validation failed', details: validationErrors }, 400);
-  }
-
-  const configWithTemplate = { ...config, _templateConfig: tcParsed.data };
-  await repo.updateVisualization(id, name, description, configWithTemplate);
+  await repo.updateVisualization(
+    id,
+    parsed.name,
+    parsed.description,
+    parsed.presetId,
+    parsed.configWithTemplate
+  );
   return c.json({ id });
 }
 

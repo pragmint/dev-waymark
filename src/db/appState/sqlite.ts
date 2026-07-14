@@ -243,14 +243,15 @@ export class SqliteAppStateRepository implements AppStateRepository {
     id: number,
     name: string,
     description: string | null,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<void> {
     const now = new Date().toISOString();
     this.db
       .query(
-        'UPDATE visualizations SET name = ?, description = ?, config = ?, updated_at = ? WHERE id = ?'
+        'UPDATE visualizations SET name = ?, description = ?, preset_id = ?, config = ?, updated_at = ? WHERE id = ?'
       )
-      .run(name, description, JSON.stringify(config), now, id);
+      .run(name, description, presetId, JSON.stringify(config), now, id);
   }
 
   async deleteVisualization(id: number): Promise<void> {

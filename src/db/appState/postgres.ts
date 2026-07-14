@@ -228,12 +228,13 @@ export class PostgresAppStateRepository implements AppStateRepository {
     id: number,
     name: string,
     description: string | null,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<void> {
     const now = new Date().toISOString();
     await this.pool.query(
-      'UPDATE visualizations SET name = $1, description = $2, config = $3, updated_at = $4 WHERE id = $5',
-      [name, description, JSON.stringify(config), now, id]
+      'UPDATE visualizations SET name = $1, description = $2, preset_id = $3, config = $4, updated_at = $5 WHERE id = $6',
+      [name, description, presetId, JSON.stringify(config), now, id]
     );
   }
 

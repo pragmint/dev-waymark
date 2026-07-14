@@ -1211,6 +1211,7 @@ async function saveModalEditInPlace(): Promise<void> {
     body: JSON.stringify({
       name: form.name,
       description: form.description || null,
+      presetId: modalState.presetId,
       templateConfig: { templateId: modalState.templateId, slots: form.slots },
     }),
   });

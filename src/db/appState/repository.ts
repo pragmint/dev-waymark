@@ -72,11 +72,12 @@ export interface AppStateRepository {
   /** List all visualizations (summary only, config excluded). */
   listVisualizations(): Promise<VisualizationSummary[]>;
 
-  /** Update an existing visualization's name, description, and config. */
+  /** Update an existing visualization's name, description, preset, and config. */
   updateVisualization(
     id: number,
     name: string,
     description: string | null,
+    presetId: number,
     config: VisualizationConfig
   ): Promise<void>;
 

@@ -467,6 +467,30 @@ test.describe('edit-viz modal', () => {
     await expect(page.locator('.viz-modal-footer button:has-text("Save changes")')).toBeVisible();
     await expect(page.locator('.viz-modal-footer button:has-text("Save as new")')).toBeVisible();
   });
+
+  test('switching dataset then clicking "Save changes" persists the new preset', async ({
+    page,
+    request,
+  }) => {
+    const presetAId = await seedPreset(request, uniqueName('EditPresetA'));
+    const presetBName = uniqueName('EditPresetB');
+    const presetBId = await seedPreset(request, presetBName);
+    const vizId = await seedViz(request, presetAId, uniqueName('SwapDataset'));
+    const dashId = await seedDashboard(request, uniqueName('SwapDatasetD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+
+    await page.locator('.viz-modal-body select').first().selectOption({ label: presetBName });
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    const res = await request.get(`/api/visualizations/${vizId}`);
+    const detail = await res.json();
+    expect(detail.presetId).toBe(presetBId);
+  });
 });
 
 // ── Cross-dashboard integrity ───────────────────────────────────────────────
