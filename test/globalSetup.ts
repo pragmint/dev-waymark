@@ -44,6 +44,11 @@ function run(cmd: string, args: string[]): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<void> {
+  // Build frontend assets once for the whole run. Per-worker webServers
+  // (spawned in test/strictTest.ts) all read the same ./public output.
+  console.log('[e2e] Building frontend assets…');
+  await run('bun', ['scripts/build.ts']);
+
   if (!usesPostgres(loadE2EEnv())) return;
 
   if (await tryConnect(POSTGRES_HOST, POSTGRES_PORT, 500)) {
