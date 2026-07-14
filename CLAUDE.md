@@ -35,6 +35,12 @@ SQLite → Repository (entityRepository) → Queries → Handlers → Page Compo
 
 **Layer dependency rule**: `src/domain/`, `src/db/`, and `src/handlers/` must never import from `src/frontend/`. Frontend scripts may import from `src/schemas/` and `src/domain/`.
 
+### Visualization templates
+
+Templates (`src/schemas/visualizationTemplate.ts`, `src/domain/templateResolver.ts`) must stay domain-agnostic: they may only know about entities, metadata, and field types (numeric, text, date) — never a specific field name, customer, or dataset. Anything template-specific (which field, name, description) must be a user-configurable "slot," the same pattern as `DurationTrendSlots`. It's fine to write tests against the golden dataset (`src/db/source/goldenSeed.ts`); never write behavior that depends on it.
+
+Any new visualization template must work across every `DateRangePeriod` (`all`, `week`, `month`, `quarter`, `year`, `custom`) via the shared `src/domain/dateRange.ts` mechanism — never reimplement range logic per-template.
+
 ### Data sources
 
 Data is stored in a SQLite database (`dev-waymark.sqlite`) and accessed exclusively via `src/db/entityRepository.ts`.
