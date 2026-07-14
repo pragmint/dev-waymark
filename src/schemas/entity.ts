@@ -31,7 +31,7 @@ export type EntityWithMetadata = z.infer<typeof EntityWithMetadataSchema>;
 
 // ── Metadata filters ──────────────────────────────────────────────────────────
 
-export const MetaFilterOpSchema = z.enum(['eq', 'contains', 'gte', 'lte']);
+export const MetaFilterOpSchema = z.enum(['eq', 'contains', 'gte', 'lte', 'exact']);
 export type MetaFilterOp = z.infer<typeof MetaFilterOpSchema>;
 
 export const MetaFilterSchema = z.object({

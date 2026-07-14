@@ -43,6 +43,7 @@ function leafLabel(leaf: FilterLeaf): string {
   if (leaf.op === 'gte') return `≥ ${s}`;
   if (leaf.op === 'lte') return `≤ ${s}`;
   if (leaf.op === 'contains') return `~${s}`;
+  if (leaf.op === 'exact') return `= ${s}`;
   return String(s);
 }
 

@@ -136,6 +136,38 @@ test('editing a contains filter prefills the contains input and opens that mode'
   await expect(editor.locator('input[data-op="contains"]')).toHaveValue('Story');
 });
 
+test('exact filter matches the literal value only — no substring behavior', async ({ page }) => {
+  // ticket_type values in the e2e seed are Story/Bug/Task/Spike. `contains 'S'`
+  // matches Story + Spike; `exact 'S'` matches nothing. Any row count > 0 for
+  // contains combined with 0 for exact proves the operator is a literal match.
+  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'contains', 'S')]));
+  const containsCount = await page.locator('table.entity-table tbody tr').count();
+  expect(containsCount).toBeGreaterThan(0);
+
+  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'exact', 'S')]));
+  await expect(page.locator('table.entity-table tbody tr')).toHaveCount(0);
+
+  // Sanity check the positive path: exact 'Story' should match Story rows and
+  // the chip label should render as `= Story`.
+  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'exact', 'Story')]));
+  const exactCount = await page.locator('table.entity-table tbody tr').count();
+  expect(exactCount).toBeGreaterThan(0);
+  await expect(
+    page.locator('.filter-chip[data-filter-key="ticket_type"] .filter-chip-val')
+  ).toHaveText('= Story');
+});
+
+test('editing an exact filter prefills the exact input and opens that mode', async ({ page }) => {
+  await page.goto(entitiesUrl('jira_ticket', [leaf('ticket_type', 'exact', 'Story')]));
+
+  const chip = page.locator('.filter-chip[data-filter-key="ticket_type"]');
+  await chip.locator('.filter-chip-content').click();
+
+  const editor = page.locator('[data-leaf-editor]');
+  await expect(editor.locator('[data-active-mode]')).toHaveAttribute('data-active-mode', 'exact');
+  await expect(editor.locator('input[data-op="exact"]')).toHaveValue('Story');
+});
+
 test('drag a chip onto an insertion line reorders without grouping', async ({ page }) => {
   // Three sibling chips at root: ticket_type, status, priority — order A, B, C.
   await page.goto(

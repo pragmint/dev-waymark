@@ -4,7 +4,7 @@
 
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 
-type LeafOp = 'eq' | 'contains' | 'gte' | 'lte';
+type LeafOp = 'eq' | 'contains' | 'gte' | 'lte' | 'exact';
 type GroupOp = 'AND' | 'OR' | 'NOT';
 
 type FilterLeaf = {
@@ -432,6 +432,7 @@ function leafLabel(leaf: FilterLeaf): string {
     return leaf.op === 'gte' ? `≥ ${s}` : `≤ ${s}`;
   }
   if (leaf.op === 'contains') return `~${s}`;
+  if (leaf.op === 'exact') return `= ${s}`;
   return String(s);
 }
 
@@ -1359,13 +1360,15 @@ function renderWidgetBody(leaf: FilterLeaf, available: AvailableFilter): HTMLEle
     return body;
   }
   // string
-  if (available.distinctValues && available.distinctValues.length > 0) {
-    return renderStringWidget(leaf, available, body);
-  }
-  const input = inputEl('text', 'contains', singleValue(leaf, 'contains'));
-  input.placeholder = 'contains…';
-  body.appendChild(input);
-  return body;
+  return renderStringWidget(leaf, available, body);
+}
+
+type StringMode = 'multi' | 'contains' | 'exact';
+
+function initialStringMode(leaf: FilterLeaf, hasValues: boolean): StringMode {
+  if (leaf.op === 'contains') return 'contains';
+  if (leaf.op === 'exact') return 'exact';
+  return hasValues ? 'multi' : 'contains';
 }
 
 function renderStringWidget(
@@ -1373,69 +1376,88 @@ function renderStringWidget(
   available: AvailableFilter,
   body: HTMLElement
 ): HTMLElement {
+  const hasValues = !!(available.distinctValues && available.distinctValues.length > 0);
+  const modes: StringMode[] = hasValues ? ['multi', 'contains', 'exact'] : ['contains', 'exact'];
+  const activeMode = initialStringMode(leaf, hasValues);
+
   const wrap = document.createElement('div');
   wrap.className = 'filter-string-modes';
-  const activeMode = leaf.op === 'contains' ? 'contains' : 'multi';
   wrap.dataset.activeMode = activeMode;
 
   const tabs = document.createElement('div');
   tabs.className = 'filter-mode-tabs';
-  const multiTab = modeTabBtn('multi', activeMode === 'multi');
-  const containsTab = modeTabBtn('contains', activeMode === 'contains');
-  tabs.append(multiTab, containsTab);
+  const tabByMode = new Map<StringMode, HTMLButtonElement>();
+  for (const mode of modes) {
+    const tab = modeTabBtn(mode, activeMode === mode);
+    tabs.appendChild(tab);
+    tabByMode.set(mode, tab);
+  }
   wrap.appendChild(tabs);
 
-  const multiPane = document.createElement('div');
-  multiPane.dataset.modeContent = 'multi';
-  if (activeMode !== 'multi') multiPane.style.display = 'none';
-  const select = document.createElement('select');
-  select.multiple = true;
-  select.className = 'filter-multi-select';
-  select.size = Math.min(available.distinctValues!.length, 6);
-  select.dataset.op = 'eq';
-  const eqValues = leaf.op === 'eq' ? (Array.isArray(leaf.value) ? leaf.value : [leaf.value]) : [];
-  available.distinctValues!.forEach(v => {
-    const o = document.createElement('option');
-    o.value = v;
-    o.textContent = v;
-    if (eqValues.includes(v)) o.selected = true;
-    select.appendChild(o);
-  });
-  multiPane.appendChild(select);
+  const paneByMode = new Map<StringMode, HTMLElement>();
+  for (const mode of modes) {
+    const pane = buildStringModePane(mode, leaf, available);
+    if (activeMode !== mode) pane.style.display = 'none';
+    wrap.appendChild(pane);
+    paneByMode.set(mode, pane);
+  }
 
-  const containsPane = document.createElement('div');
-  containsPane.dataset.modeContent = 'contains';
-  if (activeMode !== 'contains') containsPane.style.display = 'none';
-  const containsInput = inputEl(
-    'text',
-    'contains',
-    leaf.op === 'contains' ? (Array.isArray(leaf.value) ? leaf.value[0] : leaf.value) : ''
-  );
-  containsInput.placeholder = 'contains…';
-  containsPane.appendChild(containsInput);
-
-  wrap.append(multiPane, containsPane);
   body.appendChild(wrap);
 
-  const switchMode = (mode: 'multi' | 'contains') => {
+  const switchMode = (mode: StringMode) => {
     wrap.dataset.activeMode = mode;
-    multiPane.style.display = mode === 'multi' ? '' : 'none';
-    containsPane.style.display = mode === 'contains' ? '' : 'none';
-    multiTab.classList.toggle('filter-mode-tab--active', mode === 'multi');
-    containsTab.classList.toggle('filter-mode-tab--active', mode === 'contains');
+    for (const [m, pane] of paneByMode) {
+      pane.style.display = m === mode ? '' : 'none';
+    }
+    for (const [m, tab] of tabByMode) {
+      tab.classList.toggle('filter-mode-tab--active', m === mode);
+    }
   };
-  multiTab.addEventListener('click', () => switchMode('multi'));
-  containsTab.addEventListener('click', () => switchMode('contains'));
+  for (const [m, tab] of tabByMode) {
+    tab.addEventListener('click', () => switchMode(m));
+  }
 
   return body;
 }
 
-function modeTabBtn(mode: string, active: boolean): HTMLButtonElement {
+function buildStringModePane(
+  mode: StringMode,
+  leaf: FilterLeaf,
+  available: AvailableFilter
+): HTMLElement {
+  const pane = document.createElement('div');
+  pane.dataset.modeContent = mode;
+  if (mode === 'multi') {
+    const select = document.createElement('select');
+    select.multiple = true;
+    select.className = 'filter-multi-select';
+    select.size = Math.min(available.distinctValues!.length, 6);
+    select.dataset.op = 'eq';
+    const eqValues =
+      leaf.op === 'eq' ? (Array.isArray(leaf.value) ? leaf.value : [leaf.value]) : [];
+    available.distinctValues!.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = v;
+      if (eqValues.includes(v)) o.selected = true;
+      select.appendChild(o);
+    });
+    pane.appendChild(select);
+    return pane;
+  }
+  const op: LeafOp = mode;
+  const input = inputEl('text', op, singleValue(leaf, op));
+  input.placeholder = mode === 'exact' ? 'equals…' : 'contains…';
+  pane.appendChild(input);
+  return pane;
+}
+
+function modeTabBtn(mode: StringMode, active: boolean): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = `filter-mode-tab${active ? ' filter-mode-tab--active' : ''}`;
   b.dataset.modeTab = mode;
-  b.textContent = mode === 'multi' ? 'Values' : 'Contains';
+  b.textContent = mode === 'multi' ? 'Values' : mode === 'exact' ? 'Exact' : 'Contains';
   return b;
 }
 
@@ -1466,9 +1488,10 @@ function readRangeBody(body: HTMLElement): LeafPatch {
 }
 
 function readStringModesBody(modes: HTMLElement): LeafPatch {
-  if (modes.dataset.activeMode === 'contains') {
-    const v = modes.querySelector<HTMLInputElement>('input[data-op="contains"]')?.value ?? '';
-    return v ? { op: 'contains', value: v } : null;
+  const activeMode = modes.dataset.activeMode;
+  if (activeMode === 'contains' || activeMode === 'exact') {
+    const v = modes.querySelector<HTMLInputElement>(`input[data-op="${activeMode}"]`)?.value ?? '';
+    return v ? { op: activeMode, value: v } : null;
   }
   const select = modes.querySelector<HTMLSelectElement>('select.filter-multi-select');
   if (!select) return null;

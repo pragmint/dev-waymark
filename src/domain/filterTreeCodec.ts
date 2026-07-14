@@ -21,7 +21,8 @@ const KIND_GROUP = 0x01;
 const VALUE_STRING = 0x00;
 const VALUE_ARRAY = 0x01;
 
-const LEAF_OPS: MetaFilterOp[] = ['eq', 'contains', 'gte', 'lte'];
+// Append-only: existing indices are load-bearing for encoded URLs.
+const LEAF_OPS: MetaFilterOp[] = ['eq', 'contains', 'gte', 'lte', 'exact'];
 const GROUP_OPS: FilterGroupOp[] = ['AND', 'OR', 'NOT'];
 
 class Writer {

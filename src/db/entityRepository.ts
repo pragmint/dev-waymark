@@ -97,11 +97,26 @@ function rangeSql(
   };
 }
 
+function exactSql(
+  leaf: FilterLeaf,
+  value: string,
+  entityField: EntityFieldConfig | undefined
+): SqlFragment {
+  if (entityField) {
+    return { sql: `e.${entityField.column} = ?`, params: [value] };
+  }
+  return {
+    sql: `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND value = ?)`,
+    params: [leaf.key, value],
+  };
+}
+
 function leafSql(leaf: FilterLeaf): SqlFragment {
   const entityField = ENTITY_FIELDS[leaf.key];
   if (leaf.op === 'eq') return eqSql(leaf, entityField);
   const value = Array.isArray(leaf.value) ? (leaf.value[0] ?? '') : leaf.value;
   if (leaf.op === 'contains') return containsSql(leaf, value, entityField);
+  if (leaf.op === 'exact') return exactSql(leaf, value, entityField);
   if (leaf.op === 'gte') return rangeSql(leaf, value, entityField, '>=');
   if (leaf.op === 'lte') return rangeSql(leaf, value, entityField, '<=');
   return { sql: '1=1', params: [] };
