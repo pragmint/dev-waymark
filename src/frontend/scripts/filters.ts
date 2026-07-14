@@ -3,6 +3,7 @@
 // view is driven by `state.current` and re-rendered on every change.
 
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
+import { cloneTreeWithoutKey } from '../../schemas/filterTree';
 
 type LeafOp = 'eq' | 'contains' | 'gte' | 'lte' | 'exact';
 type GroupOp = 'AND' | 'OR' | 'NOT';
@@ -1211,27 +1212,10 @@ function openLeafEditor(leafId: string) {
   }
 }
 
-// Build a clone of state.current with `leafId` removed, then collapse any
-// groups it leaves empty. Used by the editor to ask the server "what values
-// would be available if this leaf were turned off?".
-function cloneTreeWithoutLeaf(tree: FilterTree, leafId: string): FilterTree {
-  function strip(node: FilterNode): FilterNode | null {
-    if (node.type === 'filter') return node.id === leafId ? null : { ...node };
-    const kept: FilterNode[] = [];
-    for (const c of node.children) {
-      const cloned = strip(c);
-      if (cloned !== null) kept.push(cloned);
-    }
-    if (kept.length === 0) return null;
-    return { ...node, children: kept };
-  }
-  const stripped = strip(tree);
-  if (stripped === null || stripped.type === 'filter') return emptyTree();
-  return stripped as FilterTree;
-}
-
 async function fetchAvailableWithoutLeaf(leafId: string): Promise<AvailableFilter[]> {
-  const cloned = cloneTreeWithoutLeaf(state.current, leafId);
+  const leaf = findNode(state.current, leafId);
+  if (!leaf || leaf.type !== 'filter') return state.available;
+  const cloned = cloneTreeWithoutKey(state.current, leaf.key);
   const baseUrl = buildUrl(cloned, state.config.selectedPresetId);
   // `all_distinct=1` tells the handler to skip the default 20-value cap so
   // the editor's multi-select gets every value, not a truncated set.

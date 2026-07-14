@@ -1,5 +1,5 @@
 import { test, expect } from './strictTest';
-import { decodeTreeFromUrl, entitiesUrl, leaf } from './treeUrl';
+import { decodeTreeFromUrl, entitiesUrl, group, leaf } from './treeUrl';
 
 test('redirects root to /entities', async ({ page }) => {
   await page.goto('/');
@@ -118,6 +118,55 @@ test('editing a multi-select chip shows all values that would be available with 
   // The saved value is still preselected.
   const selected = await editor.locator('select[multiple] option:checked').allTextContents();
   expect(selected).toEqual(['dev-001']);
+});
+
+test('editing one of two same-field chips still shows every value with the current one selected', async ({
+  page,
+}) => {
+  // Regression: with two `creator` badges applied, editing either used to strip
+  // only the clicked leaf from the tree before asking the server for values —
+  // so the sibling badge would still narrow the dropdown to its own value, and
+  // the value being edited was missing (rendered as "0 selected"). Use an OR
+  // sub-group so the current-filter result set isn't empty — with an empty
+  // set the initial available data has no `creator` entry and the editor
+  // silently refuses to open (a different concern).
+  await page.goto(
+    entitiesUrl('github_pr', [
+      group('OR', [leaf('creator', 'eq', 'dev-001'), leaf('creator', 'eq', 'dev-002')]),
+    ])
+  );
+
+  const expected = Array.from({ length: 25 }, (_, i) => `dev-${String(i + 1).padStart(3, '0')}`);
+  const chips = page.locator('.filter-chip[data-filter-key="creator"]');
+  await expect(chips).toHaveCount(2);
+
+  // Edit the first creator badge (dev-001).
+  await chips.nth(0).locator('.filter-chip-content').click();
+  let editor = page.locator('[data-leaf-editor]');
+  await expect(editor).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await editor.locator('select[multiple] option').allTextContents()).slice().sort()
+    )
+    .toEqual(expected);
+  expect(await editor.locator('select[multiple] option:checked').allTextContents()).toEqual([
+    'dev-001',
+  ]);
+  await editor.locator('.filter-widget-cancel').click();
+  await expect(editor).toHaveCount(0);
+
+  // Edit the second creator badge (dev-002) — same expectations, different preselection.
+  await chips.nth(1).locator('.filter-chip-content').click();
+  editor = page.locator('[data-leaf-editor]');
+  await expect(editor).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await editor.locator('select[multiple] option').allTextContents()).slice().sort()
+    )
+    .toEqual(expected);
+  expect(await editor.locator('select[multiple] option:checked').allTextContents()).toEqual([
+    'dev-002',
+  ]);
 });
 
 test('editing a contains filter prefills the contains input and opens that mode', async ({

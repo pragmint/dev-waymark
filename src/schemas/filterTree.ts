@@ -107,6 +107,29 @@ export function collectLeaves(node: FilterNode): FilterLeaf[] {
   return out;
 }
 
+// Return a copy of `tree` with every leaf whose key === `key` removed, and any
+// groups that end up empty as a result also removed. If the whole tree
+// collapses (root's only descendants were leaves with this key), returns a
+// fresh empty root group. Used by the leaf editor to ask the server "what
+// values would be available if this field's filters were disabled?" — the
+// stripping is by key rather than by leaf id so that when the same field
+// appears in multiple badges, sibling badges don't narrow the value set.
+export function cloneTreeWithoutKey(tree: FilterTree, key: string): FilterTree {
+  function strip(node: FilterNode): FilterNode | null {
+    if (isLeaf(node)) return node.key === key ? null : { ...node };
+    const kept: FilterNode[] = [];
+    for (const child of node.children) {
+      const cloned = strip(child);
+      if (cloned !== null) kept.push(cloned);
+    }
+    if (kept.length === 0) return null;
+    return { ...node, children: kept };
+  }
+  const stripped = strip(tree);
+  if (stripped === null || isLeaf(stripped)) return emptyTree();
+  return stripped;
+}
+
 // `true` iff every leaf descendant of `node` is wrapped in a unary NOT group.
 // Empty groups return `false` (no leaves to negate). Used to derive a group's
 // "negated" state from its children rather than tracking it separately.

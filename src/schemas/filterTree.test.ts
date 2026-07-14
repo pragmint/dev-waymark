@@ -7,6 +7,7 @@ import {
   makeGroup,
   walkTree,
   cloneTree,
+  cloneTreeWithoutKey,
   collectLeaves,
   isLeaf,
   isGroup,
@@ -120,6 +121,81 @@ describe('collectLeaves', () => {
     const c = makeLeaf('c', 'eq', '3');
     const tree = makeGroup('AND', [a, makeGroup('OR', [b, c])]);
     expect(collectLeaves(tree).map(l => l.key)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('cloneTreeWithoutKey', () => {
+  it('removes every leaf with the given key across sibling positions', () => {
+    // Regression: with two `creator` badges at the same level, editing one
+    // used to strip only that leaf — leaving the other creator filter to
+    // narrow the value set the editor fetched from the server, which is
+    // exactly what shows up as "0 selected" in the dropdown.
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'github_pr'),
+      makeLeaf('creator', 'eq', 'dev-004'),
+      makeLeaf('creator', 'eq', 'dev-013'),
+    ]);
+    const result = cloneTreeWithoutKey(tree, 'creator');
+    expect(result.children).toHaveLength(1);
+    expect(collectLeaves(result).map(l => l.key)).toEqual(['entity_type']);
+  });
+
+  it('preserves leaves whose key does not match', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('creator', 'eq', 'dev-004'),
+      makeLeaf('owner', 'eq', 'Dave'),
+    ]);
+    const result = cloneTreeWithoutKey(tree, 'creator');
+    expect(collectLeaves(result).map(l => `${l.key}=${l.value}`)).toEqual(['owner=Dave']);
+  });
+
+  it('removes leaves nested in sub-groups and collapses groups that end up empty', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('entity_type', 'eq', 'github_pr'),
+      makeGroup('OR', [makeLeaf('creator', 'eq', 'dev-004'), makeLeaf('creator', 'eq', 'dev-013')]),
+    ]);
+    const result = cloneTreeWithoutKey(tree, 'creator');
+    // The OR sub-group had only creator leaves and should collapse away.
+    expect(result.children).toHaveLength(1);
+    expect(isLeaf(result.children[0])).toBe(true);
+    if (isLeaf(result.children[0])) expect(result.children[0].key).toBe('entity_type');
+  });
+
+  it('keeps sub-groups that still have non-matching children', () => {
+    const tree = makeGroup('AND', [
+      makeGroup('OR', [makeLeaf('creator', 'eq', 'dev-004'), makeLeaf('owner', 'eq', 'Dave')]),
+    ]);
+    const result = cloneTreeWithoutKey(tree, 'creator');
+    expect(result.children).toHaveLength(1);
+    const sub = result.children[0];
+    expect(isGroup(sub)).toBe(true);
+    if (isGroup(sub)) {
+      expect(sub.op).toBe('OR');
+      expect(collectLeaves(sub).map(l => l.key)).toEqual(['owner']);
+    }
+  });
+
+  it('returns a fresh empty root when every leaf matches', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('creator', 'eq', 'dev-004'),
+      makeLeaf('creator', 'eq', 'dev-013'),
+    ]);
+    const result = cloneTreeWithoutKey(tree, 'creator');
+    expect(result).toEqual(emptyTree());
+  });
+
+  it('does not mutate the input tree', () => {
+    const tree = makeGroup('AND', [
+      makeLeaf('creator', 'eq', 'dev-004'),
+      makeLeaf('owner', 'eq', 'Dave'),
+    ]);
+    const before = cloneTree(tree);
+    cloneTreeWithoutKey(tree, 'creator');
+    expect(tree).toEqual(before);
+  });
+
+  it('returns an empty tree unchanged', () => {
+    expect(cloneTreeWithoutKey(emptyTree(), 'anything')).toEqual(emptyTree());
   });
 });
 
