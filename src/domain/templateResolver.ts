@@ -96,7 +96,7 @@ function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
       timeBucket: slots.timeBucket,
     },
     derivedMetric: {
-      name: slots.numericFields.join(' + '),
+      name: slots.numericFields.length > 1 ? 'Sum of values' : slots.numericFields[0],
       type: 'sum',
       metadataKeys: slots.numericFields,
     },
