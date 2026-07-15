@@ -579,6 +579,142 @@ test.describe('edit-viz modal', () => {
   });
 });
 
+// ── Unit transform slots (measureTransform) ─────────────────────────────────
+// category_comparison and field_trend expose an optional unit divisor + label
+// pair so a raw numeric field (e.g. seconds) can be displayed in a
+// user-chosen unit consistently on the axis and in tooltips.
+
+test.describe('unit transform slots', () => {
+  test('category_comparison and field_trend both expose optional divisor/label inputs', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetUnit');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('UnitD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+
+    await page.locator('.viz-modal-template-card:has-text("Category comparison")').click();
+    await expect(page.locator('#viz-modal-form input[name="unit_divisor"]')).toBeVisible();
+    await expect(page.locator('#viz-modal-form input[name="unit_label"]')).toBeVisible();
+
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+    await expect(page.locator('#viz-modal-form input[name="unit_divisor"]')).toBeVisible();
+    await expect(page.locator('#viz-modal-form input[name="unit_label"]')).toBeVisible();
+  });
+
+  test('leaving the unit divisor/label blank does not block saving', async ({ page, request }) => {
+    const presetName = uniqueName('PresetUnitBlank');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('UnitBlankD'));
+    const vizName = uniqueName('UnitBlankViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category comparison")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', 'ticket_type');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_field"]',
+      'total_lead_time_seconds'
+    );
+    // unit_divisor / unit_label left blank on purpose.
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    await expect(page.locator(`.dashboard-viz-card:has-text("${vizName}")`)).toBeVisible();
+  });
+
+  test('a filled divisor/label scales the saved chart values and labels the axis + tooltip', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetUnitFilled');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('UnitFilledD'));
+    const vizName = uniqueName('UnitFilledViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category comparison")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', 'ticket_type');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_field"]',
+      'total_lead_time_seconds'
+    );
+    await page.selectOption('#viz-modal-form select[name="aggregation"]', 'avg');
+    await page.fill('#viz-modal-form input[name="unit_divisor"]', '86400');
+    await page.fill('#viz-modal-form input[name="unit_label"]', 'days');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toBeVisible();
+    const vizId = await card.getAttribute('data-viz-id');
+
+    const res = await request.get(`/api/chart-data/${vizId}`);
+    expect(res.ok()).toBeTruthy();
+    const { chartJsConfig } = await res.json();
+    expect(chartJsConfig.options.scales.y.title.text).toContain('days');
+    expect(chartJsConfig.options.plugins.tooltip.unitLabel).toBe('days');
+    // total_lead_time_seconds values are on the order of millions of seconds —
+    // divided by 86400 they land well under 1000 (days), proving the raw
+    // value was actually scaled and not just relabeled.
+    const value = chartJsConfig.data.datasets[0].data[0];
+    expect(value).toBeGreaterThan(0);
+    expect(value).toBeLessThan(1000);
+  });
+
+  test('editing a saved viz to change the divisor/label updates the displayed chart', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetUnitEdit'));
+    const vizId = await seedViz(
+      request,
+      presetId,
+      uniqueName('UnitEditViz'),
+      'category_comparison'
+    );
+    const dashId = await seedDashboard(request, uniqueName('UnitEditD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+
+    await page.fill('#viz-modal-form input[name="unit_divisor"]', '3600');
+    await page.fill('#viz-modal-form input[name="unit_label"]', 'hours');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    const res = await request.get(`/api/chart-data/${vizId}`);
+    const { chartJsConfig } = await res.json();
+    expect(chartJsConfig.options.scales.y.title.text).toContain('hours');
+    expect(chartJsConfig.options.plugins.tooltip.unitLabel).toBe('hours');
+
+    // Now clear the label — the transform should switch back off.
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+    await page.fill('#viz-modal-form input[name="unit_label"]', '');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    const res2 = await request.get(`/api/chart-data/${vizId}`);
+    const { chartJsConfig: cleared } = await res2.json();
+    expect(cleared.options.plugins.tooltip.unitLabel).toBeUndefined();
+  });
+});
+
 // ── Cross-dashboard integrity ───────────────────────────────────────────────
 
 test('a viz on two dashboards stays in sync via direct unlink', async ({ page, request }) => {

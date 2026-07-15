@@ -634,6 +634,61 @@ describe('buildChartData — target config', () => {
   });
 });
 
+describe('buildChartData — measureTransform', () => {
+  const config: VisualizationConfig = {
+    chartType: 'bar',
+    category: { metadataKey: 'team' },
+    yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+    aggregation: { function: 'max' },
+    measureTransform: { divisor: 86400, unitLabel: 'days' },
+  };
+
+  test('divides raw measure values by the divisor', () => {
+    const result = buildChartData(tickets, config);
+    const alphaIndex = result.labels.indexOf('Alpha');
+    // Alpha's max lead_time_seconds is 604800 (7 days) → 604800 / 86400 = 7.
+    expect(result.datasets[0].data[alphaIndex]).toBe(7);
+  });
+
+  test('changing the divisor changes the displayed value', () => {
+    const hours: VisualizationConfig = {
+      ...config,
+      measureTransform: { divisor: 3600, unitLabel: 'hours' },
+    };
+    const result = buildChartData(tickets, hours);
+    const alphaIndex = result.labels.indexOf('Alpha');
+    expect(result.datasets[0].data[alphaIndex]).toBe(168); // 604800 / 3600
+  });
+
+  test('horizontal_line target value is used as-authored, already in display units', () => {
+    // The user types "2" meaning 2 days directly — not 2 days worth of seconds.
+    const withTarget: VisualizationConfig = {
+      ...config,
+      target: { type: 'horizontal_line', value: 2, label: 'Goal' },
+    };
+    const result = buildChartData(tickets, withTarget);
+    const targetDs = result.datasets.find(d => d.label === 'Goal');
+    expect(targetDs!.data.every(v => v === 2)).toBe(true);
+  });
+
+  test('band target min/max are used as-authored, already in display units', () => {
+    const withBand: VisualizationConfig = {
+      ...config,
+      target: { type: 'band', min: 3, max: 7, label: 'Healthy' },
+    };
+    const result = buildChartData(tickets, withBand);
+    expect(result.datasets[1].data.every(v => v === 3)).toBe(true);
+    expect(result.datasets[2].data.every(v => v === 7)).toBe(true);
+  });
+
+  test('no transform leaves raw values untouched', () => {
+    const raw: VisualizationConfig = { ...config, measureTransform: undefined };
+    const result = buildChartData(tickets, raw);
+    const alphaIndex = result.labels.indexOf('Alpha');
+    expect(result.datasets[0].data[alphaIndex]).toBe(604800);
+  });
+});
+
 // ── buildChartJsConfig tests ──────────────────────────────────────────────────
 
 describe('buildChartJsConfig', () => {
@@ -697,6 +752,50 @@ describe('buildChartJsConfig', () => {
     const yAxis = scales.y as Record<string, unknown>;
     const title = yAxis.title as Record<string, unknown>;
     expect(title.text).toContain('days');
+  });
+
+  test('measureTransform unit label appears on the y-axis title', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+      aggregation: { function: 'avg' },
+      measureTransform: { divisor: 86400, unitLabel: 'days' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    const scales = jsConfig.options.scales as Record<string, unknown>;
+    const yAxis = scales.y as Record<string, unknown>;
+    const title = yAxis.title as Record<string, unknown>;
+    expect(title.text).toContain('days');
+  });
+
+  test('measureTransform unit label is carried as a tooltip hint for the client to consume', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+      aggregation: { function: 'avg' },
+      measureTransform: { divisor: 86400, unitLabel: 'days' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    const plugins = jsConfig.options.plugins as Record<string, unknown>;
+    const tooltip = plugins.tooltip as Record<string, unknown>;
+    expect(tooltip.unitLabel).toBe('days');
+  });
+
+  test('no unit label present when there is no unit/displayUnit/measureTransform', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    const plugins = jsConfig.options.plugins as Record<string, unknown>;
+    const tooltip = plugins.tooltip as Record<string, unknown>;
+    expect(tooltip.unitLabel).toBeUndefined();
   });
 });
 

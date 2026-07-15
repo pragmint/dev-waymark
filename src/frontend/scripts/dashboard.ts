@@ -109,6 +109,24 @@ function attachPointNavigation(config: ChartConfig, pointUrls: string[]): void {
   };
 }
 
+// The server carries a `unitLabel` hint on `options.plugins.tooltip` instead of a
+// real `callbacks.label` function, since chart configs are shipped to the browser
+// as JSON (functions don't survive that trip — see buildChartPlugins server-side).
+// Here we turn that hint into the actual Chart.js callback before rendering.
+function attachUnitTooltip(config: ChartConfig): void {
+  const options: ChartOptions = config.options ?? (config.options = {});
+  const plugins = (options.plugins ?? (options.plugins = {})) as Record<string, unknown>;
+  const tooltip = (plugins.tooltip ?? (plugins.tooltip = {})) as Record<string, unknown>;
+  const unitLabel = tooltip.unitLabel;
+  if (typeof unitLabel !== 'string' || !unitLabel) return;
+  tooltip.callbacks = {
+    label: (ctx: { dataset: { label?: string }; parsed: { x?: number; y?: number } }) => {
+      const value = ctx.parsed.y ?? ctx.parsed.x;
+      return `${ctx.dataset.label ?? ''}: ${value} ${unitLabel}`;
+    },
+  };
+}
+
 function renderCardChart(canvas: HTMLCanvasElement): void {
   Chart.getChart(canvas)?.destroy();
   const raw = canvas.getAttribute('data-config');
@@ -121,6 +139,7 @@ function renderCardChart(canvas: HTMLCanvasElement): void {
   }
   const pointUrls = readPointUrls(canvas);
   if (pointUrls) attachPointNavigation(config, pointUrls);
+  attachUnitTooltip(config);
   new Chart(canvas, config);
 }
 
@@ -509,10 +528,13 @@ interface SlotFieldDef {
   slotKey: string;
   formName: string;
   label: string;
-  kind: 'field' | 'multi_field' | 'time_bucket' | 'aggregation' | 'unit';
+  kind: 'field' | 'multi_field' | 'time_bucket' | 'aggregation' | 'unit' | 'number' | 'text';
   primaryType?: 'string' | 'number' | 'date';
   defaultValue?: string;
   description?: string;
+  // Defaults to true when omitted — set false for slots the user may leave blank
+  // (e.g. the optional measure-transform fields below).
+  required?: boolean;
 }
 
 const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
@@ -635,6 +657,24 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       description:
         'How values within each time bucket are combined into a single point (e.g. average, sum, median).',
     },
+    {
+      slotKey: 'unitDivisor',
+      formName: 'unit_divisor',
+      label: 'Unit divisor (optional)',
+      kind: 'number',
+      required: false,
+      description:
+        'Divide the raw value by this number before displaying — e.g. 86400 to turn seconds into days. Leave blank for no transform.',
+    },
+    {
+      slotKey: 'unitLabel',
+      formName: 'unit_label',
+      label: 'Unit label (optional)',
+      kind: 'text',
+      required: false,
+      description:
+        'Shown on the axis and in tooltips, e.g. "days". Required to activate the divisor above.',
+    },
   ],
   category_comparison: [
     {
@@ -661,6 +701,24 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       defaultValue: 'avg',
       description:
         'How values within each category are combined into a single bar (e.g. average, sum, median).',
+    },
+    {
+      slotKey: 'unitDivisor',
+      formName: 'unit_divisor',
+      label: 'Unit divisor (optional)',
+      kind: 'number',
+      required: false,
+      description:
+        'Divide the raw value by this number before displaying — e.g. 86400 to turn seconds into days. Leave blank for no transform.',
+    },
+    {
+      slotKey: 'unitLabel',
+      formName: 'unit_label',
+      label: 'Unit label (optional)',
+      kind: 'text',
+      required: false,
+      description:
+        'Shown on the axis and in tooltips, e.g. "days". Required to activate the divisor above.',
     },
   ],
 };
@@ -1110,9 +1168,7 @@ function populateSingleSlotOptions(
   }
 }
 
-function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'form-field';
+function buildSlotLabel(def: SlotFieldDef): HTMLLabelElement {
   const lab = document.createElement('label');
   lab.className = 'filter-widget-label';
   const title = document.createElement('span');
@@ -1125,7 +1181,29 @@ function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElemen
     hint.textContent = ` - ${def.description}`;
     lab.appendChild(hint);
   }
-  wrap.appendChild(lab);
+  return lab;
+}
+
+function buildSlotInput(def: SlotFieldDef, value: string | string[]): HTMLInputElement {
+  const single = Array.isArray(value) ? (value[0] ?? '') : value;
+  const input = document.createElement('input');
+  input.type = def.kind === 'number' ? 'number' : 'text';
+  input.name = def.formName;
+  input.className = 'filter-input';
+  input.value = single;
+  if (def.kind === 'number') input.step = 'any';
+  return input;
+}
+
+function buildSlotField(def: SlotFieldDef, value: string | string[]): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'form-field';
+  wrap.appendChild(buildSlotLabel(def));
+
+  if (def.kind === 'number' || def.kind === 'text') {
+    wrap.appendChild(buildSlotInput(def, value));
+    return wrap;
+  }
 
   const select = document.createElement('select');
   select.className = 'filter-select';
@@ -1170,10 +1248,14 @@ function readModalForm(): {
   if (!tid) return null;
   const slots: Record<string, string | string[]> = {};
   for (const def of TEMPLATE_SLOT_DEFS[tid] ?? []) {
-    const el = form.elements.namedItem(def.formName) as HTMLSelectElement | null;
     if (def.kind === 'multi_field') {
+      const el = form.elements.namedItem(def.formName) as HTMLSelectElement | null;
       slots[def.slotKey] = el ? Array.from(el.selectedOptions).map(o => o.value) : [];
     } else {
+      const el = form.elements.namedItem(def.formName) as
+        | HTMLSelectElement
+        | HTMLInputElement
+        | null;
       slots[def.slotKey] = el?.value || def.defaultValue || '';
     }
   }
@@ -1182,6 +1264,18 @@ function readModalForm(): {
 
 function isSlotEmpty(value: string | string[]): boolean {
   return Array.isArray(value) ? value.length === 0 : !value;
+}
+
+// Only slots marked required (the default) must be filled before preview/save —
+// e.g. the optional unit-transform fields may be left blank.
+function hasEmptyRequiredSlot(
+  templateId: string,
+  slots: Record<string, string | string[]>
+): boolean {
+  const defs = TEMPLATE_SLOT_DEFS[templateId] ?? [];
+  return defs
+    .filter(def => def.required !== false)
+    .some(def => isSlotEmpty(slots[def.slotKey] ?? ''));
 }
 
 function scheduleModalPreview(): void {
@@ -1198,7 +1292,7 @@ async function runModalPreview(): Promise<void> {
   modalState.name = form.name;
   modalState.description = form.description;
   modalState.slots = form.slots;
-  if (Object.values(form.slots).some(isSlotEmpty)) return;
+  if (hasEmptyRequiredSlot(modalState.templateId, form.slots)) return;
 
   const warningsEl = document.getElementById('viz-modal-warnings');
   if (warningsEl) warningsEl.innerHTML = '';
@@ -1225,7 +1319,7 @@ async function fetchAndRenderModalPreview(slots: Record<string, string | string[
     return;
   }
   const data = (await resp.json()) as {
-    chartJsConfig: object;
+    chartJsConfig: ChartConfig;
     warnings: string[];
     excludedEntitiesUrl?: string | null;
   };
@@ -1233,6 +1327,7 @@ async function fetchAndRenderModalPreview(slots: Record<string, string | string[
   const canvas = document.getElementById('viz-modal-preview') as HTMLCanvasElement | null;
   if (!canvas) return;
   if (modalPreviewChart) modalPreviewChart.destroy();
+  attachUnitTooltip(data.chartJsConfig);
   modalPreviewChart = new Chart(canvas, data.chartJsConfig);
 }
 
@@ -1283,7 +1378,7 @@ function validateAndReadForm(): {
     showModalWarnings(['Name is required.']);
     return null;
   }
-  if (Object.values(form.slots).some(isSlotEmpty)) {
+  if (hasEmptyRequiredSlot(modalState.templateId, form.slots)) {
     showModalWarnings(['Fill in every configuration field.']);
     return null;
   }

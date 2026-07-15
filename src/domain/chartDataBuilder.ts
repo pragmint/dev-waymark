@@ -325,6 +325,27 @@ function applyDisplayConversion(value: number, config: VisualizationConfig): num
   return value;
 }
 
+// General-purpose per-measure transform (see MeasureTransformSchema) — applied on
+// top of any duration/display-unit conversion above, so it composes with both a
+// derived duration metric and a plain numeric field.
+function applyMeasureTransform(value: number, config: VisualizationConfig): number {
+  return config.measureTransform ? value / config.measureTransform.divisor : value;
+}
+
+function transformMeasureValue(value: number, config: VisualizationConfig): number {
+  return applyMeasureTransform(applyDisplayConversion(value, config), config);
+}
+
+// The unit text shown on the y-axis title and in tooltips. An explicit
+// measureTransform label takes priority over the duration-only unit/displayUnit
+// mechanism, since it's the more general, user-authored mechanism.
+function resolveUnitLabel(config: VisualizationConfig): string | undefined {
+  if (config.measureTransform) return config.measureTransform.unitLabel;
+  if (config.yAxis?.displayUnit) return config.yAxis.displayUnit;
+  if (config.derivedMetric?.type === 'duration') return config.derivedMetric.unit;
+  return undefined;
+}
+
 function sortGroupLabels(groups: Map<string, number[]>, config: VisualizationConfig): string[] {
   if (config.xAxis?.timeBucket) {
     return Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
@@ -395,7 +416,7 @@ export function buildChartData(
       continue;
     }
 
-    rows.push({ label, value: applyDisplayConversion(metricValue!, config) });
+    rows.push({ label, value: transformMeasureValue(metricValue!, config) });
   }
 
   const groups = new Map<string, number[]>();
@@ -419,6 +440,10 @@ export function buildChartData(
   return { labels, datasets, warnings, excludedEntityCount: excludedCount };
 }
 
+// Target/goal values are authored directly by the user in the chart's displayed
+// unit (e.g. "5" meaning 5 days once a measureTransform/displayUnit is showing
+// days) — unlike entity-derived measure values, they never carry a raw storage
+// unit, so no conversion is applied here.
 function buildTargetDatasets(target: TargetConfig, labels: string[]): ChartJsDataset[] {
   if (target.type === 'horizontal_line') {
     return [
@@ -510,11 +535,18 @@ function styleMainDataset(
 function buildChartPlugins(
   config: VisualizationConfig,
   datasetCount: number,
-  isCircular: boolean
+  isCircular: boolean,
+  unitLabel: string | undefined
 ): Record<string, unknown> {
+  // `unitLabel` is carried as inert data on the tooltip options rather than a
+  // `callbacks.label` function, since this config is serialized to JSON and sent
+  // to the browser (see buildChartJsConfig call sites) — functions don't survive
+  // that trip. The client wires the actual callback from this hint at render time.
+  const tooltip: Record<string, unknown> = { enabled: true };
+  if (unitLabel) tooltip.unitLabel = unitLabel;
   const plugins: Record<string, unknown> = {
     legend: { display: datasetCount > 1 || isCircular },
-    tooltip: { enabled: true },
+    tooltip,
   };
   if (config.target?.type === 'vertical_line') {
     plugins.title = {
@@ -533,13 +565,11 @@ function buildChartOptions(
   config: VisualizationConfig,
   isCircular: boolean
 ): Record<string, unknown> {
-  const displayUnit =
-    config.yAxis?.displayUnit ??
-    (config.derivedMetric?.type === 'duration' ? config.derivedMetric.unit : undefined);
+  const unitLabel = resolveUnitLabel(config);
   const mainLabel = result.datasets[0]?.label ?? '';
-  const yAxisLabel = displayUnit ? `${mainLabel} (${displayUnit})` : mainLabel;
+  const yAxisLabel = unitLabel ? `${mainLabel} (${unitLabel})` : mainLabel;
   const xAxisLabel = config.xAxis?.metadataKey ?? config.category?.metadataKey ?? '';
-  const plugins = buildChartPlugins(config, result.datasets.length, isCircular);
+  const plugins = buildChartPlugins(config, result.datasets.length, isCircular, unitLabel);
   const scalesConfig = isCircular
     ? undefined
     : {

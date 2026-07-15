@@ -117,4 +117,79 @@ describe('resolveTemplate', () => {
     expect(config.yAxis?.metadataKey).toBe('lead_time');
     expect(config.aggregation.function).toBe('p90');
   });
+
+  test('category_comparison with unit divisor/label produces a measureTransform', () => {
+    const config = resolveTemplate({
+      templateId: 'category_comparison',
+      slots: {
+        categoryField: 'team',
+        numericField: 'lead_time_seconds',
+        aggregation: 'avg',
+        unitDivisor: '86400',
+        unitLabel: 'days',
+      },
+    });
+
+    expect(config.measureTransform).toEqual({ divisor: 86400, unitLabel: 'days' });
+  });
+
+  test('category_comparison omits measureTransform when unitLabel is blank', () => {
+    const config = resolveTemplate({
+      templateId: 'category_comparison',
+      slots: {
+        categoryField: 'team',
+        numericField: 'lead_time_seconds',
+        aggregation: 'avg',
+        unitDivisor: '86400',
+        unitLabel: '',
+      },
+    });
+
+    expect(config.measureTransform).toBeUndefined();
+  });
+
+  test('category_comparison falls back to divisor 1 when unitDivisor is invalid', () => {
+    const config = resolveTemplate({
+      templateId: 'category_comparison',
+      slots: {
+        categoryField: 'team',
+        numericField: 'lead_time_seconds',
+        aggregation: 'avg',
+        unitDivisor: 'not-a-number',
+        unitLabel: 'story points',
+      },
+    });
+
+    expect(config.measureTransform).toEqual({ divisor: 1, unitLabel: 'story points' });
+  });
+
+  test('field_trend with unit divisor/label produces a measureTransform', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['cycle_time_seconds'],
+        timeBucket: 'week',
+        aggregation: 'avg',
+        unitDivisor: '3600',
+        unitLabel: 'hours',
+      },
+    });
+
+    expect(config.measureTransform).toEqual({ divisor: 3600, unitLabel: 'hours' });
+  });
+
+  test('field_trend omits measureTransform when unit slots are absent', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['story_points'],
+        timeBucket: 'week',
+        aggregation: 'avg',
+      },
+    });
+
+    expect(config.measureTransform).toBeUndefined();
+  });
 });

@@ -42,6 +42,9 @@ export const FieldTrendSlotsSchema = z.object({
   numericFields: z.array(z.string().min(1)).min(1),
   timeBucket: z.enum(['day', 'week', 'month', 'quarter', 'year']),
   aggregation: z.enum(['avg', 'sum', 'min', 'max', 'median', 'p75', 'p85', 'p90', 'p95', 'p99']),
+  // Optional per-measure display transform — see MeasureTransformSchema in visualization.ts.
+  unitDivisor: z.string().optional(),
+  unitLabel: z.string().optional(),
 });
 export type FieldTrendSlots = z.infer<typeof FieldTrendSlotsSchema>;
 
@@ -49,6 +52,8 @@ export const CategoryComparisonSlotsSchema = z.object({
   categoryField: z.string().min(1),
   numericField: z.string().min(1),
   aggregation: z.enum(['avg', 'sum', 'min', 'max', 'median', 'p75', 'p85', 'p90', 'p95', 'p99']),
+  unitDivisor: z.string().optional(),
+  unitLabel: z.string().optional(),
 });
 export type CategoryComparisonSlots = z.infer<typeof CategoryComparisonSlotsSchema>;
 

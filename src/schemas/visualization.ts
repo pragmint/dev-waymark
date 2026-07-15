@@ -25,6 +25,15 @@ export type AggregationFunction = z.infer<typeof AggregationFunctionSchema>;
 export const DurationUnitSchema = z.enum(['seconds', 'minutes', 'hours', 'days', 'weeks']);
 export type DurationUnit = z.infer<typeof DurationUnitSchema>;
 
+// A general-purpose, per-measure display transform: divides the raw stored value
+// (whose unit Waymark cannot infer, e.g. a "seconds" field) by `divisor` and labels
+// the result with `unitLabel` wherever that measure is shown (axis, tooltip, targets).
+export const MeasureTransformSchema = z.object({
+  divisor: z.number().positive(),
+  unitLabel: z.string().min(1),
+});
+export type MeasureTransform = z.infer<typeof MeasureTransformSchema>;
+
 export const AxisConfigSchema = z.object({
   metadataKey: z.string(),
   type: z.enum(['string', 'number', 'date', 'boolean']),
@@ -92,6 +101,7 @@ export const VisualizationConfigSchema = z.object({
   aggregation: AggregationConfigSchema,
   derivedMetric: DerivedMetricConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
+  measureTransform: MeasureTransformSchema.optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),
   layout: VisualizationLayoutSchema.optional(),
   _templateConfig: TemplateConfigSchema.optional(),

@@ -224,6 +224,19 @@ describe('TemplateConfigSchema — field_trend', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an optional unitDivisor/unitLabel pair', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'field_trend',
+      slots: { ...validSlots, unitDivisor: '86400', unitLabel: 'days' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a config with unitDivisor/unitLabel omitted', () => {
+    const result = TemplateConfigSchema.safeParse({ templateId: 'field_trend', slots: validSlots });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('TemplateConfigSchema — category_comparison', () => {
@@ -255,6 +268,14 @@ describe('TemplateConfigSchema — category_comparison', () => {
       slots: { ...validSlots, aggregation: 'count' },
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts an optional unitDivisor/unitLabel pair', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'category_comparison',
+      slots: { ...validSlots, unitDivisor: '86400', unitLabel: 'days' },
+    });
+    expect(result.success).toBe(true);
   });
 });
 

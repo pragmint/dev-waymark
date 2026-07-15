@@ -1,4 +1,4 @@
-import type { VisualizationConfig } from '../schemas/visualization';
+import type { MeasureTransform, VisualizationConfig } from '../schemas/visualization';
 import type {
   TemplateConfig,
   DurationTrendSlots,
@@ -8,6 +8,19 @@ import type {
   FieldTrendSlots,
   CategoryComparisonSlots,
 } from '../schemas/visualizationTemplate';
+
+// Turns the optional unitDivisor/unitLabel slot pair into a MeasureTransform.
+// A label is required to activate the transform; an invalid or missing divisor
+// falls back to 1 (i.e. no scaling, just a relabel).
+function resolveMeasureTransform(slots: {
+  unitDivisor?: string;
+  unitLabel?: string;
+}): MeasureTransform | undefined {
+  const unitLabel = slots.unitLabel?.trim();
+  if (!unitLabel) return undefined;
+  const divisor = Number(slots.unitDivisor);
+  return { divisor: divisor > 0 ? divisor : 1, unitLabel };
+}
 
 /**
  * Converts a template selection + filled slots into a VisualizationConfig
@@ -88,6 +101,7 @@ function resolveThroughputOverTime(slots: ThroughputOverTimeSlots): Visualizatio
 }
 
 function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
+  const measureTransform = resolveMeasureTransform(slots);
   return {
     chartType: 'line',
     xAxis: {
@@ -101,10 +115,12 @@ function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
       metadataKeys: slots.numericFields,
     },
     aggregation: { function: slots.aggregation },
+    ...(measureTransform ? { measureTransform } : {}),
   };
 }
 
 function resolveCategoryComparison(slots: CategoryComparisonSlots): VisualizationConfig {
+  const measureTransform = resolveMeasureTransform(slots);
   return {
     chartType: 'bar',
     category: {
@@ -116,5 +132,6 @@ function resolveCategoryComparison(slots: CategoryComparisonSlots): Visualizatio
       type: 'number',
     },
     aggregation: { function: slots.aggregation },
+    ...(measureTransform ? { measureTransform } : {}),
   };
 }
