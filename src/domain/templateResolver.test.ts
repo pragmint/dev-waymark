@@ -99,7 +99,7 @@ describe('resolveTemplate', () => {
       'story_points',
       'bonus_points',
     ]);
-    expect(config.derivedMetric?.name).toBe('story_points + bonus_points');
+    expect(config.derivedMetric?.name).toBe('Sum of values');
   });
 
   test('category_comparison produces bar chart with numeric field', () => {
