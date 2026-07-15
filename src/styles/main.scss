@@ -1122,14 +1122,14 @@ form {
   background: #fff3f3;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   white-space: normal;
-  transition: opacity 0.2s ease 0.5s;
+  transition: opacity 0.15s ease;
 
-  .warning-indicator:hover &,
-  .warning-indicator:focus-within &,
-  &:hover {
+  // Visibility is driven by JS (see wireWarningPopovers in dashboard.ts), which keeps the
+  // popover open for a grace period after the pointer leaves and while it's over either the
+  // icon or the popover itself — CSS :hover alone can't express that "stay open a bit longer".
+  .warning-indicator.is-visible & {
     opacity: 1;
     pointer-events: auto;
-    transition: opacity 0s ease;
   }
 }
 

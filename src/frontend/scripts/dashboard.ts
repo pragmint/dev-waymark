@@ -1553,6 +1553,71 @@ function wireDateRange(): void {
   });
 }
 
+// ── Warning popover ──────────────────────────────────────────────────────────
+
+const WARNING_HIDE_DELAY_MS = 500;
+const warningHideTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+function showWarningPopover(indicator: HTMLElement): void {
+  const pending = warningHideTimers.get(indicator);
+  if (pending) {
+    clearTimeout(pending);
+    warningHideTimers.delete(indicator);
+  }
+  indicator.classList.add('is-visible');
+}
+
+function scheduleHideWarningPopover(indicator: HTMLElement): void {
+  const pending = warningHideTimers.get(indicator);
+  if (pending) clearTimeout(pending);
+  warningHideTimers.set(
+    indicator,
+    setTimeout(() => {
+      warningHideTimers.delete(indicator);
+      indicator.classList.remove('is-visible');
+    }, WARNING_HIDE_DELAY_MS)
+  );
+}
+
+// Delegated so it keeps working for indicators rebuilt by buildWarningIndicator() after a
+// card refresh. mouseover/mouseout (rather than mouseenter/mouseleave, which don't bubble)
+// let a single listener on the grid cover every card's warning icon + popover as one unit.
+function wireWarningPopovers(): void {
+  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
+  if (!grid) return;
+
+  const movedWithinIndicator = (e: MouseEvent | FocusEvent, indicator: HTMLElement): boolean => {
+    const related = e.relatedTarget as Node | null;
+    return !!related && indicator.contains(related);
+  };
+
+  grid.addEventListener('mouseover', e => {
+    const indicator = (e.target as HTMLElement).closest<HTMLElement>('.warning-indicator');
+    if (indicator) showWarningPopover(indicator);
+  });
+
+  grid.addEventListener('mouseout', e => {
+    const indicator = (e.target as HTMLElement).closest<HTMLElement>('.warning-indicator');
+    if (indicator && !movedWithinIndicator(e, indicator)) scheduleHideWarningPopover(indicator);
+  });
+
+  grid.addEventListener('focusin', e => {
+    const indicator = (e.target as HTMLElement).closest<HTMLElement>('.warning-indicator');
+    if (indicator) showWarningPopover(indicator);
+  });
+
+  grid.addEventListener('focusout', e => {
+    const indicator = (e.target as HTMLElement).closest<HTMLElement>('.warning-indicator');
+    if (indicator && !movedWithinIndicator(e, indicator)) scheduleHideWarningPopover(indicator);
+  });
+
+  // The icon has no click behavior of its own — only the "View excluded entities" link
+  // inside the popover should ever navigate.
+  grid.addEventListener('click', e => {
+    if ((e.target as HTMLElement).closest('.warning-icon')) e.preventDefault();
+  });
+}
+
 // ── Edit pencil ──────────────────────────────────────────────────────────────
 
 function wireEditButtons(): void {
@@ -1581,6 +1646,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wireAddVizSelect();
   wireRemoveButtons();
   wireEditButtons();
+  wireWarningPopovers();
   wireDragReorder();
   wireDateRange();
   recomputeDirty();
