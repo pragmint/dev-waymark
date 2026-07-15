@@ -1273,6 +1273,10 @@ form {
   }
 }
 
+.dashboard-viz-card--wide {
+  grid-column: span 2;
+}
+
 .dashboard-viz-card-header {
   display: flex;
   align-items: center;
@@ -1589,6 +1593,11 @@ form {
 
   .dashboard-viz-grid {
     grid-template-columns: 1fr;
+  }
+
+  // Single-column grid: a wide card has nothing to span into, so drop the span.
+  .dashboard-viz-card--wide {
+    grid-column: span 1;
   }
 
   // Keep the dashboard picker + date range visible while scrolling a long

@@ -21,6 +21,7 @@ import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
 import { DashboardPage } from '../frontend/Pages/DashboardPage';
 import type { DashboardCard } from '../frontend/Pages/DashboardPage';
 import type { FilterNode, FilterTree } from '../schemas/filterTree';
+import { VisualizationLayoutSchema } from '../schemas/visualization';
 import type { VisualizationConfig, VisualizationSummary } from '../schemas/visualization';
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
@@ -76,6 +77,7 @@ async function buildCard(
     warnings: chartResult.warnings,
     excludedEntityCount: chartResult.excludedEntityCount,
     excludedEntitiesUrl,
+    layout: viz.config.layout ?? 'normal',
   };
 }
 
@@ -167,6 +169,7 @@ async function parseVisualizationInput(
     description?: unknown;
     presetId?: unknown;
     templateConfig?: unknown;
+    layout?: unknown;
   }>();
 
   const name = typeof body.name === 'string' ? body.name.trim() : '';
@@ -191,6 +194,13 @@ async function parseVisualizationInput(
     };
   }
 
+  const layoutParsed = VisualizationLayoutSchema.safeParse(body.layout ?? 'normal');
+  if (!layoutParsed.success) {
+    return {
+      response: c.json({ error: 'Invalid layout', details: layoutParsed.error.issues }, 400),
+    };
+  }
+
   const config = resolveTemplate(tcParsed.data);
   const validationErrors = validateVisualizationConfig(config);
   if (validationErrors.length > 0) {
@@ -199,7 +209,11 @@ async function parseVisualizationInput(
     };
   }
 
-  const configWithTemplate = { ...config, _templateConfig: tcParsed.data };
+  const configWithTemplate = {
+    ...config,
+    layout: layoutParsed.data,
+    _templateConfig: tcParsed.data,
+  };
   return { name, description, presetId: body.presetId, configWithTemplate };
 }
 
@@ -239,6 +253,7 @@ export async function visualizationDetailApiHandler(c: Context) {
     description: viz.description,
     presetId: viz.presetId,
     templateConfig: viz.config._templateConfig ?? null,
+    layout: viz.config.layout ?? 'normal',
   });
 }
 

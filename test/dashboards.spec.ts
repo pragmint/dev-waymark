@@ -440,6 +440,92 @@ test.describe('create-viz modal', () => {
   });
 });
 
+// ── Extra-wide viz layout ───────────────────────────────────────────────────
+
+test.describe('extra-wide viz layout', () => {
+  test('setting "Double wide" in the create modal renders a wide card and persists via the API', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetWide');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('WideD'));
+    const vizName = uniqueName('WideViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', { index: 1 });
+    await page.selectOption('#viz-modal-form select[name="layout"]', 'wide');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toBeVisible();
+    await expect(card).toHaveClass(/dashboard-viz-card--wide/);
+
+    const vizId = await card.getAttribute('data-viz-id');
+    const res = await request.get(`/api/visualizations/${vizId}`);
+    expect((await res.json()).layout).toBe('wide');
+  });
+
+  test('a wide card keeps its wide class after an AJAX date-range refresh', async ({
+    page,
+    request,
+  }) => {
+    // applyCardUpdate() re-toggles dashboard-viz-card--wide on every range-driven
+    // card refresh; this guards against that toggle being dropped or inverted.
+    const presetName = uniqueName('PresetWideRange');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('WideRangeD'));
+    const vizName = uniqueName('WideRangeViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', { index: 1 });
+    await page.selectOption('#viz-modal-form select[name="layout"]', 'wide');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toHaveClass(/dashboard-viz-card--wide/);
+
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-date-range-period]', 'week');
+    await expect(page.locator('[data-date-range-label]')).toBeVisible();
+    await expect(card).toHaveClass(/dashboard-viz-card--wide/);
+  });
+
+  test('editing a viz from Normal to "Double wide" adds the wide class after save', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWideEdit'));
+    const vizId = await seedViz(request, presetId, uniqueName('WideEditViz'));
+    const dashId = await seedDashboard(request, uniqueName('WideEditD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+    await expect(card).not.toHaveClass(/dashboard-viz-card--wide/);
+
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+    await page.selectOption('#viz-modal-form select[name="layout"]', 'wide');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+
+    await expect(card).toHaveClass(/dashboard-viz-card--wide/);
+    const res = await request.get(`/api/visualizations/${vizId}`);
+    expect((await res.json()).layout).toBe('wide');
+  });
+});
+
 // ── Edit modal (pencil) ─────────────────────────────────────────────────────
 
 test.describe('edit-viz modal', () => {

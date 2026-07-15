@@ -673,6 +673,7 @@ interface ModalState {
   templateId: string | null;
   name: string;
   description: string;
+  layout: 'normal' | 'wide';
   slots: Record<string, string | string[]>;
   availableFields: AvailableField[];
   warnings: string[];
@@ -686,6 +687,7 @@ let modalState: ModalState = {
   templateId: null,
   name: '',
   description: '',
+  layout: 'normal',
   slots: {},
   availableFields: [],
   warnings: [],
@@ -706,6 +708,7 @@ function resetModalState(): void {
     templateId: null,
     name: '',
     description: '',
+    layout: 'normal',
     slots: {},
     availableFields: [],
     warnings: [],
@@ -750,6 +753,7 @@ async function openEditModal(vizId: number): Promise<void> {
     description: string | null;
     presetId: number;
     templateConfig: { templateId: string; slots: Record<string, string | string[]> } | null;
+    layout?: string;
   };
   if (!detail.templateConfig) {
     showModalWarnings(['This visualization has no template config and cannot be edited here.']);
@@ -759,6 +763,7 @@ async function openEditModal(vizId: number): Promise<void> {
   modalState.templateId = detail.templateConfig.templateId;
   modalState.name = detail.name;
   modalState.description = detail.description ?? '';
+  modalState.layout = detail.layout === 'wide' ? 'wide' : 'normal';
   modalState.slots = { ...detail.templateConfig.slots };
 
   if (dashResp.ok) {
@@ -982,6 +987,12 @@ function renderConfigSection(): HTMLElement {
 
   form.appendChild(field('Name', 'text', 'name', modalState.name, true));
   form.appendChild(field('Description', 'text', 'description', modalState.description, false));
+  form.appendChild(
+    selectField('Layout width', 'layout', modalState.layout, [
+      ['normal', 'Normal'],
+      ['wide', 'Double wide'],
+    ])
+  );
 
   for (const def of slotDefs) {
     form.appendChild(buildSlotField(def, modalState.slots[def.slotKey] ?? def.defaultValue ?? ''));
@@ -1009,6 +1020,7 @@ function captureFormState(): void {
   if (!captured) return;
   modalState.name = captured.name;
   modalState.description = captured.description;
+  modalState.layout = captured.layout;
   modalState.slots = captured.slots;
 }
 
@@ -1032,6 +1044,26 @@ function field(
   if (required) input.required = true;
   wrap.appendChild(lab);
   wrap.appendChild(input);
+  return wrap;
+}
+
+function selectField(
+  label: string,
+  name: string,
+  value: string,
+  options: [string, string][]
+): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'form-field';
+  const lab = document.createElement('label');
+  lab.className = 'filter-widget-label';
+  lab.textContent = label;
+  const select = document.createElement('select');
+  select.className = 'filter-select';
+  select.name = name;
+  for (const [v, l] of options) select.appendChild(opt(v, l, value === v));
+  wrap.appendChild(lab);
+  wrap.appendChild(select);
   return wrap;
 }
 
@@ -1123,6 +1155,7 @@ function opt(value: string, label: string, selected = false): HTMLOptionElement 
 function readModalForm(): {
   name: string;
   description: string;
+  layout: 'normal' | 'wide';
   slots: Record<string, string | string[]>;
 } | null {
   const form = document.getElementById('viz-modal-form') as HTMLFormElement | null;
@@ -1131,6 +1164,8 @@ function readModalForm(): {
   const description = (
     (form.elements.namedItem('description') as HTMLInputElement | null)?.value ?? ''
   ).trim();
+  const layoutValue = (form.elements.namedItem('layout') as HTMLSelectElement | null)?.value;
+  const layout: 'normal' | 'wide' = layoutValue === 'wide' ? 'wide' : 'normal';
   const tid = modalState.templateId;
   if (!tid) return null;
   const slots: Record<string, string | string[]> = {};
@@ -1142,7 +1177,7 @@ function readModalForm(): {
       slots[def.slotKey] = el?.value || def.defaultValue || '';
     }
   }
-  return { name, description, slots };
+  return { name, description, layout, slots };
 }
 
 function isSlotEmpty(value: string | string[]): boolean {
@@ -1231,6 +1266,7 @@ function showModalWarnings(details: unknown, excludedEntitiesUrl: string | null 
 function validateAndReadForm(): {
   name: string;
   description: string;
+  layout: 'normal' | 'wide';
   slots: Record<string, string | string[]>;
 } | null {
   if (modalState.presetId == null) {
@@ -1265,6 +1301,7 @@ async function saveModalCreate(): Promise<void> {
       description: form.description || null,
       presetId: modalState.presetId,
       templateConfig: { templateId: modalState.templateId, slots: form.slots },
+      layout: form.layout,
     }),
   });
   if (!resp.ok) {
@@ -1287,6 +1324,7 @@ async function saveModalEditInPlace(): Promise<void> {
       description: form.description || null,
       presetId: modalState.presetId,
       templateConfig: { templateId: modalState.templateId, slots: form.slots },
+      layout: form.layout,
     }),
   });
   if (!resp.ok) {
@@ -1405,6 +1443,7 @@ interface CardPayload {
   warnings: string[];
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
+  layout: 'normal' | 'wide';
 }
 
 function applyCardUpdate(card: CardPayload): void {
@@ -1412,6 +1451,8 @@ function applyCardUpdate(card: CardPayload): void {
     `.dashboard-viz-card[data-viz-id="${card.id}"]`
   );
   if (!cardEl) return;
+
+  cardEl.classList.toggle('dashboard-viz-card--wide', card.layout === 'wide');
 
   const existingWarning = cardEl.querySelector('.warning-indicator');
   existingWarning?.remove();

@@ -17,6 +17,7 @@ export type DashboardCard = {
   warnings: string[];
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
+  layout: 'normal' | 'wide';
 };
 
 type Props = {
@@ -357,7 +358,11 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
   card,
   dashboardCount,
 }) => (
-  <div class="dashboard-viz-card" data-viz-id={card.id} draggable={true}>
+  <div
+    class={`dashboard-viz-card${card.layout === 'wide' ? ' dashboard-viz-card--wide' : ''}`}
+    data-viz-id={card.id}
+    draggable={true}
+  >
     <div class="dashboard-viz-card-header">
       <span class="dashboard-viz-card-grip" aria-hidden="true">
         ⋮⋮
