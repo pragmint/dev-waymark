@@ -22,6 +22,7 @@ import {
   resolveVizDateField,
 } from '../domain/dateRange';
 import type { ComputedDateRange, DateRange } from '../domain/dateRange';
+import { nextDashboardCopyName } from '../domain/dashboardNaming';
 import { buildEntityUrl } from '../domain/filterUrl';
 import { resolveTemplate } from '../domain/templateResolver';
 import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
@@ -284,6 +285,23 @@ export async function dashboardDeleteHandler(c: Context) {
   const id = parseInt(c.req.param('id') ?? '', 10);
   if (!isNaN(id)) await repo.deleteDashboard(id);
   return c.redirect('/visualizations');
+}
+
+export async function dashboardDuplicateHandler(c: Context) {
+  const repo = getAppStateRepo();
+  const id = parseInt(c.req.param('id') ?? '', 10);
+  if (isNaN(id)) return c.redirect('/visualizations');
+
+  const existing = await repo.getDashboard(id);
+  if (!existing) return c.redirect('/visualizations');
+
+  const allDashboards = await repo.listDashboards();
+  const newName = nextDashboardCopyName(
+    allDashboards.map(d => d.name),
+    existing.name
+  );
+  const newId = await repo.saveDashboard(newName, existing.visualizationIds);
+  return c.redirect(`/visualizations?dashboard=${newId}`);
 }
 
 export async function dashboardAddVisualizationHandler(c: Context) {

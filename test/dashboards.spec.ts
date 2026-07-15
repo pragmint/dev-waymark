@@ -201,6 +201,27 @@ test.describe('dashboard CRUD', () => {
     await expect(page).toHaveURL(new RegExp(`dashboard=${bid}`));
   });
 
+  test('duplicate dashboard via the copy icon creates a "copy1 - " named clone', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetDup'));
+    const vizId = await seedViz(request, presetId, uniqueName('DupViz'));
+    const name = uniqueName('Original');
+    const id = await seedDashboard(request, name, [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${id}`);
+    await waitForDashboardHydrated(page);
+    await page.locator('[data-dashboard-duplicate-form] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/dashboard=\d+/);
+    expect(page.url()).not.toContain(`dashboard=${id}`);
+    await expect(page.locator('[data-dashboard-name-input]')).toHaveValue(`copy1 - ${name}`);
+
+    // The duplicate shares the same visualization(s) as the source.
+    await expect(page.locator(`[data-viz-id="${vizId}"]`)).toHaveCount(1);
+  });
+
   test('delete dashboard via trash icon (auto-accepts confirm) clears it', async ({
     page,
     request,

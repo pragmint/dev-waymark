@@ -182,6 +182,21 @@ const DashboardMetaRow: FC<{
         </button>
         <form
           method="post"
+          action={`/visualizations/dashboards/${selectedDashboard.id}/duplicate`}
+          class="filter-inline-form"
+          data-dashboard-duplicate-form
+        >
+          <button
+            type="submit"
+            class="filter-icon-btn"
+            title={`Duplicate "${selectedDashboard.name}"`}
+            aria-label={`Duplicate dashboard ${selectedDashboard.name}`}
+          >
+            ⧉
+          </button>
+        </form>
+        <form
+          method="post"
           action={`/visualizations/dashboards/${selectedDashboard.id}/delete`}
           class="filter-inline-form"
           data-dashboard-delete-form

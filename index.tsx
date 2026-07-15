@@ -18,6 +18,7 @@ import {
   dashboardSaveHandler,
   dashboardUpdateHandler,
   dashboardDeleteHandler,
+  dashboardDuplicateHandler,
   dashboardAddVisualizationHandler,
   dashboardRemoveVisualizationHandler,
   visualizationCreateApiHandler,
@@ -76,6 +77,7 @@ app.get('/visualizations', dashboardsPageHandler);
 app.post('/visualizations/dashboards', dashboardSaveHandler);
 app.post('/visualizations/dashboards/:id', dashboardUpdateHandler);
 app.post('/visualizations/dashboards/:id/delete', dashboardDeleteHandler);
+app.post('/visualizations/dashboards/:id/duplicate', dashboardDuplicateHandler);
 app.post('/visualizations/dashboards/:id/visualizations', dashboardAddVisualizationHandler);
 app.post(
   '/visualizations/dashboards/:id/visualizations/:vizId/delete',
