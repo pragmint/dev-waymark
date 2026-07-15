@@ -16,11 +16,13 @@ import {
   buildSmoothingWindowEntityFilters,
   buildWaymarkDataset,
   extendLabelsForWaymarks,
+  filterWaymarksInRange,
   padDatasetsToLength,
   resolveWaymarkAnchors,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 import { isGroup, isLeaf } from '../schemas/filterTree';
+import type { ComputedDateRange } from './dateRange';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -1215,6 +1217,57 @@ function makeWaymark(overrides: Partial<Waymark> = {}): Waymark {
     ...overrides,
   };
 }
+
+// ── filterWaymarksInRange ─────────────────────────────────────────────────────
+
+function makeRange(overrides: Partial<ComputedDateRange> = {}): ComputedDateRange {
+  return { start: null, end: null, label: '', ...overrides };
+}
+
+describe('filterWaymarksInRange', () => {
+  test('keeps a waymark fully inside the range', () => {
+    const waymark = makeWaymark({ startDate: '2026-02-01', endDate: '2026-02-28' });
+    const range = makeRange({
+      start: new Date('2026-02-01T00:00:00Z'),
+      end: new Date('2026-02-28T23:59:59Z'),
+    });
+    expect(filterWaymarksInRange([waymark], range)).toEqual([waymark]);
+  });
+
+  test('excludes a waymark entirely before the range', () => {
+    const waymark = makeWaymark({ startDate: '2025-01-01', endDate: '2025-03-31' });
+    const range = makeRange({
+      start: new Date('2026-04-01T00:00:00Z'),
+      end: new Date('2026-06-30T23:59:59Z'),
+    });
+    expect(filterWaymarksInRange([waymark], range)).toEqual([]);
+  });
+
+  test('excludes a waymark entirely after the range — the reported bug', () => {
+    // A goal line stretching into the future (e.g. today through year-end) should
+    // disappear once the user shifts the dashboard to view a past quarter.
+    const waymark = makeWaymark({ startDate: '2026-07-01', endDate: '2026-12-31' });
+    const range = makeRange({
+      start: new Date('2026-01-01T00:00:00Z'),
+      end: new Date('2026-03-31T23:59:59Z'),
+    });
+    expect(filterWaymarksInRange([waymark], range)).toEqual([]);
+  });
+
+  test('keeps a waymark that only partially overlaps the range', () => {
+    const waymark = makeWaymark({ startDate: '2026-01-15', endDate: '2026-02-15' });
+    const range = makeRange({
+      start: new Date('2026-02-01T00:00:00Z'),
+      end: new Date('2026-02-28T23:59:59Z'),
+    });
+    expect(filterWaymarksInRange([waymark], range)).toEqual([waymark]);
+  });
+
+  test('keeps every waymark when the range is unbounded (all time)', () => {
+    const waymark = makeWaymark({ startDate: '2020-01-01', endDate: '2020-01-31' });
+    expect(filterWaymarksInRange([waymark], makeRange())).toEqual([waymark]);
+  });
+});
 
 // ── extendLabelsForWaymarks ───────────────────────────────────────────────────
 

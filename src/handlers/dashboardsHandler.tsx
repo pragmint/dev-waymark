@@ -10,6 +10,7 @@ import {
   buildSmoothingWindowEntityFilters,
   buildWaymarkDataset,
   extendLabelsForWaymarks,
+  filterWaymarksInRange,
   padDatasetsToLength,
   resolveWaymarkAnchors,
   validateVisualizationConfig,
@@ -114,21 +115,27 @@ function buildSmoothingPointUrls(
 // Extends the label axis with a synthetic future tail (so a goal line can
 // reach past the last bucket that actually has entities) and pushes a
 // dataset per waymark, mutating chartResult in place — mirrors
-// applyLookbackSmoothing's shape. Returns the count of labels that
-// correspond to real (non-synthetic) buckets, so click-through URL building
-// can skip the synthetic tail.
+// applyLookbackSmoothing's shape. Waymarks are stored per-visualization with
+// no built-in tie to the currently viewed date range, so they're first
+// narrowed to those overlapping `computedRange` — otherwise a goal line (and
+// its legend entry) would keep rendering after the user shifts to a period
+// it doesn't apply to. Returns the count of labels that correspond to real
+// (non-synthetic) buckets, so click-through URL building can skip the
+// synthetic tail.
 async function applyWaymarks(
   vizId: number,
   chartResult: ChartDataResult,
   viz: Visualization,
   presetTree: FilterTree,
+  computedRange: ComputedDateRange,
   repo: ReturnType<typeof getAppStateRepo>,
   entityRepo: ReturnType<typeof getEntityRepo>
 ): Promise<number> {
   const bucket = viz.config.xAxis?.timeBucket;
   if (!bucket) return chartResult.labels.length;
 
-  const waymarks = await repo.listWaymarksForVisualization(vizId);
+  const allWaymarks = await repo.listWaymarksForVisualization(vizId);
+  const waymarks = filterWaymarksInRange(allWaymarks, computedRange);
   if (waymarks.length === 0) return chartResult.labels.length;
 
   const historyEntities = await entityRepo.list(presetTree);
@@ -188,6 +195,7 @@ async function buildCard(
     chartResult,
     viz,
     preset.tree,
+    computedRange,
     repo,
     entityRepo
   );

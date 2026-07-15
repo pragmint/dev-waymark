@@ -12,6 +12,8 @@ import type {
   ChartType,
 } from '../schemas/visualization';
 import type { Waymark } from '../schemas/waymark';
+import { computedRangeOverlaps } from './dateRange';
+import type { ComputedDateRange } from './dateRange';
 
 // ── Output types ──────────────────────────────────────────────────────────────
 
@@ -204,6 +206,17 @@ function nextBucketLabel(label: string, bucket: TimeBucket): string | null {
 }
 
 const MAX_SYNTHETIC_LABELS = 1000;
+
+// Waymarks are stored per-visualization with no inherent tie to the currently
+// viewed date range, so a goal line whose [startDate, endDate] doesn't
+// intersect the dashboard's current window must be excluded entirely — the
+// caller should not fetch, extend labels for, or render it on this render.
+export function filterWaymarksInRange(
+  waymarks: Waymark[],
+  computedRange: ComputedDateRange
+): Waymark[] {
+  return waymarks.filter(w => computedRangeOverlaps(w.startDate, w.endDate, computedRange));
+}
 
 // Appends synthetic future bucket labels after the last real label, up to the
 // furthest waymark end date, so a goal line can extend past the last bucket

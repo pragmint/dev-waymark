@@ -220,3 +220,17 @@ export function buildDateRangeFilters(
   if (computed.end) nodes.push(makeLeaf(dateMetadataKey, 'lte', toLteValue(computed.end)));
   return nodes;
 }
+
+// Whether a [startDate, endDate] span (YYYY-MM-DD strings) intersects a
+// computed range at all, inclusive on both ends. A null bound on either side
+// means unbounded in that direction (e.g. "all time", or a one-sided custom
+// range).
+export function computedRangeOverlaps(
+  startDate: string,
+  endDate: string,
+  computed: ComputedDateRange
+): boolean {
+  if (computed.start && endDate < toGteValue(computed.start)) return false;
+  if (computed.end && startDate > toGteValue(computed.end)) return false;
+  return true;
+}
