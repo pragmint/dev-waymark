@@ -50,6 +50,38 @@ async function seedViz(
   return id;
 }
 
+// seedViz's `/test/visualizations` auto-picker grabs the first date field and
+// first numeric field it finds, which can land on two fields with almost no
+// overlapping entities (e.g. a github_pr-only numeric field paired with the
+// entity table's own created_at). That's fine for tests that only check
+// dataset *count*, but waymark anchor resolution needs a viz with real,
+// overlapping history — so this seeds a field_trend viz with explicit,
+// known-compatible jira_ticket fields via the real create API instead.
+async function seedFieldTrendViz(
+  request: APIRequestContext,
+  presetId: number,
+  name: string
+): Promise<number> {
+  const res = await request.post('/api/visualizations', {
+    data: {
+      name,
+      presetId,
+      templateConfig: {
+        templateId: 'field_trend',
+        slots: {
+          dateField: 'jira_created_at',
+          numericFields: ['total_lead_time_seconds'],
+          timeBucket: 'week',
+          aggregation: 'avg',
+        },
+      },
+    },
+  });
+  expect(res.ok()).toBeTruthy();
+  const { id } = await res.json();
+  return id;
+}
+
 async function seedDashboard(
   request: APIRequestContext,
   name: string,
@@ -1114,5 +1146,273 @@ test.describe('drag-and-drop reorder', () => {
 
     await expect.poll(async () => await orderedVizIds(page)).toEqual([v2, v3, v1]);
     await expect(page.locator('[data-dashboard-save-submit]')).toBeVisible();
+  });
+});
+
+// ── Waymarks ─────────────────────────────────────────────────────────────────
+// A waymark is a goal-line overlay: a straight line from the visualization's
+// actual value at a start date to a user-entered target at an end date. They
+// require a time-bucketed x-axis, so every test here seeds a "Field trend"
+// viz (seedViz auto-picks a date + numeric field for that template).
+
+test.describe('waymarks', () => {
+  type DashboardCardPayload = {
+    id: number;
+    chartJsConfig: { data: { datasets: { label: string }[] } };
+  };
+
+  async function openWaymarkModal(page: Page, vizId: number): Promise<void> {
+    await page.locator(`[data-waymark-viz="${vizId}"]`).click();
+    await expect(page.locator('.waymark-dialog')).toBeVisible();
+  }
+
+  async function fillWaymarkForm(
+    page: Page,
+    opts: { startDate: string; endDate: string; targetValue: string; label?: string }
+  ): Promise<void> {
+    await page.locator('.waymark-dialog input[name="start_date"]').fill(opts.startDate);
+    await page.locator('.waymark-dialog input[name="end_date"]').fill(opts.endDate);
+    await page.locator('.waymark-dialog input[name="target_value"]').fill(opts.targetValue);
+    if (opts.label != null) {
+      await page.locator('.waymark-dialog input[name="label"]').fill(opts.label);
+    }
+  }
+
+  async function getCard(request: APIRequestContext, dashId: number, vizId: number) {
+    const res = await request.get(`/api/dashboards/${dashId}/cards`);
+    expect(res.ok()).toBeTruthy();
+    const { cards } = (await res.json()) as { cards: DashboardCardPayload[] };
+    const card = cards.find(c => c.id === vizId);
+    expect(card).toBeDefined();
+    return card!;
+  }
+
+  test('waymark button opens the modal with an empty state', async ({ page, request }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymark'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+
+    await expect(page.locator('.waymark-dialog .viz-modal-title')).toHaveText('Waymarks');
+    await expect(page.locator('.waymark-dialog .viz-modal-section-placeholder')).toHaveText(
+      'No waymarks yet.'
+    );
+    await expect(page.locator('.waymark-dialog h3:has-text("Add waymark")')).toBeVisible();
+    // No smoothing configured on this viz, so the applies-to picker is absent.
+    await expect(page.locator('.waymark-dialog select[name="applies_to"]')).toHaveCount(0);
+  });
+
+  test('adding a waymark renders it in the list and adds a dataset to the chart', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkAdd'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkAddViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkAddD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+
+    await fillWaymarkForm(page, {
+      startDate: '2024-02-01',
+      endDate: '2027-01-01',
+      targetValue: '42',
+      label: 'Goal',
+    });
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+
+    await expect(page.locator('.waymark-dialog .waymark-list-item')).toHaveCount(1);
+    await expect(page.locator('.waymark-dialog .waymark-list-summary')).toContainText('Goal');
+    await expect(page.locator('.waymark-dialog .waymark-list-summary')).toContainText('main line');
+    // The form resets back to "Add waymark" mode after a successful save.
+    await expect(page.locator('.waymark-dialog h3:has-text("Add waymark")')).toBeVisible();
+
+    const card = await getCard(request, dashId, vizId);
+    expect(card.chartJsConfig.data.datasets.length).toBe(2);
+    expect(card.chartJsConfig.data.datasets[1].label).toBe('Goal');
+  });
+
+  test('editing a waymark updates the list and the chart', async ({ page, request }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkEdit'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkEditViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkEditD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+    await fillWaymarkForm(page, {
+      startDate: '2024-02-01',
+      endDate: '2027-01-01',
+      targetValue: '10',
+    });
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+    await expect(page.locator('.waymark-dialog .waymark-list-item')).toHaveCount(1);
+
+    await page.locator('.waymark-dialog [title="Edit waymark"]').click();
+    await expect(page.locator('.waymark-dialog h3:has-text("Edit waymark")')).toBeVisible();
+    // Existing values are pre-filled.
+    await expect(page.locator('.waymark-dialog input[name="target_value"]')).toHaveValue('10');
+
+    await page.locator('.waymark-dialog input[name="target_value"]').fill('99');
+    await page.locator('.waymark-dialog button:has-text("Save changes")').click();
+
+    await expect(page.locator('.waymark-dialog .waymark-list-summary')).toContainText('99');
+    const card = await getCard(request, dashId, vizId);
+    expect(card.chartJsConfig.data.datasets.length).toBe(2);
+  });
+
+  test('cancelling an edit reverts the form to "Add waymark" without changing the list', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkCancel'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkCancelViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkCancelD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+    await fillWaymarkForm(page, {
+      startDate: '2024-02-01',
+      endDate: '2027-01-01',
+      targetValue: '10',
+    });
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+    await expect(page.locator('.waymark-dialog .waymark-list-item')).toHaveCount(1);
+
+    await page.locator('.waymark-dialog [title="Edit waymark"]').click();
+    await expect(page.locator('.waymark-dialog h3:has-text("Edit waymark")')).toBeVisible();
+    await page.locator('.waymark-dialog button:has-text("Cancel")').click();
+
+    await expect(page.locator('.waymark-dialog h3:has-text("Add waymark")')).toBeVisible();
+    await expect(page.locator('.waymark-dialog .waymark-list-summary')).toContainText('10');
+  });
+
+  test('deleting a waymark (auto-accepts confirm) removes it from the list and the chart', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkDelete'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkDeleteViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkDeleteD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+    await fillWaymarkForm(page, {
+      startDate: '2024-02-01',
+      endDate: '2027-01-01',
+      targetValue: '10',
+    });
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+    await expect(page.locator('.waymark-dialog .waymark-list-item')).toHaveCount(1);
+
+    page.on('dialog', d => d.accept());
+    await page.locator('.waymark-dialog [title="Delete waymark"]').click();
+
+    await expect(page.locator('.waymark-dialog .viz-modal-section-placeholder')).toHaveText(
+      'No waymarks yet.'
+    );
+    const card = await getCard(request, dashId, vizId);
+    expect(card.chartJsConfig.data.datasets.length).toBe(1);
+  });
+
+  test('applies-to selector is hidden until smoothing is configured, then offers both lines', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkApplies'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkAppliesViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkAppliesD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+    await expect(page.locator('.waymark-dialog select[name="applies_to"]')).toHaveCount(0);
+    await page.locator('.waymark-dialog button:has-text("Close")').click();
+    await expect(page.locator('.waymark-dialog')).not.toBeVisible();
+
+    // Add a smoothing window to the visualization via the edit modal.
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '3');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    await openWaymarkModal(page, vizId);
+    const appliesSelect = page.locator('.waymark-dialog select[name="applies_to"]');
+    await expect(appliesSelect).toBeVisible();
+    await expect(appliesSelect.locator('option')).toHaveCount(2);
+
+    await appliesSelect.selectOption('smoothing');
+    await fillWaymarkForm(page, {
+      startDate: '2024-02-01',
+      endDate: '2027-01-01',
+      targetValue: '10',
+    });
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+    await expect(page.locator('.waymark-dialog .waymark-list-summary')).toContainText(
+      'smoothing avg'
+    );
+  });
+
+  test('leaving required fields blank is rejected client-side without creating a waymark', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkInvalid'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('WaymarkInvalidViz'));
+    const dashId = await seedDashboard(request, uniqueName('WaymarkInvalidD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await openWaymarkModal(page, vizId);
+
+    let alertMessage = '';
+    page.on('dialog', d => {
+      alertMessage = d.message();
+      void d.accept();
+    });
+    // Only the target value is filled in; both dates are left blank.
+    await page.locator('.waymark-dialog input[name="target_value"]').fill('10');
+    await page.locator('.waymark-dialog button:has-text("Add waymark")').click();
+
+    await expect.poll(() => alertMessage).toContain('required');
+    await expect(page.locator('.waymark-dialog .waymark-list-item')).toHaveCount(0);
+
+    const res = await request.get(`/api/visualizations/${vizId}/waymarks`);
+    const { waymarks } = await res.json();
+    expect(waymarks).toHaveLength(0);
+  });
+
+  test('the waymark modal is independent of the create/edit viz modal', async ({
+    page,
+    request,
+  }) => {
+    // Regression guard: both dialogs used to share the `.viz-modal` class,
+    // which made `.viz-modal` an ambiguous locator once the waymark dialog
+    // existed on the page at all (even closed/empty).
+    const presetId = await seedPreset(request, uniqueName('PresetWaymarkIsolation'));
+    const vizId = await seedViz(
+      request,
+      presetId,
+      uniqueName('WaymarkIsolationViz'),
+      'field_trend'
+    );
+    const dashId = await seedDashboard(request, uniqueName('WaymarkIsolationD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    await expect(page.locator('.viz-modal')).toHaveCount(1);
+    await expect(page.locator('.waymark-dialog')).toHaveCount(1);
+
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+    await expect(page.locator('.waymark-dialog')).not.toBeVisible();
   });
 });

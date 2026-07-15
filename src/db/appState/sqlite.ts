@@ -5,6 +5,7 @@ import { PresetSchema, PresetWithTreeSchema } from '../../schemas/preset';
 import { FilterTreeSchema, emptyTree } from '../../schemas/filterTree';
 import { VisualizationSchema, VisualizationSummarySchema } from '../../schemas/visualization';
 import { DashboardSchema, DashboardWithVizSchema } from '../../schemas/dashboard';
+import { WaymarkSchema } from '../../schemas/waymark';
 import type { Preset, PresetWithTree } from '../../schemas/preset';
 import type { FilterTree } from '../../schemas/filterTree';
 import type {
@@ -13,6 +14,7 @@ import type {
   VisualizationSummary,
 } from '../../schemas/visualization';
 import type { Dashboard, DashboardWithViz } from '../../schemas/dashboard';
+import type { Waymark, WaymarkInput } from '../../schemas/waymark';
 import type { AppStateRepository } from './repository';
 import { migrations } from './migrations/index';
 
@@ -34,6 +36,32 @@ function rowToVisualizationSummary(row: VisualizationRow): VisualizationSummary 
     description: row.description,
     presetId: row.preset_id,
     chartType: config.chartType,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+type WaymarkRow = {
+  id: number;
+  visualization_id: number;
+  start_date: string;
+  end_date: string;
+  target_value: number;
+  applies_to: string;
+  label: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToWaymark(row: WaymarkRow): Waymark {
+  return WaymarkSchema.parse({
+    id: row.id,
+    visualizationId: row.visualization_id,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    targetValue: row.target_value,
+    appliesTo: row.applies_to,
+    label: row.label,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -258,6 +286,70 @@ export class SqliteAppStateRepository implements AppStateRepository {
     this.db.query('DELETE FROM visualizations WHERE id = ?').run(id);
   }
 
+  // ── Waymarks ─────────────────────────────────────────────────────────────
+
+  async createWaymark(visualizationId: number, input: WaymarkInput): Promise<number> {
+    const now = new Date().toISOString();
+    const result = this.db
+      .query<
+        { id: number },
+        [number, string, string, number, string, string | null, string, string]
+      >(
+        `INSERT INTO waymarks
+           (visualization_id, start_date, end_date, target_value, applies_to, label, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`
+      )
+      .get(
+        visualizationId,
+        input.startDate,
+        input.endDate,
+        input.targetValue,
+        input.appliesTo,
+        input.label,
+        now,
+        now
+      );
+    return result!.id;
+  }
+
+  async listWaymarksForVisualization(visualizationId: number): Promise<Waymark[]> {
+    const rows = this.db
+      .query<
+        WaymarkRow,
+        [number]
+      >('SELECT id, visualization_id, start_date, end_date, target_value, applies_to, label, created_at, updated_at FROM waymarks WHERE visualization_id = ? ORDER BY start_date')
+      .all(visualizationId);
+    return rows.map(rowToWaymark);
+  }
+
+  async updateWaymark(id: number, input: WaymarkInput): Promise<void> {
+    const now = new Date().toISOString();
+    this.db
+      .query(
+        `UPDATE waymarks
+         SET start_date = ?, end_date = ?, target_value = ?, applies_to = ?, label = ?, updated_at = ?
+         WHERE id = ?`
+      )
+      .run(
+        input.startDate,
+        input.endDate,
+        input.targetValue,
+        input.appliesTo,
+        input.label,
+        now,
+        id
+      );
+  }
+
+  async deleteWaymark(id: number): Promise<void> {
+    this.db.query('DELETE FROM waymarks WHERE id = ?').run(id);
+  }
+
+  async deleteAllWaymarks(): Promise<void> {
+    this.db.query('DELETE FROM waymarks').run();
+  }
+
   // ── Dashboards ────────────────────────────────────────────────────────────
 
   async saveDashboard(name: string, visualizationIds: number[]): Promise<number> {
@@ -385,9 +477,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
   }
 
   async truncateData(): Promise<void> {
-    // Order matters: junction rows first, then parents. SQLite has no
+    // Order matters: junction/child rows first, then parents. SQLite has no
     // TRUNCATE — DELETE is the idiom, and DELETE from an empty table is cheap.
     this.db.query('DELETE FROM dashboard_visualizations').run();
+    this.db.query('DELETE FROM waymarks').run();
     this.db.query('DELETE FROM visualizations').run();
     this.db.query('DELETE FROM dashboards').run();
     this.db.query('DELETE FROM presets').run();

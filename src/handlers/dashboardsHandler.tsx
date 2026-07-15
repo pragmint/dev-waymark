@@ -8,6 +8,10 @@ import {
   buildLookbackSmoothingDataset,
   buildPointEntityFilters,
   buildSmoothingWindowEntityFilters,
+  buildWaymarkDataset,
+  extendLabelsForWaymarks,
+  padDatasetsToLength,
+  resolveWaymarkAnchors,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 import {
@@ -24,7 +28,11 @@ import { DashboardPage } from '../frontend/Pages/DashboardPage';
 import type { DashboardCard } from '../frontend/Pages/DashboardPage';
 import type { FilterNode, FilterTree } from '../schemas/filterTree';
 import { VisualizationLayoutSchema } from '../schemas/visualization';
-import type { VisualizationConfig, VisualizationSummary } from '../schemas/visualization';
+import type {
+  Visualization,
+  VisualizationConfig,
+  VisualizationSummary,
+} from '../schemas/visualization';
 import type { ChartDataResult } from '../domain/chartDataBuilder';
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
@@ -103,6 +111,45 @@ function buildSmoothingPointUrls(
   );
 }
 
+// Extends the label axis with a synthetic future tail (so a goal line can
+// reach past the last bucket that actually has entities) and pushes a
+// dataset per waymark, mutating chartResult in place — mirrors
+// applyLookbackSmoothing's shape. Returns the count of labels that
+// correspond to real (non-synthetic) buckets, so click-through URL building
+// can skip the synthetic tail.
+async function applyWaymarks(
+  vizId: number,
+  chartResult: ChartDataResult,
+  viz: Visualization,
+  presetTree: FilterTree,
+  repo: ReturnType<typeof getAppStateRepo>,
+  entityRepo: ReturnType<typeof getEntityRepo>
+): Promise<number> {
+  const bucket = viz.config.xAxis?.timeBucket;
+  if (!bucket) return chartResult.labels.length;
+
+  const waymarks = await repo.listWaymarksForVisualization(vizId);
+  if (waymarks.length === 0) return chartResult.labels.length;
+
+  const historyEntities = await entityRepo.list(presetTree);
+  const anchors = resolveWaymarkAnchors(waymarks, historyEntities, viz.config);
+
+  const extended = extendLabelsForWaymarks(chartResult.labels, bucket, waymarks);
+  if (extended.labels.length > chartResult.labels.length) {
+    padDatasetsToLength(chartResult.datasets, extended.labels.length);
+    chartResult.labels = extended.labels;
+  }
+
+  for (const w of waymarks) {
+    const startValue = anchors.get(w.id);
+    if (startValue == null) continue;
+    const dataset = buildWaymarkDataset(w, startValue, chartResult.labels, bucket);
+    if (dataset) chartResult.datasets.push(dataset);
+  }
+
+  return extended.realLabelCount;
+}
+
 async function buildCard(
   vizId: number,
   repo: ReturnType<typeof getAppStateRepo>,
@@ -136,23 +183,34 @@ async function buildCard(
     dateField,
     entityRepo
   );
+  const realLabelCount = await applyWaymarks(
+    vizId,
+    chartResult,
+    viz,
+    preset.tree,
+    repo,
+    entityRepo
+  );
+
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
-  const pointUrls = chartResult.labels.map(label =>
-    buildEntityUrl(combineWithExtras(filteredTree, buildPointEntityFilters(label, viz.config)))
+  const pointUrls: (string | null)[] = chartResult.labels.map((label, i) =>
+    i < realLabelCount
+      ? buildEntityUrl(combineWithExtras(filteredTree, buildPointEntityFilters(label, viz.config)))
+      : null
   );
 
   const smoothingWindowSize = viz.config.smoothing?.windowSize;
-  const smoothingPointUrls =
+  const smoothingPointUrls: (string | null)[] | null =
     chartResult.smoothingDatasetIndex != null && smoothingWindowSize
       ? buildSmoothingPointUrls(
-          chartResult.labels,
+          chartResult.labels.slice(0, realLabelCount),
           extendedLabelsForSmoothing,
           smoothingWindowSize,
           viz.config,
           preset.tree,
           filteredTree
-        )
+        ).concat(Array(chartResult.labels.length - realLabelCount).fill(null))
       : null;
 
   const excludedFilters = buildExcludedEntityFilters(viz.config);

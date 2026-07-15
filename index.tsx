@@ -32,6 +32,12 @@ import {
   presetFieldsHandler,
 } from './src/handlers/chartDataHandler';
 import {
+  waymarksListApiHandler,
+  waymarkCreateApiHandler,
+  waymarkUpdateApiHandler,
+  waymarkDeleteApiHandler,
+} from './src/handlers/waymarksHandler';
+import {
   testSeedPresetHandler,
   testClearPresetsHandler,
   testSeedVisualizationHandler,
@@ -80,6 +86,10 @@ app.get('/api/visualizations/:id', visualizationDetailApiHandler);
 app.post('/api/visualizations/:id', visualizationUpdateApiHandler);
 app.get('/api/visualizations/:id/dashboards', visualizationDashboardsApiHandler);
 app.post('/api/visualizations/:id/delete', visualizationDeleteApiHandler);
+app.get('/api/visualizations/:id/waymarks', waymarksListApiHandler);
+app.post('/api/visualizations/:id/waymarks', waymarkCreateApiHandler);
+app.post('/api/waymarks/:id', waymarkUpdateApiHandler);
+app.post('/api/waymarks/:id/delete', waymarkDeleteApiHandler);
 
 app.get('/api/dashboards/:id/cards', dashboardCardsApiHandler);
 

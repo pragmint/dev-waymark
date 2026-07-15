@@ -11,12 +11,13 @@ import type {
   SmoothingConfig,
   ChartType,
 } from '../schemas/visualization';
+import type { Waymark } from '../schemas/waymark';
 
 // ── Output types ──────────────────────────────────────────────────────────────
 
 export type ChartJsDataset = {
   label: string;
-  data: number[];
+  data: (number | null)[];
   borderColor?: string;
   backgroundColor?: string | string[];
   fill?: boolean | string;
@@ -158,6 +159,96 @@ function bucketRange(label: string, bucket: TimeBucket): { gte: string; lte: str
       if (!/^\d{4}$/.test(label)) return null;
       return { gte: label, lte: `${label}-12-31T23:59:59.999Z` };
     }
+  }
+}
+
+// ── Waymark bucket math ───────────────────────────────────────────────────────
+
+// Integer "bucket-steps since epoch" for a bucket label — adjacent buckets are
+// always exactly 1 apart. Lets a waymark's start/end date be placed and
+// interpolated by bucket position even when its own bucket has no entry in
+// the current `labels` array (sparse data, or a future bucket with no
+// entities yet) — something plain array-index interpolation can't do.
+function bucketOrdinal(label: string, bucket: TimeBucket): number | null {
+  switch (bucket) {
+    case 'year': {
+      const m = /^(\d{4})$/.exec(label);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    case 'quarter': {
+      const m = /^(\d{4})-Q([1-4])$/.exec(label);
+      return m ? parseInt(m[1], 10) * 4 + (parseInt(m[2], 10) - 1) : null;
+    }
+    case 'month': {
+      const m = /^(\d{4})-(\d{2})$/.exec(label);
+      return m ? parseInt(m[1], 10) * 12 + (parseInt(m[2], 10) - 1) : null;
+    }
+    case 'week': {
+      const m = /^Week of (\d{4}-\d{2}-\d{2})$/.exec(label);
+      const ms = m ? Date.parse(`${m[1]}T00:00:00Z`) : NaN;
+      return isNaN(ms) ? null : Math.round(ms / (7 * 86_400_000));
+    }
+    case 'day': {
+      const ms = Date.parse(`${label}T00:00:00Z`);
+      return isNaN(ms) ? null : Math.round(ms / 86_400_000);
+    }
+  }
+}
+
+// The label immediately following `label`, one bucket-step later.
+function nextBucketLabel(label: string, bucket: TimeBucket): string | null {
+  const range = bucketRange(label, bucket);
+  if (!range) return null;
+  const rollover = new Date(new Date(range.lte).getTime() + 1);
+  return bucketDate(rollover.toISOString(), bucket);
+}
+
+const MAX_SYNTHETIC_LABELS = 1000;
+
+// Appends synthetic future bucket labels after the last real label, up to the
+// furthest waymark end date, so a goal line can extend past the last bucket
+// that actually has entities. Only ever extends the tail — never inserts
+// mid-array — so existing index-based logic elsewhere (click-through filters,
+// smoothing window filters) keeps working unmodified against the labels it
+// already knows about. `realLabelCount` tells the caller where the synthetic
+// tail starts, so it can skip click-through URLs for those indices.
+export function extendLabelsForWaymarks(
+  labels: string[],
+  bucket: TimeBucket,
+  waymarks: Waymark[]
+): { labels: string[]; realLabelCount: number } {
+  const realLabelCount = labels.length;
+  if (labels.length === 0 || waymarks.length === 0) return { labels, realLabelCount };
+
+  const maxEndLabel = waymarks
+    .map(w => bucketDate(w.endDate, bucket))
+    .filter((l): l is string => l != null)
+    .sort((a, b) => a.localeCompare(b))
+    .pop();
+  const lastReal = labels[labels.length - 1];
+  if (!maxEndLabel || maxEndLabel <= lastReal) return { labels, realLabelCount };
+
+  const extended = [...labels];
+  let cursor = lastReal;
+  while (
+    extended[extended.length - 1] < maxEndLabel &&
+    extended.length - realLabelCount < MAX_SYNTHETIC_LABELS
+  ) {
+    const next = nextBucketLabel(cursor, bucket);
+    if (!next) break;
+    extended.push(next);
+    cursor = next;
+  }
+  return { labels: extended, realLabelCount };
+}
+
+// Pads every dataset's `data` with `null` up to `length`, in place, after the
+// label axis has been extended with a synthetic future tail. Chart.js treats
+// `null` as a gap on a category-scale line dataset (default `spanGaps: false`).
+export function padDatasetsToLength(datasets: ChartJsDataset[], length: number): void {
+  for (const ds of datasets) {
+    if (ds.data.length >= length) continue;
+    ds.data = [...ds.data, ...Array(length - ds.data.length).fill(null)];
   }
 }
 
@@ -611,6 +702,110 @@ function buildBandDatasets(
     { ...common, label: `${label} (min)`, data: labels.map(() => min), fill: '+1' },
     { ...common, label: `${label} (max)`, data: labels.map(() => max), fill: false },
   ];
+}
+
+// ── Waymarks ──────────────────────────────────────────────────────────────────
+
+// Resolves each waymark's start-anchor value — the actual value of the line it
+// tracks (main or smoothing) at its start date — from full, unfiltered
+// history. Computed once and shared across every waymark on the card,
+// regardless of how many there are. A waymark's own start-date bucket may
+// have zero entities (sparse data), so this binary-searches for the nearest
+// real bucket at-or-before the start date rather than requiring an exact
+// match. Returns null for a waymark with no history at or before its start —
+// callers should drop that waymark rather than fabricate a value.
+export function resolveWaymarkAnchors(
+  waymarks: Waymark[],
+  fullHistoryEntities: EntityWithMetadata[],
+  config: VisualizationConfig
+): Map<number, number | null> {
+  const bucket = config.xAxis?.timeBucket;
+  const result = new Map<number, number | null>();
+  if (!bucket) {
+    for (const w of waymarks) result.set(w.id, null);
+    return result;
+  }
+
+  const { labels: fullLabels, data: fullData } = computeMainSeries(fullHistoryEntities, config);
+  const needsSmoothing = !!config.smoothing && waymarks.some(w => w.appliesTo === 'smoothing');
+  const smoothedData = needsSmoothing
+    ? computeRollingAverage(fullData, config.smoothing!.windowSize)
+    : null;
+
+  const valueAtOrBefore = (series: number[], targetLabel: string): number | null => {
+    let lo = 0;
+    let hi = fullLabels.length - 1;
+    let ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (fullLabels[mid] <= targetLabel) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans === -1 ? null : series[ans];
+  };
+
+  for (const w of waymarks) {
+    const startLabel = bucketDate(w.startDate, bucket);
+    if (!startLabel) {
+      result.set(w.id, null);
+      continue;
+    }
+    // Falls back to the main series if this waymark tracks smoothing but the
+    // viz has no smoothing configured (e.g. it was removed after the waymark
+    // was created).
+    const series = w.appliesTo === 'smoothing' && smoothedData ? smoothedData : fullData;
+    result.set(w.id, valueAtOrBefore(series, startLabel));
+  }
+  return result;
+}
+
+const WAYMARK_COLOR = 'rgba(168, 85, 247, 0.85)';
+
+// Builds a single waymark's overlay dataset: a straight line from
+// (startDate, startValue) to (endDate, waymark.targetValue), interpolated by
+// bucket-ordinal position (not raw array index, not raw calendar time) so it
+// still resolves correctly when a bucket in between is missing from `labels`
+// (sparse data, or the synthetic future tail from extendLabelsForWaymarks).
+// Labels outside [startDate, endDate] get null, which gives "clip to visible
+// range" for free — this only ever maps over whatever labels the current
+// zoom level already produced.
+export function buildWaymarkDataset(
+  waymark: Waymark,
+  startValue: number,
+  labels: string[],
+  bucket: TimeBucket
+): ChartJsDataset | null {
+  const startLabel = bucketDate(waymark.startDate, bucket);
+  const endLabel = bucketDate(waymark.endDate, bucket);
+  const startOrd = startLabel ? bucketOrdinal(startLabel, bucket) : null;
+  const endOrd = endLabel ? bucketOrdinal(endLabel, bucket) : null;
+  if (startOrd == null || endOrd == null || endOrd < startOrd) return null;
+
+  const span = endOrd - startOrd;
+  const data: (number | null)[] = labels.map(label => {
+    const ord = bucketOrdinal(label, bucket);
+    if (ord == null || ord < startOrd || ord > endOrd) return null;
+    if (span === 0) return waymark.targetValue;
+    const t = (ord - startOrd) / span;
+    return startValue + t * (waymark.targetValue - startValue);
+  });
+
+  return {
+    label: waymark.label ?? 'Waymark',
+    data,
+    borderColor: WAYMARK_COLOR,
+    backgroundColor: 'transparent',
+    borderDash: [2, 3],
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+    type: 'line',
+    order: 0,
+  };
 }
 
 // ── Chart.js config builder ───────────────────────────────────────────────────

@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 import type { EntityWithMetadata } from '../schemas/entity';
 import type { VisualizationConfig } from '../schemas/visualization';
+import type { Waymark } from '../schemas/waymark';
+import type { ChartJsDataset } from './chartDataBuilder';
 import {
   aggregate,
   bucketDate,
@@ -12,6 +14,10 @@ import {
   buildLookbackSmoothingDataset,
   buildPointEntityFilters,
   buildSmoothingWindowEntityFilters,
+  buildWaymarkDataset,
+  extendLabelsForWaymarks,
+  padDatasetsToLength,
+  resolveWaymarkAnchors,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 import { isGroup, isLeaf } from '../schemas/filterTree';
@@ -483,7 +489,7 @@ describe('buildChartData — categorical (count by issue_type)', () => {
     const result = buildChartData(tickets, config);
     const data = result.datasets[0].data;
     for (let i = 0; i < data.length - 1; i++) {
-      expect(data[i]).toBeGreaterThanOrEqual(data[i + 1]);
+      expect(data[i] as number).toBeGreaterThanOrEqual(data[i + 1] as number);
     }
   });
 });
@@ -1190,5 +1196,272 @@ describe('buildSmoothingWindowEntityFilters', () => {
 
   test('returns empty array when a bucket label does not match the expected format', () => {
     expect(buildSmoothingWindowEntityFilters(['not-a-date'], 0, 2, config)).toEqual([]);
+  });
+});
+
+// ── Waymark fixtures ──────────────────────────────────────────────────────────
+
+function makeWaymark(overrides: Partial<Waymark> = {}): Waymark {
+  return {
+    id: 1,
+    visualizationId: 1,
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+    targetValue: 0,
+    appliesTo: 'main',
+    label: null,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
+// ── extendLabelsForWaymarks ───────────────────────────────────────────────────
+
+describe('extendLabelsForWaymarks', () => {
+  test('returns labels unchanged when there are no waymarks', () => {
+    const labels = ['2026-01', '2026-02'];
+    const result = extendLabelsForWaymarks(labels, 'month', []);
+    expect(result.labels).toEqual(labels);
+    expect(result.realLabelCount).toBe(2);
+  });
+
+  test('does not extend when the waymark end date is already covered by existing labels', () => {
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const waymark = makeWaymark({ endDate: '2026-02-10' });
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark]);
+    expect(result.labels).toEqual(labels);
+    expect(result.realLabelCount).toBe(3);
+  });
+
+  test('extends past the last label up to a waymark end date a few months out', () => {
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const waymark = makeWaymark({ endDate: '2026-06-15' });
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark]);
+    expect(result.labels).toEqual([
+      '2026-01',
+      '2026-02',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+      '2026-06',
+    ]);
+    expect(result.realLabelCount).toBe(3);
+  });
+
+  test('extends only as far as the furthest of multiple waymarks', () => {
+    const labels = ['2026-01', '2026-02'];
+    const nearer = makeWaymark({ id: 1, endDate: '2026-04-15' });
+    const furthest = makeWaymark({ id: 2, endDate: '2026-07-20' });
+    const result = extendLabelsForWaymarks(labels, 'month', [nearer, furthest]);
+    expect(result.labels).toEqual([
+      '2026-01',
+      '2026-02',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+      '2026-06',
+      '2026-07',
+    ]);
+    expect(result.realLabelCount).toBe(2);
+  });
+
+  test('returns empty labels unchanged even when a waymark is present', () => {
+    const waymark = makeWaymark({ endDate: '2026-06-15' });
+    const result = extendLabelsForWaymarks([], 'month', [waymark]);
+    expect(result.labels).toEqual([]);
+    expect(result.realLabelCount).toBe(0);
+  });
+
+  test('does not mutate the original labels array when extending', () => {
+    const labels = ['2026-01', '2026-02'];
+    const waymark = makeWaymark({ endDate: '2026-04-15' });
+    extendLabelsForWaymarks(labels, 'month', [waymark]);
+    expect(labels).toEqual(['2026-01', '2026-02']);
+  });
+});
+
+// ── padDatasetsToLength ────────────────────────────────────────────────────────
+
+describe('padDatasetsToLength', () => {
+  test('pads a shorter dataset with nulls up to length', () => {
+    const ds: ChartJsDataset = { label: 'a', data: [1, 2] };
+    padDatasetsToLength([ds], 5);
+    expect(ds.data).toEqual([1, 2, null, null, null]);
+  });
+
+  test('pads multiple datasets independently based on their own length', () => {
+    const short: ChartJsDataset = { label: 'a', data: [1] };
+    const long: ChartJsDataset = { label: 'b', data: [1, 2, 3] };
+    padDatasetsToLength([short, long], 3);
+    expect(short.data).toEqual([1, null, null]);
+    expect(long.data).toEqual([1, 2, 3]);
+  });
+
+  test('leaves a dataset already at the target length untouched', () => {
+    const ds: ChartJsDataset = { label: 'a', data: [1, 2, 3] };
+    padDatasetsToLength([ds], 3);
+    expect(ds.data).toEqual([1, 2, 3]);
+  });
+
+  test('leaves a dataset already longer than the target length untouched', () => {
+    const ds: ChartJsDataset = { label: 'a', data: [1, 2, 3, 4, 5] };
+    padDatasetsToLength([ds], 3);
+    expect(ds.data).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+// ── resolveWaymarkAnchors ──────────────────────────────────────────────────────
+
+describe('resolveWaymarkAnchors', () => {
+  function monthEntity(id: number, isoDate: string, value: number): EntityWithMetadata {
+    return makeEntity(id, {
+      done_at: { value: isoDate, value_type: 'date' },
+      value: { value: String(value), value_type: 'number' },
+    });
+  }
+
+  const config: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'month' },
+    yAxis: { metadataKey: 'value', type: 'number' },
+    aggregation: { function: 'avg' },
+  };
+
+  // Sparse history: January and March each have one entity; February is empty.
+  const sparseEntities = [
+    monthEntity(1, '2026-01-15T00:00:00Z', 10),
+    monthEntity(2, '2026-03-15T00:00:00Z', 20),
+  ];
+
+  test('anchors to the aggregated value at the waymark start-date bucket', () => {
+    const waymark = makeWaymark({ id: 10, startDate: '2026-03-10' });
+    const anchors = resolveWaymarkAnchors([waymark], sparseEntities, config);
+    expect(anchors.get(10)).toBe(20);
+  });
+
+  test('falls back to the nearest earlier bucket when the start-date bucket is empty', () => {
+    const waymark = makeWaymark({ id: 11, startDate: '2026-02-10' });
+    const anchors = resolveWaymarkAnchors([waymark], sparseEntities, config);
+    expect(anchors.get(11)).toBe(10);
+  });
+
+  test('returns null when the start date is before all history', () => {
+    const waymark = makeWaymark({ id: 12, startDate: '2025-12-01' });
+    const anchors = resolveWaymarkAnchors([waymark], sparseEntities, config);
+    expect(anchors.get(12)).toBeNull();
+  });
+
+  test('returns null when the start date does not parse into a bucket label', () => {
+    const waymark = makeWaymark({ id: 13, startDate: 'not-a-date' });
+    const anchors = resolveWaymarkAnchors([waymark], sparseEntities, config);
+    expect(anchors.get(13)).toBeNull();
+  });
+
+  test('every waymark anchors to null when the config has no time-bucketed x-axis', () => {
+    const categoryConfig: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    const waymarks = [makeWaymark({ id: 20 }), makeWaymark({ id: 21 })];
+    const anchors = resolveWaymarkAnchors(waymarks, sparseEntities, categoryConfig);
+    expect(anchors.get(20)).toBeNull();
+    expect(anchors.get(21)).toBeNull();
+  });
+
+  describe('appliesTo smoothing', () => {
+    // One entity per month, steadily increasing, so the rolling average at
+    // the final bucket differs from the raw main-series value there.
+    const monthlyEntities = [
+      monthEntity(31, '2026-01-15T00:00:00Z', 10),
+      monthEntity(32, '2026-02-15T00:00:00Z', 20),
+      monthEntity(33, '2026-03-15T00:00:00Z', 30),
+      monthEntity(34, '2026-04-15T00:00:00Z', 40),
+    ];
+
+    test('anchors to the rolling average rather than the raw main series when smoothing is configured', () => {
+      const smoothingConfig: VisualizationConfig = { ...config, smoothing: { windowSize: 2 } };
+      const waymark = makeWaymark({ id: 40, startDate: '2026-04-10', appliesTo: 'smoothing' });
+      const anchors = resolveWaymarkAnchors([waymark], monthlyEntities, smoothingConfig);
+      // Main series value at April is 40; rolling avg(2) of [30, 40] is 35.
+      expect(anchors.get(40)).toBe(35);
+      expect(anchors.get(40)).not.toBe(40);
+    });
+
+    test('falls back to the main series when the visualization has no smoothing configured', () => {
+      const waymark = makeWaymark({ id: 41, startDate: '2026-04-10', appliesTo: 'smoothing' });
+      const anchors = resolveWaymarkAnchors([waymark], monthlyEntities, config);
+      expect(anchors.get(41)).toBe(40);
+    });
+  });
+});
+
+// ── buildWaymarkDataset ─────────────────────────────────────────────────────────
+
+describe('buildWaymarkDataset', () => {
+  test('interpolates linearly from startValue to targetValue and clips outside the visible range', () => {
+    const waymark = makeWaymark({
+      startDate: '2026-01-10',
+      endDate: '2026-04-10',
+      targetValue: 100,
+    });
+    const labels = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05'];
+    const result = buildWaymarkDataset(waymark, 20, labels, 'month');
+
+    expect(result).not.toBeNull();
+    expect(result!.data[0]).toBeNull(); // before range
+    expect(result!.data[1]).toBeNull(); // before range
+    expect(result!.data[2]).toBe(20); // start of range
+    expect(result!.data[3]).toBeCloseTo(20 + (1 / 3) * 80);
+    expect(result!.data[4]).toBeCloseTo(20 + (2 / 3) * 80);
+    expect(result!.data[5]).toBe(100); // end of range
+    expect(result!.data[6]).toBeNull(); // after range
+    expect(result!.label).toBe('Waymark');
+  });
+
+  test('computes the exact midpoint for a symmetric two-bucket span', () => {
+    const waymark = makeWaymark({
+      startDate: '2026-01-10',
+      endDate: '2026-03-10',
+      targetValue: 100,
+    });
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const result = buildWaymarkDataset(waymark, 20, labels, 'month');
+    expect(result).not.toBeNull();
+    expect(result!.data).toEqual([20, 60, 100]);
+  });
+
+  test('returns null when endDate is before startDate', () => {
+    const waymark = makeWaymark({
+      startDate: '2026-04-01',
+      endDate: '2026-01-01',
+      targetValue: 100,
+    });
+    const labels = ['2026-01', '2026-02', '2026-03', '2026-04'];
+    expect(buildWaymarkDataset(waymark, 20, labels, 'month')).toBeNull();
+  });
+
+  test('every in-range point equals targetValue when start and end fall in the same bucket', () => {
+    const waymark = makeWaymark({
+      startDate: '2026-02-05',
+      endDate: '2026-02-25',
+      targetValue: 50,
+    });
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const result = buildWaymarkDataset(waymark, 10, labels, 'month');
+    expect(result).not.toBeNull();
+    expect(result!.data).toEqual([null, 50, null]);
+  });
+
+  test('uses the waymark label when set, falling back to "Waymark" only when null', () => {
+    const waymark = makeWaymark({
+      startDate: '2026-01-10',
+      endDate: '2026-02-10',
+      targetValue: 10,
+      label: 'Ship goal',
+    });
+    const result = buildWaymarkDataset(waymark, 0, ['2026-01', '2026-02'], 'month');
+    expect(result!.label).toBe('Ship goal');
   });
 });

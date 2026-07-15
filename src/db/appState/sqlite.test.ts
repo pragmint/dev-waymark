@@ -346,6 +346,154 @@ describe('SqliteAppStateRepository — dashboards', () => {
   });
 });
 
+describe('SqliteAppStateRepository — waymarks', () => {
+  let repo: SqliteAppStateRepository;
+
+  async function seedPreset(): Promise<number> {
+    return repo.savePreset('p', emptyTree());
+  }
+
+  async function seedViz(presetId: number, name = 'viz'): Promise<number> {
+    return repo.saveVisualization(name, null, presetId, {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'month' },
+      aggregation: { function: 'avg' },
+    });
+  }
+
+  function waymarkInput(overrides: Partial<Parameters<typeof repo.createWaymark>[1]> = {}) {
+    return {
+      startDate: '2026-04-01',
+      endDate: '2026-10-01',
+      targetValue: 100,
+      appliesTo: 'main' as const,
+      label: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    repo = new SqliteAppStateRepository(':memory:');
+    await repo.migrate();
+  });
+
+  it('createWaymark returns a numeric id', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    const id = await repo.createWaymark(vizId, waymarkInput());
+    expect(typeof id).toBe('number');
+    expect(id).toBeGreaterThan(0);
+  });
+
+  it('listWaymarksForVisualization returns the saved fields', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    await repo.createWaymark(
+      vizId,
+      waymarkInput({ startDate: '2026-01-01', endDate: '2026-06-01', label: 'Q1 goal' })
+    );
+    const waymarks = await repo.listWaymarksForVisualization(vizId);
+    expect(waymarks).toHaveLength(1);
+    expect(waymarks[0].visualizationId).toBe(vizId);
+    expect(waymarks[0].startDate).toBe('2026-01-01');
+    expect(waymarks[0].endDate).toBe('2026-06-01');
+    expect(waymarks[0].targetValue).toBe(100);
+    expect(waymarks[0].appliesTo).toBe('main');
+    expect(waymarks[0].label).toBe('Q1 goal');
+  });
+
+  it('listWaymarksForVisualization orders by start date', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    await repo.createWaymark(
+      vizId,
+      waymarkInput({ startDate: '2026-06-01', endDate: '2026-12-01' })
+    );
+    await repo.createWaymark(
+      vizId,
+      waymarkInput({ startDate: '2026-01-01', endDate: '2026-06-01' })
+    );
+    const waymarks = await repo.listWaymarksForVisualization(vizId);
+    expect(waymarks.map(w => w.startDate)).toEqual(['2026-01-01', '2026-06-01']);
+  });
+
+  it('listWaymarksForVisualization only returns waymarks for that visualization', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'A');
+    const v2 = await seedViz(presetId, 'B');
+    await repo.createWaymark(v1, waymarkInput());
+    const waymarks = await repo.listWaymarksForVisualization(v2);
+    expect(waymarks).toHaveLength(0);
+  });
+
+  it('updateWaymark replaces every field', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    const id = await repo.createWaymark(vizId, waymarkInput());
+    await repo.updateWaymark(
+      id,
+      waymarkInput({
+        startDate: '2026-05-01',
+        endDate: '2026-11-01',
+        targetValue: 50,
+        appliesTo: 'smoothing',
+        label: 'updated',
+      })
+    );
+    const [waymark] = await repo.listWaymarksForVisualization(vizId);
+    expect(waymark.startDate).toBe('2026-05-01');
+    expect(waymark.endDate).toBe('2026-11-01');
+    expect(waymark.targetValue).toBe(50);
+    expect(waymark.appliesTo).toBe('smoothing');
+    expect(waymark.label).toBe('updated');
+  });
+
+  it('updateWaymark is a no-op for unknown id', async () => {
+    await expect(repo.updateWaymark(9999, waymarkInput())).resolves.toBeUndefined();
+  });
+
+  it('deleteWaymark removes it', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    const id = await repo.createWaymark(vizId, waymarkInput());
+    await repo.deleteWaymark(id);
+    expect(await repo.listWaymarksForVisualization(vizId)).toHaveLength(0);
+  });
+
+  it('deleteWaymark is a no-op for unknown id', async () => {
+    await expect(repo.deleteWaymark(9999)).resolves.toBeUndefined();
+  });
+
+  it('deleteAllWaymarks removes every waymark', async () => {
+    const presetId = await seedPreset();
+    const v1 = await seedViz(presetId, 'A');
+    const v2 = await seedViz(presetId, 'B');
+    await repo.createWaymark(v1, waymarkInput());
+    await repo.createWaymark(v2, waymarkInput());
+    await repo.deleteAllWaymarks();
+    expect(await repo.listWaymarksForVisualization(v1)).toHaveLength(0);
+    expect(await repo.listWaymarksForVisualization(v2)).toHaveLength(0);
+  });
+
+  it('deleting the visualization cascades to its waymarks', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    await repo.createWaymark(vizId, waymarkInput());
+    await repo.deleteVisualization(vizId);
+    const rows = repo.getDb().query('SELECT * FROM waymarks WHERE visualization_id = ?').all(vizId);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('truncateData clears waymarks along with visualizations', async () => {
+    const presetId = await seedPreset();
+    const vizId = await seedViz(presetId);
+    await repo.createWaymark(vizId, waymarkInput());
+    await repo.truncateData();
+    const rows = repo.getDb().query('SELECT * FROM waymarks').all();
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe('app state DB independence from source DB', () => {
   it('app state DB has no entity/source tables', async () => {
     const repo = new SqliteAppStateRepository(':memory:');

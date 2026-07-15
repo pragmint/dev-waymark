@@ -1307,6 +1307,7 @@ form {
 }
 
 .dashboard-viz-edit-btn,
+.dashboard-viz-waymark-btn,
 .dashboard-viz-remove-btn {
   height: var(--control-height);
   width: var(--control-height);
@@ -1407,7 +1408,8 @@ form {
 // (pick preset, pick template, configure + preview) are all rendered together
 // in the same .viz-modal-body container; selections in any section update the
 // others SPA-style. The modal driver lives in dashboard.ts.
-.viz-modal {
+.viz-modal,
+.waymark-dialog {
   width: min(900px, 95vw);
   max-height: 90vh;
   padding: 0;
@@ -1529,6 +1531,43 @@ form {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.waymark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waymark-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.waymark-list-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waymark-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.waymark-form-actions {
+  display: flex;
+  gap: 8px;
 }
 
 // X-button popover for the single-dashboard branch — same shape as the filter

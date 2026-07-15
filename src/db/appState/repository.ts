@@ -6,6 +6,7 @@ import type {
   VisualizationSummary,
 } from '../../schemas/visualization';
 import type { Dashboard, DashboardWithViz } from '../../schemas/dashboard';
+import type { Waymark, WaymarkInput } from '../../schemas/waymark';
 
 /**
  * AppStateRepository — interface for Dev Waymark-owned application state.
@@ -89,6 +90,23 @@ export interface AppStateRepository {
    * the dashboard "Add visualization" picker.
    */
   listVisualizationsNotOnDashboard(dashboardId: number): Promise<VisualizationSummary[]>;
+
+  // ── Waymarks ─────────────────────────────────────────────────────────────
+
+  /** Create a new waymark on a visualization. Returns the new waymark's id. */
+  createWaymark(visualizationId: number, input: WaymarkInput): Promise<number>;
+
+  /** List all waymarks for a visualization, ordered by start date. */
+  listWaymarksForVisualization(visualizationId: number): Promise<Waymark[]>;
+
+  /** Update an existing waymark's fields. No-op if the id does not exist. */
+  updateWaymark(id: number, input: WaymarkInput): Promise<void>;
+
+  /** Delete a waymark. No-op if the id does not exist. */
+  deleteWaymark(id: number): Promise<void>;
+
+  /** Test-mode only: delete every waymark. */
+  deleteAllWaymarks(): Promise<void>;
 
   // ── Dashboards ────────────────────────────────────────────────────────────
 

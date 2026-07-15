@@ -24,6 +24,7 @@ import * as m3 from './migration-20260520T000000Z';
 import * as m4 from './migration-20260610T000000Z';
 import * as m5 from './migration-20260618T000000Z';
 import * as m6 from './migration-20260625T000000Z';
+import * as m7 from './migration-20260715T000000Z';
 
 export const migrations: Migration[] = [
   { name: 'migration-20260518T000000Z', ...m0 },
@@ -33,4 +34,5 @@ export const migrations: Migration[] = [
   { name: 'migration-20260610T000000Z', ...m4 },
   { name: 'migration-20260618T000000Z', ...m5 },
   { name: 'migration-20260625T000000Z', ...m6 },
+  { name: 'migration-20260715T000000Z', ...m7 },
 ];

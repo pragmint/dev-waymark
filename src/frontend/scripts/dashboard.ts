@@ -83,23 +83,23 @@ function hydrate(): void {
 
 // ── Chart rendering ──────────────────────────────────────────────────────────
 
-function readPointUrls(canvas: HTMLCanvasElement): string[] | null {
+function readPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
   const raw = canvas.getAttribute('data-point-urls');
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]) : null;
+    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
   } catch {
     return null;
   }
 }
 
-function readSmoothingPointUrls(canvas: HTMLCanvasElement): string[] | null {
+function readSmoothingPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
   const raw = canvas.getAttribute('data-smoothing-point-urls');
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]) : null;
+    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
   } catch {
     return null;
   }
@@ -117,14 +117,14 @@ function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
 // from every bucket in that point's window, not just the point's own bucket.
 function attachPointNavigation(
   config: ChartConfig,
-  pointUrls: string[],
-  smoothingPointUrls: string[] | null,
+  pointUrls: (string | null)[],
+  smoothingPointUrls: (string | null)[] | null,
   smoothingDatasetIndex: number | null
 ): void {
   const urlFor = (datasetIndex: number, index: number): string | undefined => {
-    if (datasetIndex === 0) return pointUrls[index];
+    if (datasetIndex === 0) return pointUrls[index] ?? undefined;
     if (smoothingPointUrls && datasetIndex === smoothingDatasetIndex) {
-      return smoothingPointUrls[index];
+      return smoothingPointUrls[index] ?? undefined;
     }
     return undefined;
   };
@@ -1586,8 +1586,8 @@ function buildWarningIndicator(
 interface CardPayload {
   id: number;
   chartJsConfig: unknown;
-  pointUrls: string[];
-  smoothingPointUrls: string[] | null;
+  pointUrls: (string | null)[];
+  smoothingPointUrls: (string | null)[] | null;
   smoothingDatasetIndex: number | null;
   warnings: string[];
   excludedEntityCount: number;
@@ -1810,6 +1810,333 @@ function wireWarningPopovers(): void {
   });
 }
 
+// ── Waymarks ─────────────────────────────────────────────────────────────────
+
+type WaymarkAppliesTo = 'main' | 'smoothing';
+
+interface WaymarkPayload {
+  id: number;
+  startDate: string;
+  endDate: string;
+  targetValue: number;
+  appliesTo: WaymarkAppliesTo;
+  label: string | null;
+}
+
+interface WaymarkModalState {
+  vizId: number | null;
+  waymarks: WaymarkPayload[];
+  smoothingEnabled: boolean;
+  editingId: number | null;
+}
+
+let waymarkModalState: WaymarkModalState = {
+  vizId: null,
+  waymarks: [],
+  smoothingEnabled: false,
+  editingId: null,
+};
+
+function getWaymarkModal(): HTMLDialogElement | null {
+  return document.getElementById('waymark-modal') as HTMLDialogElement | null;
+}
+
+function closeWaymarkModal(): void {
+  getWaymarkModal()?.close();
+}
+
+async function openWaymarkModal(vizId: number): Promise<void> {
+  const dialog = getWaymarkModal();
+  if (!dialog) return;
+  waymarkModalState = { vizId, waymarks: [], smoothingEnabled: false, editingId: null };
+  dialog.showModal();
+  await refreshWaymarkList();
+}
+
+async function refreshWaymarkList(): Promise<void> {
+  const vizId = waymarkModalState.vizId;
+  if (vizId == null) return;
+  const resp = await fetch(`/api/visualizations/${vizId}/waymarks`);
+  if (!resp.ok) return;
+  const data = (await resp.json()) as { waymarks: WaymarkPayload[]; smoothingEnabled: boolean };
+  waymarkModalState.waymarks = data.waymarks;
+  waymarkModalState.smoothingEnabled = data.smoothingEnabled;
+  renderWaymarkModal();
+}
+
+function renderWaymarkModal(): void {
+  const dialog = getWaymarkModal();
+  if (!dialog) return;
+  dialog.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'viz-modal-header';
+  const title = document.createElement('h2');
+  title.className = 'viz-modal-title';
+  title.textContent = 'Waymarks';
+  header.appendChild(title);
+  dialog.appendChild(header);
+
+  const body = document.createElement('div');
+  body.className = 'viz-modal-body';
+  body.appendChild(renderWaymarkList());
+  body.appendChild(renderWaymarkForm());
+  dialog.appendChild(body);
+
+  const footer = document.createElement('div');
+  footer.className = 'viz-modal-footer';
+  const spacer = document.createElement('div');
+  spacer.style.flex = '1';
+  footer.appendChild(spacer);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'filter-btn';
+  close.textContent = 'Close';
+  close.addEventListener('click', closeWaymarkModal);
+  footer.appendChild(close);
+  dialog.appendChild(footer);
+}
+
+function renderWaymarkList(): HTMLElement {
+  const section = document.createElement('div');
+  section.className = 'viz-modal-section';
+
+  const heading = document.createElement('h3');
+  heading.className = 'viz-modal-section-title';
+  heading.textContent = 'Existing waymarks';
+  section.appendChild(heading);
+
+  if (waymarkModalState.waymarks.length === 0) {
+    section.appendChild(sectionPlaceholder('No waymarks yet.'));
+    return section;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'waymark-list';
+  for (const w of waymarkModalState.waymarks) {
+    list.appendChild(renderWaymarkListItem(w));
+  }
+  section.appendChild(list);
+  return section;
+}
+
+function renderWaymarkListItem(w: WaymarkPayload): HTMLElement {
+  const item = document.createElement('li');
+  item.className = 'waymark-list-item';
+
+  const summary = document.createElement('span');
+  summary.className = 'waymark-list-summary';
+  const appliesText = w.appliesTo === 'smoothing' ? 'smoothing avg' : 'main line';
+  summary.textContent = `${w.startDate} → ${w.endDate}: ${w.targetValue} (${appliesText})${
+    w.label ? ` — ${w.label}` : ''
+  }`;
+  item.appendChild(summary);
+
+  const actions = document.createElement('span');
+  actions.className = 'waymark-list-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'filter-icon-btn';
+  editBtn.title = 'Edit waymark';
+  editBtn.textContent = '✎';
+  editBtn.addEventListener('click', () => {
+    waymarkModalState.editingId = w.id;
+    renderWaymarkModal();
+  });
+  actions.appendChild(editBtn);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'filter-icon-btn';
+  deleteBtn.title = 'Delete waymark';
+  deleteBtn.textContent = '🗑';
+  deleteBtn.addEventListener('click', () => void deleteWaymarkRow(w.id));
+  actions.appendChild(deleteBtn);
+
+  item.appendChild(actions);
+  return item;
+}
+
+function waymarkField(
+  labelText: string,
+  type: string,
+  name: string,
+  value: string
+): { wrap: HTMLElement; input: HTMLInputElement } {
+  const wrap = document.createElement('div');
+  wrap.className = 'form-field';
+  const lab = document.createElement('label');
+  lab.className = 'filter-widget-label';
+  lab.textContent = labelText;
+  const input = document.createElement('input');
+  input.type = type;
+  input.name = name;
+  input.className = 'filter-input';
+  input.value = value;
+  if (type === 'number') input.step = 'any';
+  wrap.appendChild(lab);
+  wrap.appendChild(input);
+  return { wrap, input };
+}
+
+function renderWaymarkAppliesToField(current: WaymarkAppliesTo): {
+  wrap: HTMLElement;
+  select: HTMLSelectElement;
+} {
+  const wrap = document.createElement('div');
+  wrap.className = 'form-field';
+  const lab = document.createElement('label');
+  lab.className = 'filter-widget-label';
+  lab.textContent = 'Applies to';
+  const select = document.createElement('select');
+  select.name = 'applies_to';
+  select.className = 'filter-select';
+  select.appendChild(opt('main', 'Main line', current === 'main'));
+  select.appendChild(opt('smoothing', 'Smoothing average', current === 'smoothing'));
+  wrap.appendChild(lab);
+  wrap.appendChild(select);
+  return { wrap, select };
+}
+
+function renderWaymarkFormActions(editing: boolean): HTMLElement {
+  const actions = document.createElement('div');
+  actions.className = 'waymark-form-actions';
+
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.className = 'filter-btn filter-btn-attention';
+  submit.textContent = editing ? 'Save changes' : 'Add waymark';
+  actions.appendChild(submit);
+
+  if (editing) {
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'filter-btn';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => {
+      waymarkModalState.editingId = null;
+      renderWaymarkModal();
+    });
+    actions.appendChild(cancel);
+  }
+  return actions;
+}
+
+function renderWaymarkForm(): HTMLElement {
+  const editing =
+    waymarkModalState.waymarks.find(w => w.id === waymarkModalState.editingId) ?? null;
+
+  const section = document.createElement('div');
+  section.className = 'viz-modal-section';
+
+  const heading = document.createElement('h3');
+  heading.className = 'viz-modal-section-title';
+  heading.textContent = editing ? 'Edit waymark' : 'Add waymark';
+  section.appendChild(heading);
+
+  const startField = waymarkField('Start date', 'date', 'start_date', editing?.startDate ?? '');
+  const endField = waymarkField('End date', 'date', 'end_date', editing?.endDate ?? '');
+  const targetField = waymarkField(
+    'Target value',
+    'number',
+    'target_value',
+    String(editing?.targetValue ?? '')
+  );
+  const labelField = waymarkField('Label (optional)', 'text', 'label', editing?.label ?? '');
+
+  const form = document.createElement('form');
+  form.className = 'viz-modal-fields';
+  form.appendChild(startField.wrap);
+  form.appendChild(endField.wrap);
+  form.appendChild(targetField.wrap);
+
+  let appliesToField: { wrap: HTMLElement; select: HTMLSelectElement } | null = null;
+  if (waymarkModalState.smoothingEnabled) {
+    appliesToField = renderWaymarkAppliesToField(editing?.appliesTo ?? 'main');
+    form.appendChild(appliesToField.wrap);
+  }
+
+  form.appendChild(labelField.wrap);
+  form.appendChild(renderWaymarkFormActions(!!editing));
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    void submitWaymarkForm(
+      startField.input.value,
+      endField.input.value,
+      targetField.input.value,
+      appliesToField?.select.value ?? 'main',
+      labelField.input.value
+    );
+  });
+
+  section.appendChild(form);
+  return section;
+}
+
+async function submitWaymarkForm(
+  startDate: string,
+  endDate: string,
+  targetValueRaw: string,
+  appliesToRaw: string,
+  label: string
+): Promise<void> {
+  const vizId = waymarkModalState.vizId;
+  if (vizId == null) return;
+  const targetValue = Number(targetValueRaw);
+  if (!startDate || !endDate || !isFinite(targetValue)) {
+    alert('Start date, end date, and a numeric target value are required.');
+    return;
+  }
+
+  const body = JSON.stringify({
+    startDate,
+    endDate,
+    targetValue,
+    appliesTo: appliesToRaw === 'smoothing' ? 'smoothing' : 'main',
+    label: label.trim() ? label.trim() : null,
+  });
+
+  const editingId = waymarkModalState.editingId;
+  const url =
+    editingId != null ? `/api/waymarks/${editingId}` : `/api/visualizations/${vizId}/waymarks`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!resp.ok) {
+    const err = (await resp.json()) as { error?: string };
+    alert(err.error ?? 'Failed to save waymark.');
+    return;
+  }
+
+  waymarkModalState.editingId = null;
+  await refreshWaymarkList();
+  await applyRange(state.dateRange, { pushHistory: false });
+}
+
+async function deleteWaymarkRow(id: number): Promise<void> {
+  if (!confirm('Delete this waymark?')) return;
+  const resp = await fetch(`/api/waymarks/${id}/delete`, { method: 'POST' });
+  if (!resp.ok) return;
+  await refreshWaymarkList();
+  await applyRange(state.dateRange, { pushHistory: false });
+}
+
+function wireWaymarkButtons(): void {
+  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
+  if (!grid) return;
+  grid.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-waymark-viz]');
+    if (!btn) return;
+    const vizId = parseInt(btn.dataset.waymarkViz ?? '', 10);
+    if (isNaN(vizId)) return;
+    void openWaymarkModal(vizId);
+  });
+}
+
 // ── Edit pencil ──────────────────────────────────────────────────────────────
 
 function wireEditButtons(): void {
@@ -1838,6 +2165,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wireAddVizSelect();
   wireRemoveButtons();
   wireEditButtons();
+  wireWaymarkButtons();
   wireWarningPopovers();
   wireDragReorder();
   wireDateRange();

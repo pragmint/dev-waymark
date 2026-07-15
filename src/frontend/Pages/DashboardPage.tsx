@@ -13,8 +13,8 @@ export type DashboardCard = {
   id: number;
   name: string;
   chartJsConfig: ChartJsConfig;
-  pointUrls: string[];
-  smoothingPointUrls: string[] | null;
+  pointUrls: (string | null)[];
+  smoothingPointUrls: (string | null)[] | null;
   smoothingDatasetIndex: number | null;
   warnings: string[];
   excludedEntityCount: number;
@@ -114,6 +114,7 @@ export const DashboardPage: FC<Props> = ({
       />
 
       <dialog id="viz-create-modal" class="viz-modal" />
+      <dialog id="waymark-modal" class="waymark-dialog" />
     </Layout>
   );
 };
@@ -381,6 +382,20 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
         aria-label={`Edit ${card.name}`}
       >
         ✎
+      </button>
+      <button
+        type="button"
+        class="dashboard-viz-waymark-btn"
+        data-waymark-viz={card.id}
+        title="Waymarks"
+        aria-label={`Waymarks for ${card.name}`}
+      >
+        <svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M16 2a10 10 0 0 0-10 10c0 7.5 10 18 10 18s10-10.5 10-18A10 10 0 0 0 16 2zm0 13.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"
+          />
+        </svg>
       </button>
       <button
         type="button"
