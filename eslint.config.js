@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
@@ -6,9 +7,30 @@ import prettierPlugin from 'eslint-plugin-prettier';
 import cyclomaticPlugin from 'eslint-plugin-cyclomatic-complexity';
 import noNestedTry from './eslint-rules/no-nested-try.js';
 import noInlineEnoentCheck from './eslint-rules/no-inline-enoent-check.js';
+import { listOtherWorktreePaths } from './src/domain/worktreeIgnores.ts';
+
+// Other git worktrees are sometimes created as subdirectories of this repo
+// (e.g. `git worktree add my-feature`), which puts them inside ESLint's `**`
+// globs. Ignore any such worktree directory automatically instead of hardcoding names.
+function getOtherWorktreeIgnores() {
+  try {
+    const output = execSync('git worktree list --porcelain', { encoding: 'utf8' });
+    return listOtherWorktreePaths(output, process.cwd()).map(rel => `${rel}/**`);
+  } catch {
+    return [];
+  }
+}
 
 export default [
   js.configs.recommended,
+  {
+    files: ['eslint.config.js'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+      },
+    },
+  },
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -80,6 +102,7 @@ export default [
       'eslint-rules',
       'mirror',
       'src/db/source/goldenSeed.ts',
+      ...getOtherWorktreeIgnores(),
     ],
   },
 ];
