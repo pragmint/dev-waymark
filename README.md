@@ -14,7 +14,13 @@ Copy `.env.example` to `.env` and configure as needed. All settings have default
 # Do the same for the end to end test configuration file.
 cp .env.example .env
 cp .env.e2e.example .env.e2e
+```
 
+Make sure to have [nix package manager](https://nixos.org/download/) installed on your computer.
+
+Then run the relevant bun install commands.
+
+```bash
 # Install deps
 bun install
 
@@ -40,7 +46,7 @@ bun b:prod
 bun start
 ```
 
-Unless otherwise configured, the server runs at `http://localhost:3000`
+Unless otherwise configured, the server runs at `http://localhost:4040`
 
 ## Database
 
