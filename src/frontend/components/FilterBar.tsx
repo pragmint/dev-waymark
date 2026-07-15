@@ -4,6 +4,7 @@ import type { Preset } from '../../schemas/preset';
 import type { FilterTree } from '../../schemas/filterTree';
 import {
   allLeavesNegated,
+  cloneTreeWithoutKey,
   distributeGroupNots,
   isGroup,
   isLeaf,
@@ -14,6 +15,16 @@ import type { FilterLeaf, FilterNode } from '../../schemas/filterTree';
 import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
 
 export type PresetWithUrl = Preset & { url: string };
+
+// Strip the entity_type leaf from the tree shown to the client — it lives
+// in the Type dropdown, not the tree view. The client merges it back when
+// building the final URL. We also normalize any legacy NOT(group) wrappers
+// into per-leaf NOTs so the view layer only has to handle NOT(leaf). Stripped
+// recursively since entity_type can appear nested (e.g. inside a preset's
+// sub-group on the "view excluded entities" links).
+export function computeVisibleFilterTree(activeTree: FilterTree): FilterTree {
+  return distributeGroupNots(cloneTreeWithoutKey(activeTree, 'entity_type')) as FilterTree;
+}
 
 type FilterBarProps = {
   activeTree: FilterTree;
@@ -205,14 +216,7 @@ export const FilterBar: FC<FilterBarProps> = ({
       })
     : '/entities';
 
-  // Strip the entity_type leaf from the tree shown to the client — it lives
-  // in the Type dropdown, not the tree view. The client merges it back when
-  // building the final URL. We also normalize any legacy NOT(group) wrappers
-  // into per-leaf NOTs so the view layer only has to handle NOT(leaf).
-  const visibleTree = distributeGroupNots({
-    ...activeTree,
-    children: activeTree.children.filter(c => !(isLeaf(c) && c.key === 'entity_type')),
-  }) as FilterTree;
+  const visibleTree = computeVisibleFilterTree(activeTree);
 
   return (
     <div class="filter-bar" data-filter-bar>
