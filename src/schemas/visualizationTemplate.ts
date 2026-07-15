@@ -45,6 +45,8 @@ export const FieldTrendSlotsSchema = z.object({
   // Optional per-measure display transform — see MeasureTransformSchema in visualization.ts.
   unitDivisor: z.string().optional(),
   unitLabel: z.string().optional(),
+  // Optional rolling-average smoothing line — see SmoothingConfigSchema in visualization.ts.
+  smoothingWindow: z.string().optional(),
 });
 export type FieldTrendSlots = z.infer<typeof FieldTrendSlotsSchema>;
 

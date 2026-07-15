@@ -93,6 +93,13 @@ export type TargetConfig = z.infer<typeof TargetConfigSchema>;
 export const VisualizationLayoutSchema = z.enum(['normal', 'wide']);
 export type VisualizationLayout = z.infer<typeof VisualizationLayoutSchema>;
 
+// Adds a second line to a time-series chart tracing the trailing rolling
+// average of the main series, to smooth out point-to-point noise.
+export const SmoothingConfigSchema = z.object({
+  windowSize: z.number().int().min(2),
+});
+export type SmoothingConfig = z.infer<typeof SmoothingConfigSchema>;
+
 export const VisualizationConfigSchema = z.object({
   chartType: ChartTypeSchema,
   xAxis: AxisConfigSchema.optional(),
@@ -102,6 +109,7 @@ export const VisualizationConfigSchema = z.object({
   derivedMetric: DerivedMetricConfigSchema.optional(),
   target: TargetConfigSchema.optional(),
   measureTransform: MeasureTransformSchema.optional(),
+  smoothing: SmoothingConfigSchema.optional(),
   chartOptions: z.record(z.string(), z.unknown()).optional(),
   layout: VisualizationLayoutSchema.optional(),
   _templateConfig: TemplateConfigSchema.optional(),

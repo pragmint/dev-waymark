@@ -94,18 +94,54 @@ function readPointUrls(canvas: HTMLCanvasElement): string[] | null {
   }
 }
 
-function attachPointNavigation(config: ChartConfig, pointUrls: string[]): void {
+function readSmoothingPointUrls(canvas: HTMLCanvasElement): string[] | null {
+  const raw = canvas.getAttribute('data-smoothing-point-urls');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as string[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
+  const raw = canvas.getAttribute('data-smoothing-dataset-index');
+  if (!raw) return null;
+  const parsed = JSON.parse(raw);
+  return typeof parsed === 'number' ? parsed : null;
+}
+
+// Point navigation covers both the main series (dataset 0) and, when present,
+// the smoothing line — clicking a rolling-average point opens the entities
+// from every bucket in that point's window, not just the point's own bucket.
+function attachPointNavigation(
+  config: ChartConfig,
+  pointUrls: string[],
+  smoothingPointUrls: string[] | null,
+  smoothingDatasetIndex: number | null
+): void {
+  const urlFor = (datasetIndex: number, index: number): string | undefined => {
+    if (datasetIndex === 0) return pointUrls[index];
+    if (smoothingPointUrls && datasetIndex === smoothingDatasetIndex) {
+      return smoothingPointUrls[index];
+    }
+    return undefined;
+  };
+  const isNavigable = (datasetIndex: number): boolean =>
+    datasetIndex === 0 || (smoothingPointUrls != null && datasetIndex === smoothingDatasetIndex);
+
   const options: ChartOptions = config.options ?? (config.options = {});
   options.onClick = (_event, elements) => {
-    const hit = elements.find(e => e.datasetIndex === 0);
+    const hit = elements.find(e => isNavigable(e.datasetIndex));
     if (!hit) return;
-    const url = pointUrls[hit.index];
+    const url = urlFor(hit.datasetIndex, hit.index);
     if (url) window.location.href = url;
   };
   options.onHover = (event, elements) => {
     const target = event?.native?.target as HTMLElement | null;
     if (!target || !('style' in target)) return;
-    target.style.cursor = elements.some(e => e.datasetIndex === 0) ? 'pointer' : 'default';
+    target.style.cursor = elements.some(e => isNavigable(e.datasetIndex)) ? 'pointer' : 'default';
   };
 }
 
@@ -138,7 +174,14 @@ function renderCardChart(canvas: HTMLCanvasElement): void {
     return;
   }
   const pointUrls = readPointUrls(canvas);
-  if (pointUrls) attachPointNavigation(config, pointUrls);
+  if (pointUrls) {
+    attachPointNavigation(
+      config,
+      pointUrls,
+      readSmoothingPointUrls(canvas),
+      readSmoothingDatasetIndex(canvas)
+    );
+  }
   attachUnitTooltip(config);
   new Chart(canvas, config);
 }
@@ -674,6 +717,15 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       required: false,
       description:
         'Shown on the axis and in tooltips, e.g. "days". Required to activate the divisor above.',
+    },
+    {
+      slotKey: 'smoothingWindow',
+      formName: 'smoothing_window',
+      label: 'Smoothing window (optional)',
+      kind: 'number',
+      required: false,
+      description:
+        'Adds a second line tracing the rolling average of the previous N points, e.g. 4 to smooth over the last 4 buckets. Leave blank for no smoothing line.',
     },
   ],
   category_comparison: [
@@ -1535,6 +1587,8 @@ interface CardPayload {
   id: number;
   chartJsConfig: unknown;
   pointUrls: string[];
+  smoothingPointUrls: string[] | null;
+  smoothingDatasetIndex: number | null;
   warnings: string[];
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
@@ -1565,6 +1619,8 @@ function applyCardUpdate(card: CardPayload): void {
   if (canvas) {
     canvas.setAttribute('data-config', JSON.stringify(card.chartJsConfig));
     canvas.setAttribute('data-point-urls', JSON.stringify(card.pointUrls));
+    canvas.setAttribute('data-smoothing-point-urls', JSON.stringify(card.smoothingPointUrls));
+    canvas.setAttribute('data-smoothing-dataset-index', JSON.stringify(card.smoothingDatasetIndex));
     renderCardChart(canvas);
   }
 }

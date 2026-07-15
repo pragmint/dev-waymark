@@ -1,4 +1,8 @@
-import type { MeasureTransform, VisualizationConfig } from '../schemas/visualization';
+import type {
+  MeasureTransform,
+  SmoothingConfig,
+  VisualizationConfig,
+} from '../schemas/visualization';
 import type {
   TemplateConfig,
   DurationTrendSlots,
@@ -20,6 +24,16 @@ function resolveMeasureTransform(slots: {
   if (!unitLabel) return undefined;
   const divisor = Number(slots.unitDivisor);
   return { divisor: divisor > 0 ? divisor : 1, unitLabel };
+}
+
+// Turns the optional smoothingWindow slot into a SmoothingConfig. The window
+// size alone activates the feature — an unset, blank, or invalid (< 2) value
+// leaves smoothing off rather than falling back to some default window.
+function resolveSmoothing(slots: { smoothingWindow?: string }): SmoothingConfig | undefined {
+  if (!slots.smoothingWindow?.trim()) return undefined;
+  const windowSize = Number(slots.smoothingWindow);
+  if (!Number.isInteger(windowSize) || windowSize < 2) return undefined;
+  return { windowSize };
 }
 
 /**
@@ -102,6 +116,7 @@ function resolveThroughputOverTime(slots: ThroughputOverTimeSlots): Visualizatio
 
 function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
   const measureTransform = resolveMeasureTransform(slots);
+  const smoothing = resolveSmoothing(slots);
   return {
     chartType: 'line',
     xAxis: {
@@ -116,6 +131,7 @@ function resolveFieldTrend(slots: FieldTrendSlots): VisualizationConfig {
     },
     aggregation: { function: slots.aggregation },
     ...(measureTransform ? { measureTransform } : {}),
+    ...(smoothing ? { smoothing } : {}),
   };
 }
 

@@ -5,7 +5,9 @@ import {
   buildChartData,
   buildChartJsConfig,
   buildExcludedEntityFilters,
+  buildLookbackSmoothingDataset,
   buildPointEntityFilters,
+  buildSmoothingWindowEntityFilters,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 import {
@@ -23,6 +25,7 @@ import type { DashboardCard } from '../frontend/Pages/DashboardPage';
 import type { FilterNode, FilterTree } from '../schemas/filterTree';
 import { VisualizationLayoutSchema } from '../schemas/visualization';
 import type { VisualizationConfig, VisualizationSummary } from '../schemas/visualization';
+import type { ChartDataResult } from '../domain/chartDataBuilder';
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
 // under a fresh root AND group, so click-through URLs narrow the entity list
@@ -30,6 +33,74 @@ import type { VisualizationConfig, VisualizationSummary } from '../schemas/visua
 function combineWithExtras(presetTree: FilterTree, extras: FilterNode[]): FilterTree {
   if (extras.length === 0) return presetTree;
   return { type: 'group', id: 'root', op: 'AND', children: [presetTree, ...extras] };
+}
+
+// A bounded dashboard date range clips the entities the smoothing line's
+// rolling average is computed over, so the first few visible points would
+// otherwise average fewer than `windowSize` points instead of a TRUE rolling
+// average. This re-queries with no lower bound at all — a calendar-based
+// lookback (e.g. "windowSize - 1 weeks earlier") isn't reliable, since a
+// window needs `windowSize - 1` *populated* buckets of history, and buckets
+// can be sparse (a week/day with zero entities). Fetching full history is the
+// only way to guarantee enough real data points regardless of gaps — then the
+// result is narrowed back down to the visible labels. Returns the extended
+// label list (used to build correctly-windowed click-through URLs), or null
+// when there's nothing to widen (unbounded range, or smoothing not
+// configured).
+async function applyLookbackSmoothing(
+  chartResult: ChartDataResult,
+  config: VisualizationConfig,
+  presetTree: FilterTree,
+  computedRange: ComputedDateRange,
+  dateField: string | null,
+  entityRepo: ReturnType<typeof getEntityRepo>
+): Promise<string[] | null> {
+  if (!config.smoothing || !computedRange.start || !dateField) return null;
+  if (chartResult.smoothingDatasetIndex == null) return null;
+
+  const lookbackFilters = buildDateRangeFilters(
+    { start: null, end: computedRange.end, label: '' },
+    dateField
+  );
+  const lookbackEntities = await entityRepo.list(combineWithExtras(presetTree, lookbackFilters));
+
+  const mainLabel = chartResult.datasets[0].label;
+  const lookback = buildLookbackSmoothingDataset(
+    chartResult.labels,
+    lookbackEntities,
+    mainLabel,
+    config
+  );
+  if (!lookback) return null;
+
+  chartResult.datasets[chartResult.smoothingDatasetIndex] = lookback.dataset;
+  return lookback.extendedLabels;
+}
+
+// Builds the smoothing line's click-through URLs. When lookback history was
+// used to compute a TRUE rolling average (extendedLabels set), the window for
+// an early point can reach before the visible range's own start — so the
+// filter must be scoped to the bare preset tree rather than `filteredTree`,
+// whose own range bound would otherwise clip the wider window right back.
+function buildSmoothingPointUrls(
+  visibleLabels: string[],
+  extendedLabels: string[] | null,
+  windowSize: number,
+  config: VisualizationConfig,
+  presetTree: FilterTree,
+  filteredTree: FilterTree
+): string[] {
+  const labelsForWindow = extendedLabels ?? visibleLabels;
+  const offset = labelsForWindow.length - visibleLabels.length;
+  const baseTree = extendedLabels ? presetTree : filteredTree;
+  return visibleLabels.map((_, i) =>
+    buildEntityUrl(
+      combineWithExtras(
+        baseTree,
+        buildSmoothingWindowEntityFilters(labelsForWindow, offset + i, windowSize, config)
+      )
+    )
+  );
 }
 
 async function buildCard(
@@ -57,11 +128,32 @@ async function buildCard(
   const entities = await entityRepo.list(filteredTree);
 
   const chartResult = buildChartData(entities, viz.config);
+  const extendedLabelsForSmoothing = await applyLookbackSmoothing(
+    chartResult,
+    viz.config,
+    preset.tree,
+    computedRange,
+    dateField,
+    entityRepo
+  );
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
 
   const pointUrls = chartResult.labels.map(label =>
     buildEntityUrl(combineWithExtras(filteredTree, buildPointEntityFilters(label, viz.config)))
   );
+
+  const smoothingWindowSize = viz.config.smoothing?.windowSize;
+  const smoothingPointUrls =
+    chartResult.smoothingDatasetIndex != null && smoothingWindowSize
+      ? buildSmoothingPointUrls(
+          chartResult.labels,
+          extendedLabelsForSmoothing,
+          smoothingWindowSize,
+          viz.config,
+          preset.tree,
+          filteredTree
+        )
+      : null;
 
   const excludedFilters = buildExcludedEntityFilters(viz.config);
   const excludedEntitiesUrl =
@@ -74,6 +166,8 @@ async function buildCard(
     name: viz.name,
     chartJsConfig,
     pointUrls,
+    smoothingPointUrls,
+    smoothingDatasetIndex: chartResult.smoothingDatasetIndex,
     warnings: chartResult.warnings,
     excludedEntityCount: chartResult.excludedEntityCount,
     excludedEntitiesUrl,

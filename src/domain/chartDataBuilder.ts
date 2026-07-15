@@ -8,6 +8,7 @@ import type {
   DurationUnit,
   DerivedMetricConfig,
   TargetConfig,
+  SmoothingConfig,
   ChartType,
 } from '../schemas/visualization';
 
@@ -31,6 +32,8 @@ export type ChartDataResult = {
   datasets: ChartJsDataset[];
   warnings: string[];
   excludedEntityCount: number;
+  // Index into `datasets` of the smoothing line, or null when smoothing is off.
+  smoothingDatasetIndex: number | null;
 };
 
 export type ChartJsConfig = {
@@ -176,6 +179,28 @@ export function buildPointEntityFilters(label: string, config: VisualizationConf
   return [];
 }
 
+// Filter nodes isolating every entity across the trailing window of buckets
+// that feeds a single smoothing-line point (labels[startIdx..pointIndex]
+// inclusive). Powers click-through from a rolling-average point to the
+// entities behind it, mirroring buildPointEntityFilters but spanning
+// multiple buckets instead of just one.
+export function buildSmoothingWindowEntityFilters(
+  labels: string[],
+  pointIndex: number,
+  windowSize: number,
+  config: VisualizationConfig
+): FilterNode[] {
+  if (!config.xAxis?.timeBucket) return [];
+  const startIdx = Math.max(0, pointIndex - windowSize + 1);
+  const startRange = bucketRange(labels[startIdx], config.xAxis.timeBucket);
+  const endRange = bucketRange(labels[pointIndex], config.xAxis.timeBucket);
+  if (!startRange || !endRange) return [];
+  return [
+    makeLeaf(config.xAxis.metadataKey, 'gte', startRange.gte),
+    makeLeaf(config.xAxis.metadataKey, 'lte', endRange.lte),
+  ];
+}
+
 // Filter nodes that, combined with the preset's filter tree under an AND,
 // isolate the entities that were excluded from the chart because they were
 // missing one or more required fields. Each required field becomes an IS NULL
@@ -246,9 +271,24 @@ const NUMERIC_AGGS: AggregationFunction[] = [
   'p99',
 ];
 
+function validateTargetAndSmoothing(config: VisualizationConfig): string[] {
+  const { xAxis, yAxis, derivedMetric, target, smoothing } = config;
+  const errors: string[] = [];
+  if (target?.type === 'horizontal_line' && !yAxis && !derivedMetric) {
+    errors.push('Horizontal target line requires a numeric y-axis or derived metric.');
+  }
+  if (target?.type === 'vertical_line' && !xAxis) {
+    errors.push('Vertical target line requires an x-axis.');
+  }
+  if (smoothing && !xAxis?.timeBucket) {
+    errors.push('Rolling average smoothing requires a time-bucketed x-axis.');
+  }
+  return errors;
+}
+
 export function validateVisualizationConfig(config: VisualizationConfig): string[] {
   const errors: string[] = [];
-  const { chartType, xAxis, yAxis, category, aggregation, derivedMetric, target } = config;
+  const { chartType, xAxis, yAxis, category, aggregation, derivedMetric } = config;
 
   if (!xAxis && !category) {
     errors.push('Visualization requires either an x-axis (with time bucket) or a category field.');
@@ -278,12 +318,7 @@ export function validateVisualizationConfig(config: VisualizationConfig): string
   if (derivedMetric?.type === 'sum' && derivedMetric.metadataKeys.length === 0) {
     errors.push('Derived sum metric requires at least one metadata key.');
   }
-  if (target?.type === 'horizontal_line' && !yAxis && !derivedMetric) {
-    errors.push('Horizontal target line requires a numeric y-axis or derived metric.');
-  }
-  if (target?.type === 'vertical_line' && !xAxis) {
-    errors.push('Vertical target line requires an x-axis.');
-  }
+  errors.push(...validateTargetAndSmoothing(config));
   return errors;
 }
 
@@ -398,11 +433,10 @@ function buildExclusionWarning(count: number, config: VisualizationConfig): stri
 
 // ── Chart data builder ────────────────────────────────────────────────────────
 
-export function buildChartData(
+function computeMainSeries(
   entities: EntityWithMetadata[],
   config: VisualizationConfig
-): ChartDataResult {
-  const warnings: string[] = [];
+): { labels: string[]; data: number[]; excludedCount: number } {
   let excludedCount = 0;
   const rows: Array<{ label: string; value: number }> = [];
 
@@ -427,17 +461,70 @@ export function buildChartData(
 
   const labels = sortGroupLabels(groups, config);
   const data = labels.map(l => aggregate(groups.get(l)!, config.aggregation.function));
+  return { labels, data, excludedCount };
+}
 
-  const mainLabel =
+function resolveMainLabel(config: VisualizationConfig): string {
+  return (
     config.derivedMetric?.name ??
     config.yAxis?.metadataKey ??
-    (config.aggregation.function === 'count' ? 'Count' : 'Value');
+    (config.aggregation.function === 'count' ? 'Count' : 'Value')
+  );
+}
 
-  const datasets: ChartJsDataset[] = [{ label: mainLabel, data }];
-  if (config.target) datasets.push(...buildTargetDatasets(config.target, labels));
+export function buildChartData(
+  entities: EntityWithMetadata[],
+  config: VisualizationConfig
+): ChartDataResult {
+  const warnings: string[] = [];
+  const { labels, data, excludedCount } = computeMainSeries(entities, config);
+  const mainLabel = resolveMainLabel(config);
+
+  const datasets = buildDatasets(mainLabel, data, labels, config);
+  const smoothingDatasetIndex = config.smoothing ? datasets.length - 1 : null;
   if (excludedCount > 0) warnings.push(buildExclusionWarning(excludedCount, config));
 
-  return { labels, datasets, warnings, excludedEntityCount: excludedCount };
+  return { labels, datasets, warnings, excludedEntityCount: excludedCount, smoothingDatasetIndex };
+}
+
+// Computes the smoothing line using entities from a lookback-widened window
+// (e.g. extending before the dashboard's active date-range filter), then
+// narrows the result to just `visibleLabels`. This makes the rolling average
+// a TRUE rolling average — the first few visible points still average over a
+// full window of history — instead of one clipped to fewer than `windowSize`
+// points because history before the visible range was filtered out.
+export function buildLookbackSmoothingDataset(
+  visibleLabels: string[],
+  lookbackEntities: EntityWithMetadata[],
+  mainLabel: string,
+  config: VisualizationConfig
+): { dataset: ChartJsDataset; extendedLabels: string[] } | null {
+  if (!config.smoothing) return null;
+  const { labels: extendedLabels, data: extendedData } = computeMainSeries(
+    lookbackEntities,
+    config
+  );
+  const smoothed = computeRollingAverage(extendedData, config.smoothing.windowSize);
+  const valueByLabel = new Map(extendedLabels.map((label, i) => [label, smoothed[i]]));
+  return {
+    dataset: {
+      ...smoothingDatasetStyle(mainLabel, config.smoothing.windowSize),
+      data: visibleLabels.map(label => valueByLabel.get(label)!),
+    },
+    extendedLabels,
+  };
+}
+
+function buildDatasets(
+  mainLabel: string,
+  data: number[],
+  labels: string[],
+  config: VisualizationConfig
+): ChartJsDataset[] {
+  const datasets: ChartJsDataset[] = [{ label: mainLabel, data }];
+  if (config.target) datasets.push(...buildTargetDatasets(config.target, labels));
+  if (config.smoothing) datasets.push(buildSmoothingDataset(config.smoothing, mainLabel, data));
+  return datasets;
 }
 
 // Target/goal values are authored directly by the user in the chart's displayed
@@ -465,6 +552,45 @@ function buildTargetDatasets(target: TargetConfig, labels: string[]): ChartJsDat
     return buildBandDatasets(target.min, target.max, target.label ?? 'Band', labels);
   }
   return [];
+}
+
+// Trailing rolling average over `data`. Early points average over however
+// many prior points exist rather than being dropped, so the smoothing line
+// always spans the full input — callers that need a TRUE average for the
+// first few visible points (see buildLookbackSmoothingDataset) pass in data
+// extended with history from before the visible range instead of relying on
+// this clamping.
+function computeRollingAverage(data: number[], windowSize: number): number[] {
+  return data.map((_, i) => {
+    const window = data.slice(Math.max(0, i - windowSize + 1), i + 1);
+    return window.reduce((a, b) => a + b, 0) / window.length;
+  });
+}
+
+function smoothingDatasetStyle(
+  mainLabel: string,
+  windowSize: number
+): Omit<ChartJsDataset, 'data'> {
+  return {
+    label: `${mainLabel} (${windowSize}-point avg)`,
+    borderColor: 'rgba(245, 158, 11, 0.9)',
+    backgroundColor: 'transparent',
+    pointRadius: 3,
+    fill: false,
+    tension: 0.2,
+    type: 'line',
+  };
+}
+
+function buildSmoothingDataset(
+  smoothing: SmoothingConfig,
+  mainLabel: string,
+  data: number[]
+): ChartJsDataset {
+  return {
+    ...smoothingDatasetStyle(mainLabel, smoothing.windowSize),
+    data: computeRollingAverage(data, smoothing.windowSize),
+  };
 }
 
 function buildBandDatasets(

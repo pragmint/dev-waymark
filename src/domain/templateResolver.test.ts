@@ -192,4 +192,48 @@ describe('resolveTemplate', () => {
 
     expect(config.measureTransform).toBeUndefined();
   });
+
+  test('field_trend with smoothingWindow produces a smoothing config', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['story_points'],
+        timeBucket: 'week',
+        aggregation: 'avg',
+        smoothingWindow: '4',
+      },
+    });
+
+    expect(config.smoothing).toEqual({ windowSize: 4 });
+  });
+
+  test('field_trend omits smoothing when smoothingWindow is absent', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['story_points'],
+        timeBucket: 'week',
+        aggregation: 'avg',
+      },
+    });
+
+    expect(config.smoothing).toBeUndefined();
+  });
+
+  test('field_trend omits smoothing when smoothingWindow is invalid', () => {
+    const config = resolveTemplate({
+      templateId: 'field_trend',
+      slots: {
+        dateField: 'created_at',
+        numericFields: ['story_points'],
+        timeBucket: 'week',
+        aggregation: 'avg',
+        smoothingWindow: '1',
+      },
+    });
+
+    expect(config.smoothing).toBeUndefined();
+  });
 });

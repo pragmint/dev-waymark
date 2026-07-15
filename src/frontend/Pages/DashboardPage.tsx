@@ -14,6 +14,8 @@ export type DashboardCard = {
   name: string;
   chartJsConfig: ChartJsConfig;
   pointUrls: string[];
+  smoothingPointUrls: string[] | null;
+  smoothingDatasetIndex: number | null;
   warnings: string[];
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
@@ -396,6 +398,8 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
         class="dashboard-viz-canvas"
         data-config={JSON.stringify(card.chartJsConfig)}
         data-point-urls={JSON.stringify(card.pointUrls)}
+        data-smoothing-point-urls={JSON.stringify(card.smoothingPointUrls)}
+        data-smoothing-dataset-index={JSON.stringify(card.smoothingDatasetIndex)}
       />
     </div>
   </div>

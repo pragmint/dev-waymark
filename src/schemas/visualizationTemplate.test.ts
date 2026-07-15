@@ -237,6 +237,19 @@ describe('TemplateConfigSchema — field_trend', () => {
     const result = TemplateConfigSchema.safeParse({ templateId: 'field_trend', slots: validSlots });
     expect(result.success).toBe(true);
   });
+
+  it('accepts an optional smoothingWindow', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'field_trend',
+      slots: { ...validSlots, smoothingWindow: '4' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a config with smoothingWindow omitted', () => {
+    const result = TemplateConfigSchema.safeParse({ templateId: 'field_trend', slots: validSlots });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('TemplateConfigSchema — category_comparison', () => {

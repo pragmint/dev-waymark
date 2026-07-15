@@ -9,7 +9,9 @@ import {
   buildChartData,
   buildChartJsConfig,
   buildExcludedEntityFilters,
+  buildLookbackSmoothingDataset,
   buildPointEntityFilters,
+  buildSmoothingWindowEntityFilters,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 import { isGroup, isLeaf } from '../schemas/filterTree';
@@ -363,6 +365,30 @@ describe('validateVisualizationConfig', () => {
     };
     expect(validateVisualizationConfig(config)).toEqual([]);
   });
+
+  test('valid config with smoothing on a time-bucketed x-axis has no errors', () => {
+    const config: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+      aggregation: { function: 'avg' },
+      smoothing: { windowSize: 4 },
+    };
+    expect(validateVisualizationConfig(config)).toEqual([]);
+  });
+
+  test('error when smoothing used without a time-bucketed x-axis', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+      aggregation: { function: 'avg' },
+      smoothing: { windowSize: 4 },
+    };
+    expect(validateVisualizationConfig(config)).toContain(
+      'Rolling average smoothing requires a time-bucketed x-axis.'
+    );
+  });
 });
 
 // ── buildChartData tests ──────────────────────────────────────────────────────
@@ -634,6 +660,216 @@ describe('buildChartData — target config', () => {
   });
 });
 
+describe('buildChartData — smoothing config', () => {
+  const baseConfig: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+    yAxis: {
+      metadataKey: 'lead_time_seconds',
+      type: 'number',
+      unit: 'seconds',
+      displayUnit: 'days',
+    },
+    aggregation: { function: 'avg' },
+  };
+
+  // Main series (avg lead time in days per week): [6, 7, 6]
+
+  test('adds a second dataset tracing the trailing rolling average', () => {
+    const config: VisualizationConfig = { ...baseConfig, smoothing: { windowSize: 2 } };
+    const result = buildChartData(tickets, config);
+    expect(result.datasets.length).toBe(2);
+    const smoothed = result.datasets[1];
+    expect(smoothed.data.length).toBe(result.labels.length);
+    expect(smoothed.data[0]).toBeCloseTo(6); // only one point available
+    expect(smoothed.data[1]).toBeCloseTo(6.5); // avg(6, 7)
+    expect(smoothed.data[2]).toBeCloseTo(6.5); // avg(7, 6)
+  });
+
+  test('window larger than available points averages over what exists', () => {
+    const config: VisualizationConfig = { ...baseConfig, smoothing: { windowSize: 10 } };
+    const result = buildChartData(tickets, config);
+    const smoothed = result.datasets[1];
+    expect(smoothed.data[0]).toBeCloseTo(6);
+    expect(smoothed.data[1]).toBeCloseTo(6.5);
+    expect(smoothed.data[2]).toBeCloseTo(19 / 3);
+  });
+
+  test('no smoothing dataset when smoothing is absent', () => {
+    const result = buildChartData(tickets, baseConfig);
+    expect(result.datasets.length).toBe(1);
+  });
+
+  test('smoothing dataset is styled as a solid first-class line, not a dashed reference line', () => {
+    const config: VisualizationConfig = { ...baseConfig, smoothing: { windowSize: 2 } };
+    const result = buildChartData(tickets, config);
+    const smoothed = result.datasets[1];
+    expect(smoothed.borderDash).toBeUndefined();
+    expect(smoothed.pointRadius).toBeGreaterThan(0);
+    expect(smoothed.type).toBe('line');
+  });
+
+  test('smoothing dataset label reflects the configured window size', () => {
+    const config: VisualizationConfig = { ...baseConfig, smoothing: { windowSize: 3 } };
+    const result = buildChartData(tickets, config);
+    expect(result.datasets[1].label).toBe('lead_time_seconds (3-point avg)');
+  });
+
+  test('smoothingDatasetIndex points at the smoothing dataset', () => {
+    const config: VisualizationConfig = { ...baseConfig, smoothing: { windowSize: 2 } };
+    const result = buildChartData(tickets, config);
+    expect(result.smoothingDatasetIndex).toBe(1);
+  });
+
+  test('smoothingDatasetIndex accounts for a target dataset appearing first', () => {
+    const config: VisualizationConfig = {
+      ...baseConfig,
+      target: { type: 'horizontal_line', value: 5 },
+      smoothing: { windowSize: 2 },
+    };
+    const result = buildChartData(tickets, config);
+    expect(result.datasets.length).toBe(3);
+    expect(result.smoothingDatasetIndex).toBe(2);
+  });
+
+  test('smoothingDatasetIndex is null when smoothing is absent', () => {
+    const result = buildChartData(tickets, baseConfig);
+    expect(result.smoothingDatasetIndex).toBeNull();
+  });
+});
+
+// ── buildLookbackSmoothingDataset ─────────────────────────────────────────────
+//
+// A bounded dashboard date range only fetches entities inside that range, so
+// computing the rolling average from those entities alone clips the first few
+// visible points to fewer than `windowSize` points. buildLookbackSmoothingDataset
+// takes a wider ("lookback") entity set and narrows the result back down to
+// just the visible labels, producing a TRUE rolling average instead.
+
+describe('buildLookbackSmoothingDataset', () => {
+  function weekEntity(id: number, mondayIso: string, storyPoints: number): EntityWithMetadata {
+    return makeEntity(id, {
+      done_at: { value: `${mondayIso}T10:00:00Z`, value_type: 'date' },
+      story_points: { value: String(storyPoints), value_type: 'number' },
+    });
+  }
+
+  // One entity per week, six consecutive weeks, values 2..12 so a rolling
+  // average is easy to hand-verify.
+  const allWeeksEntities = [
+    weekEntity(101, '2026-01-05', 2),
+    weekEntity(102, '2026-01-12', 4),
+    weekEntity(103, '2026-01-19', 6),
+    weekEntity(104, '2026-01-26', 8),
+    weekEntity(105, '2026-02-02', 10),
+    weekEntity(106, '2026-02-09', 12),
+  ];
+
+  const config: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+    yAxis: { metadataKey: 'story_points', type: 'number' },
+    aggregation: { function: 'avg' },
+    smoothing: { windowSize: 3 },
+  };
+
+  // Simulates a dashboard date range bounded to just the last 3 of the 6 weeks.
+  const visibleEntities = allWeeksEntities.slice(3);
+
+  test('produces a TRUE rolling average using lookback history beyond the visible range', () => {
+    const visibleResult = buildChartData(visibleEntities, { ...config, smoothing: undefined });
+    expect(visibleResult.labels.length).toBe(3);
+
+    const lookback = buildLookbackSmoothingDataset(
+      visibleResult.labels,
+      allWeeksEntities,
+      visibleResult.datasets[0].label,
+      config
+    );
+    expect(lookback).not.toBeNull();
+    // Trailing window of 3: [W2,W3,W4]=6, [W3,W4,W5]=8, [W4,W5,W6]=10.
+    expect(lookback!.dataset.data).toEqual([6, 8, 10]);
+  });
+
+  test('without lookback, the same visible-only entities clip the first point (proves the bug)', () => {
+    const clippedResult = buildChartData(visibleEntities, config);
+    expect(clippedResult.smoothingDatasetIndex).not.toBeNull();
+    // No history before the visible range, so the first point can only
+    // average what's present: itself.
+    expect(clippedResult.datasets[clippedResult.smoothingDatasetIndex!].data[0]).toBe(8);
+  });
+
+  test('extendedLabels spans the full lookback entity set', () => {
+    const visibleResult = buildChartData(visibleEntities, { ...config, smoothing: undefined });
+    const lookback = buildLookbackSmoothingDataset(
+      visibleResult.labels,
+      allWeeksEntities,
+      visibleResult.datasets[0].label,
+      config
+    );
+    expect(lookback!.extendedLabels.length).toBe(6);
+  });
+
+  test('dataset label and style match the plain smoothing dataset', () => {
+    const visibleResult = buildChartData(visibleEntities, { ...config, smoothing: undefined });
+    const lookback = buildLookbackSmoothingDataset(
+      visibleResult.labels,
+      allWeeksEntities,
+      visibleResult.datasets[0].label,
+      config
+    );
+    expect(lookback!.dataset.label).toBe('story_points (3-point avg)');
+    expect(lookback!.dataset.borderDash).toBeUndefined();
+    expect(lookback!.dataset.pointRadius).toBeGreaterThan(0);
+  });
+
+  test('returns null when smoothing is not configured', () => {
+    const visibleResult = buildChartData(visibleEntities, { ...config, smoothing: undefined });
+    const result = buildLookbackSmoothingDataset(
+      visibleResult.labels,
+      allWeeksEntities,
+      'story_points',
+      {
+        ...config,
+        smoothing: undefined,
+      }
+    );
+    expect(result).toBeNull();
+  });
+
+  // A calendar-based lookback (e.g. "3 weeks earlier") would under-reach here:
+  // W3 has no entity at all, so 3 calendar weeks back from W6 only reaches W4,
+  // short of the 3 *populated* buckets (W2, W4, W5) the window actually needs.
+  // Passing every entity as `lookbackEntities` (no calendar cutoff) sidesteps
+  // that entirely — computeMainSeries naturally skips the empty bucket.
+  test('skips empty buckets rather than under-reaching on a calendar-based lookback', () => {
+    const sparseEntities = [
+      weekEntity(201, '2026-01-05', 2), // W1
+      weekEntity(202, '2026-01-12', 4), // W2
+      // W3 (2026-01-19) deliberately has no entity.
+      weekEntity(204, '2026-01-26', 8), // W4
+      weekEntity(205, '2026-02-02', 10), // W5
+      weekEntity(206, '2026-02-09', 12), // W6
+    ];
+    const visibleSparseEntities = sparseEntities.slice(3); // W5, W6 only
+    const visibleResult = buildChartData(visibleSparseEntities, {
+      ...config,
+      smoothing: undefined,
+    });
+    expect(visibleResult.labels.length).toBe(2);
+
+    const lookback = buildLookbackSmoothingDataset(
+      visibleResult.labels,
+      sparseEntities,
+      visibleResult.datasets[0].label,
+      config
+    );
+    // Trailing window of 3 populated points: [W2,W4,W5]=(4+8+10)/3, [W4,W5,W6]=(8+10+12)/3.
+    expect(lookback!.dataset.data[0]).toBeCloseTo((4 + 8 + 10) / 3);
+    expect(lookback!.dataset.data[1]).toBeCloseTo((8 + 10 + 12) / 3);
+  });
+});
+
 describe('buildChartData — measureTransform', () => {
   const config: VisualizationConfig = {
     chartType: 'bar',
@@ -898,5 +1134,61 @@ describe('buildPointEntityFilters', () => {
   test('returns empty array when label does not match bucket format', () => {
     expect(buildPointEntityFilters('not-a-date', timeConfig('day'))).toEqual([]);
     expect(buildPointEntityFilters('2024-13', timeConfig('quarter'))).toEqual([]);
+  });
+});
+
+// ── buildSmoothingWindowEntityFilters ─────────────────────────────────────────
+
+describe('buildSmoothingWindowEntityFilters', () => {
+  const config: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+    aggregation: { function: 'avg' },
+  };
+  const labels = [
+    'Week of 2024-01-01',
+    'Week of 2024-01-08',
+    'Week of 2024-01-15',
+    'Week of 2024-01-22',
+  ];
+
+  function summarize(nodes: ReturnType<typeof buildSmoothingWindowEntityFilters>) {
+    return nodes.map(n => (n.type === 'filter' ? { key: n.key, op: n.op, value: n.value } : n));
+  }
+
+  test('spans from the start of the earliest bucket in the window to the end of the point bucket', () => {
+    // windowSize 3, pointIndex 2 → covers buckets at indices 0, 1, 2.
+    expect(summarize(buildSmoothingWindowEntityFilters(labels, 2, 3, config))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-01-01' },
+      { key: 'done_at', op: 'lte', value: '2024-01-21T23:59:59.999Z' },
+    ]);
+  });
+
+  test('clamps the window start to the first available label', () => {
+    // windowSize 10 at pointIndex 1 would reach index -8; clamps to index 0.
+    expect(summarize(buildSmoothingWindowEntityFilters(labels, 1, 10, config))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-01-01' },
+      { key: 'done_at', op: 'lte', value: '2024-01-14T23:59:59.999Z' },
+    ]);
+  });
+
+  test('windowSize 1 covers just the point bucket, same as buildPointEntityFilters', () => {
+    expect(summarize(buildSmoothingWindowEntityFilters(labels, 3, 1, config))).toEqual([
+      { key: 'done_at', op: 'gte', value: '2024-01-22' },
+      { key: 'done_at', op: 'lte', value: '2024-01-28T23:59:59.999Z' },
+    ]);
+  });
+
+  test('returns empty array without a time-bucketed x-axis', () => {
+    const categoryConfig: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    expect(buildSmoothingWindowEntityFilters(labels, 0, 2, categoryConfig)).toEqual([]);
+  });
+
+  test('returns empty array when a bucket label does not match the expected format', () => {
+    expect(buildSmoothingWindowEntityFilters(['not-a-date'], 0, 2, config)).toEqual([]);
   });
 });

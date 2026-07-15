@@ -1,10 +1,32 @@
 import { type APIRequestContext, type Page } from '@playwright/test';
 import { test, expect } from './strictTest';
+import { decodeTreeHex } from '../src/domain/filterTreeCodec';
+import { isGroup, isLeaf } from '../src/schemas/filterTree';
+import type { FilterNode } from '../src/schemas/filterTree';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function uniqueName(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
+
+// Pulls the gte/lte bounds for `key` out of an /entities?f=... click-through
+// URL's encoded filter tree, to assert on the date window it targets without
+// depending on entity-type defaulting or seeded row counts.
+function dateRangeFromEntityUrl(url: string, key: string): { gte?: string; lte?: string } {
+  const f = new URL(url, 'http://localhost').searchParams.get('f');
+  const tree = f ? decodeTreeHex(f) : null;
+  const result: { gte?: string; lte?: string } = {};
+  const walk = (node: FilterNode): void => {
+    if (isLeaf(node) && node.key === key) {
+      if (node.op === 'gte') result.gte = String(node.value);
+      if (node.op === 'lte') result.lte = String(node.value);
+    } else if (isGroup(node)) {
+      node.children.forEach(walk);
+    }
+  };
+  if (tree) walk(tree);
+  return result;
 }
 
 async function seedPreset(request: APIRequestContext, name: string): Promise<number> {
@@ -712,6 +734,239 @@ test.describe('unit transform slots', () => {
     const res2 = await request.get(`/api/chart-data/${vizId}`);
     const { chartJsConfig: cleared } = await res2.json();
     expect(cleared.options.plugins.tooltip.unitLabel).toBeUndefined();
+  });
+});
+
+// field_trend exposes an optional smoothing window slot that adds a second,
+// solid rolling-average line alongside the main series.
+
+test.describe('field trend smoothing slot', () => {
+  test('field trend exposes an optional smoothing window input', async ({ page, request }) => {
+    const presetName = uniqueName('PresetSmooth');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SmoothD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    await expect(page.locator('#viz-modal-form input[name="smoothing_window"]')).toBeVisible();
+  });
+
+  test('leaving the smoothing window blank does not block saving and adds no extra line', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetSmoothBlank');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SmoothBlankD'));
+    const vizName = uniqueName('SmoothBlankViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_fields"]',
+      'total_lead_time_seconds'
+    );
+    // smoothing_window left blank on purpose.
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toBeVisible();
+    const vizId = await card.getAttribute('data-viz-id');
+
+    const res = await request.get(`/api/chart-data/${vizId}`);
+    const { chartJsConfig } = await res.json();
+    expect(chartJsConfig.data.datasets.length).toBe(1);
+  });
+
+  test('a filled smoothing window adds a solid rolling-average line', async ({ page, request }) => {
+    const presetName = uniqueName('PresetSmoothFilled');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SmoothFilledD'));
+    const vizName = uniqueName('SmoothFilledViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_fields"]',
+      'total_lead_time_seconds'
+    );
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '4');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toBeVisible();
+    const vizId = await card.getAttribute('data-viz-id');
+
+    const res = await request.get(`/api/chart-data/${vizId}`);
+    expect(res.ok()).toBeTruthy();
+    const { chartJsConfig } = await res.json();
+    expect(chartJsConfig.data.datasets.length).toBe(2);
+    const smoothingDs = chartJsConfig.data.datasets[1];
+    expect(smoothingDs.label).toContain('4-point avg');
+    // The line reads as a first-class series, not a dashed reference line.
+    expect(smoothingDs.borderDash).toBeUndefined();
+    expect(smoothingDs.pointRadius).toBeGreaterThan(0);
+  });
+
+  test('a smoothing-line point click-through targets the entities across its whole window', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetSmoothWindow');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SmoothWindowD'));
+    const vizName = uniqueName('SmoothWindowViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_fields"]',
+      'total_lead_time_seconds'
+    );
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '4');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    await expect(card).toBeVisible();
+    const canvas = card.locator('canvas');
+
+    const smoothingDatasetIndex = await canvas.getAttribute('data-smoothing-dataset-index');
+    expect(smoothingDatasetIndex).toBe('1');
+
+    const pointUrls = JSON.parse((await canvas.getAttribute('data-point-urls')) ?? '[]');
+    const smoothingPointUrls = JSON.parse(
+      (await canvas.getAttribute('data-smoothing-point-urls')) ?? '[]'
+    );
+    expect(smoothingPointUrls.length).toBe(pointUrls.length);
+
+    // The very first bucket has no history, so its window collapses to just
+    // that bucket — main and smoothing point-through URLs should match.
+    expect(smoothingPointUrls[0]).toBe(pointUrls[0]);
+
+    // A later point's smoothing window spans multiple buckets: its filter's
+    // gte should reach further back than the main point's, while both share
+    // the same lte (the window's most recent bucket, same as the main point).
+    const lastIndex = pointUrls.length - 1;
+    const mainRange = dateRangeFromEntityUrl(pointUrls[lastIndex], 'jira_created_at');
+    const smoothingRange = dateRangeFromEntityUrl(smoothingPointUrls[lastIndex], 'jira_created_at');
+    expect(mainRange.gte).toBeTruthy();
+    expect(smoothingRange.gte).toBeTruthy();
+    expect(new Date(smoothingRange.gte!).getTime()).toBeLessThan(
+      new Date(mainRange.gte!).getTime()
+    );
+    expect(smoothingRange.lte).toBe(mainRange.lte);
+  });
+
+  test('editing a saved viz to add a smoothing window updates the displayed chart', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetSmoothEdit'));
+    const vizId = await seedViz(request, presetId, uniqueName('SmoothEditViz'), 'field_trend');
+    const dashId = await seedDashboard(request, uniqueName('SmoothEditD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '3');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    const res = await request.get(`/api/chart-data/${vizId}`);
+    const { chartJsConfig } = await res.json();
+    expect(chartJsConfig.data.datasets.length).toBe(2);
+    expect(chartJsConfig.data.datasets[1].label).toContain('3-point avg');
+
+    // Now clear the window — smoothing should switch back off.
+    await page.locator(`[data-edit-viz="${vizId}"]`).click();
+    await expect(page.locator('.viz-modal')).toBeVisible();
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '');
+    await page.locator('.viz-modal-footer button:has-text("Save changes")').click();
+    await expect(page.locator('.viz-modal')).not.toBeVisible();
+
+    const res2 = await request.get(`/api/chart-data/${vizId}`);
+    const { chartJsConfig: cleared } = await res2.json();
+    expect(cleared.data.datasets.length).toBe(1);
+  });
+
+  test('a bounded dashboard date range still produces a TRUE rolling average, not one clipped to the range', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetSmoothRange');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('SmoothRangeD'));
+    const vizName = uniqueName('SmoothRangeViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_fields"]',
+      'total_lead_time_seconds'
+    );
+    await page.fill('#viz-modal-form input[name="smoothing_window"]', '4');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+    await expect(page.locator(`.dashboard-viz-card:has-text("${vizName}")`)).toBeVisible();
+
+    const unboundedRes = await request.get(`/api/dashboards/${dashId}/cards`);
+    const { cards: unboundedCards } = await unboundedRes.json();
+    const unboundedCard = unboundedCards[0];
+    const smoothIdx: number = unboundedCard.smoothingDatasetIndex;
+    expect(smoothIdx).not.toBeNull();
+    const labels: string[] = unboundedCard.chartJsConfig.data.labels;
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+
+    // Bounding the range to start at the last bucket should still average
+    // over the same history as the unbounded chart, not just that one point.
+    const pivot = labels.length - 1;
+    const pivotLabel = labels[pivot];
+    const rs = pivotLabel.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    expect(rs).toBeTruthy();
+
+    const boundedRes = await request.get(`/api/dashboards/${dashId}/cards?range=custom&rs=${rs}`);
+    const { cards: boundedCards } = await boundedRes.json();
+    const boundedCard = boundedCards[0];
+    const boundedLabels: string[] = boundedCard.chartJsConfig.data.labels;
+    expect(boundedLabels[0]).toBe(pivotLabel);
+
+    const unboundedSmoothValue = unboundedCard.chartJsConfig.data.datasets[smoothIdx].data[pivot];
+    const boundedSmoothValue = boundedCard.chartJsConfig.data.datasets[smoothIdx].data[0];
+    expect(boundedSmoothValue).toBeCloseTo(unboundedSmoothValue, 5);
+
+    // Sanity check this isn't trivially true because averaging collapsed to a
+    // single point: the smoothed value should differ from the raw main value.
+    const boundedMainValue = boundedCard.chartJsConfig.data.datasets[0].data[0];
+    expect(boundedSmoothValue).not.toBeCloseTo(boundedMainValue, 5);
   });
 });
 
