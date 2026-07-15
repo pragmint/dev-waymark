@@ -87,7 +87,17 @@ The connection URLs and `DEV_WAYMARK_SOURCE_DB_SEED=golden` are set in `.env` (s
 
 **Never set `DEV_WAYMARK_SOURCE_DB_SEED` to a non-`none` value against a real source database** — it will TRUNCATE its rows on every boot. Leave it `none` (the default) for prod-style configurations; Dev Waymark will then treat the source as read-only and never touch its schema.
 
-Stop the devenv processes with `devenv down` when you're done for the day. Nix and devenv must be installed — see [devenv.sh](https://devenv.sh/getting-started/) for platform install instructions.
+Stop the devenv processes with `devenv processes down` when you're done for the day. Nix and devenv must be installed — see [devenv.sh](https://devenv.sh/getting-started/) for platform install instructions.
+
+#### Automatic activation via direnv
+
+This repo ships an `.envrc` that loads the devenv shell automatically when you `cd` into it. Install [direnv](https://direnv.net/docs/installation.html), then allow it once per checkout:
+
+```bash
+direnv allow
+```
+
+Because trust is scoped to the directory, **each new git worktree needs its own `direnv allow`** — allowing it in `dev-waymark` doesn't carry over to `dev-waymark/some-worktree`. Without direnv, `devenv`/`bun test:e2e` still work as long as `devenv` is otherwise on `PATH` (e.g. a login shell that sources the nix profile); `test/globalSetup.ts` falls back to `nix run nixpkgs#devenv` if a bare `devenv` isn't found.
 
 #### First-run gotcha: `insteadOf` git rewrite
 
@@ -135,7 +145,7 @@ The webServer environment is loaded from `.env.e2e` (gitignored) if present, lay
 cp .env.e2e.example .env.e2e
 ```
 
-When `.env.e2e` uses the Postgres adapter, `test/globalSetup.ts` runs `devenv up -d` if the Postgres port isn't already listening and waits for it to accept connections. `test/globalTeardown.ts` calls `devenv down` — but only when this run was the one that started devenv (tracked via a `.devenv-e2e-owned` marker file). If your `bun dev` session already has devenv running, e2e reuses it and leaves it alone at the end.
+When `.env.e2e` uses the Postgres adapter, `test/globalSetup.ts` runs `devenv up -d` if the Postgres port isn't already listening and waits for it to accept connections. `test/globalTeardown.ts` calls `devenv processes down` — but only when this run was the one that started devenv (tracked via a `.devenv-e2e-owned` marker file). If your `bun dev` session already has devenv running, e2e reuses it and leaves it alone at the end.
 
 To run without devenv, comment out the Postgres block in `.env.e2e`; the fallback in `playwright.config.ts` uses in-memory SQLite and globalSetup skips the devenv lifecycle entirely.
 

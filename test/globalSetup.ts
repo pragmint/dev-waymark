@@ -4,6 +4,7 @@ import { createConnection } from 'node:net';
 import { Pool } from 'pg';
 import type { FullConfig } from '@playwright/test';
 import { loadE2EEnv, usesPostgres } from './e2eEnv';
+import { runDevenv } from './runDevenv';
 import { urlForWorker } from './strictTest';
 
 // Marker written when this run started devenv itself, so globalTeardown knows
@@ -108,7 +109,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     console.log(`[e2e] Postgres already reachable on ${POSTGRES_HOST}:${POSTGRES_PORT}`);
   } else {
     console.log('[e2e] Starting devenv…');
-    await run('devenv', ['up', '-d']);
+    await runDevenv(['up', '-d']);
     await waitForPort(POSTGRES_HOST, POSTGRES_PORT, 30_000);
     writeFileSync(OWNED_MARKER, `started ${new Date().toISOString()}\n`);
   }

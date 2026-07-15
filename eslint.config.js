@@ -76,6 +76,14 @@ export default [
     },
   },
   {
+    // This is the canonical implementation of the ENOENT check the rule
+    // otherwise forbids inline.
+    files: ['src/loaders/isEnoentError.ts'],
+    rules: {
+      'local/no-inline-enoent-check': 'off',
+    },
+  },
+  {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     ignores: ['src/frontend/**'],
     rules: {
