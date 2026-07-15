@@ -43,8 +43,8 @@ async function waitForPort(port: number, timeoutMs: number): Promise<void> {
 // Rewrite DB URLs so each worker owns disjoint state.
 //   sqlite :memory:  → unchanged (already per-process)
 //   sqlite file      → foo.sqlite → foo-worker-N.sqlite
-//   postgres         → dbname → dbname_worker_N (caller must pre-create)
-function urlForWorker(url: string, workerIndex: number): string {
+//   postgres         → dbname → dbname_worker_N (created by globalSetup.ts)
+export function urlForWorker(url: string, workerIndex: number): string {
   if (url.includes(':memory:')) return url;
   if (url.startsWith('sqlite:///')) {
     return url.replace(/(\.sqlite)?$/, `-worker-${workerIndex}.sqlite`);
