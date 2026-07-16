@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createConnection } from 'node:net';
+import { Pool } from 'pg';
 import { loadE2EEnv } from './e2eEnv';
 
 // Worker-scoped server: each Playwright worker owns its own bun index.tsx
@@ -64,6 +65,46 @@ function envForWorker(workerIndex: number, port: number): NodeJS.ProcessEnv {
   return { ...process.env, ...merged, PORT: String(port) };
 }
 
+const DB_NAME_PATTERN = /^[a-zA-Z0-9_]+$/;
+
+// globalSetup.ts pre-creates worker databases for indices 0..config.workers-1,
+// but Playwright retires a worker and spawns a replacement with a HIGHER index
+// after a test failure — that index has no pre-created database. Provision the
+// worker's postgres databases here, on boot, so any index is self-sufficient.
+// Idempotent (checks pg_database first), so the pre-created indices are no-ops.
+async function ensureWorkerDatabases(env: NodeJS.ProcessEnv): Promise<void> {
+  const urls = [env.DEV_WAYMARK_SOURCE_DB_URL, env.DEV_WAYMARK_APP_DB_URL].filter(
+    (url): url is string =>
+      !!url && (url.startsWith('postgres://') || url.startsWith('postgresql://'))
+  );
+  if (urls.length === 0) return;
+
+  const admin = new URL(urls[0]);
+  const pool = new Pool({
+    host: admin.hostname,
+    port: Number(admin.port),
+    user: admin.username,
+    password: admin.password,
+    database: 'postgres',
+  });
+  try {
+    for (const url of urls) {
+      const dbName = new URL(url).pathname.slice(1);
+      if (!DB_NAME_PATTERN.test(dbName)) {
+        throw new Error(`Refusing to create database with unexpected name: ${dbName}`);
+      }
+      const { rowCount } = await pool.query('SELECT 1 FROM pg_database WHERE datname = $1', [
+        dbName,
+      ]);
+      if (rowCount === 0) {
+        await pool.query(`CREATE DATABASE "${dbName}"`);
+      }
+    }
+  } finally {
+    await pool.end();
+  }
+}
+
 // Buffer per-worker server output so it can be dumped only if the server dies
 // or misbehaves. Piping it live to the parent stdout produces confusing
 // out-of-order interleaving because bun block-buffers its stdout when it's
@@ -92,8 +133,12 @@ async function spawnWorkerServer(workerIndex: number): Promise<{
   stop: () => Promise<void>;
 }> {
   const port = BASE_PORT + workerIndex;
+  const env = envForWorker(workerIndex, port);
+  // A worker restarted after a failure gets a fresh index that globalSetup
+  // never provisioned — create its databases before booting the server.
+  await ensureWorkerDatabases(env);
   const proc: ChildProcess = spawn('bun', ['index.tsx'], {
-    env: envForWorker(workerIndex, port),
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

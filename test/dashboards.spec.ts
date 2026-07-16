@@ -1311,7 +1311,14 @@ test.describe('drag-and-drop reorder', () => {
     await expect(target).toHaveClass(/drop-before/);
     await expect(target).not.toHaveClass(/drop-after/);
 
-    // Drop on the right half → v1 moves past v3.
+    // Drop on the right half → v1 moves past v3. The reorder auto-saves via a
+    // fire-and-forget POST; wait for that response so the later reload can't race
+    // ahead of the persist and read the pre-drop server-side order.
+    const reorderSaved = page.waitForResponse(
+      resp =>
+        resp.url().includes(`/api/dashboards/${dashId}/reorder`) &&
+        resp.request().method() === 'POST'
+    );
     await page.evaluate(tgtId => {
       const tgt = document.querySelector<HTMLElement>(
         `.dashboard-viz-card[data-viz-id="${tgtId}"]`
@@ -1333,6 +1340,7 @@ test.describe('drag-and-drop reorder', () => {
     }, v3);
 
     await expect.poll(async () => await orderedVizIds(page)).toEqual([v2, v3, v1]);
+    await reorderSaved;
     // Reordering auto-saves — it must never require the (name-only) Save
     // Changes button, which drives from name-dirty state alone.
     await expect(page.locator('[data-dashboard-save-submit]')).toBeHidden();
