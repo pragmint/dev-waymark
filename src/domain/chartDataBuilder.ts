@@ -1179,7 +1179,12 @@ function buildChartOptions(
           // of overlapping into an unreadable smear.
           ticks: { autoSkip: true, maxRotation: 60, minRotation: 60 },
         },
-        y: { title: { display: !!yAxisLabel, text: yAxisLabel }, beginAtZero: false },
+        // Bars encode magnitude by height, so their axis must start at zero;
+        // line charts may legitimately zoom to their data range.
+        y: {
+          title: { display: !!yAxisLabel, text: yAxisLabel },
+          beginAtZero: config.chartType === 'bar',
+        },
       };
   return {
     responsive: true,

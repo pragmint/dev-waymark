@@ -82,6 +82,29 @@ async function seedFieldTrendViz(
   return id;
 }
 
+// Seeds a throughput_over_time viz — the one bar-chart template that counts
+// entities per time bucket — via the real create API, so its rendered chart
+// exercises the bar-specific y-axis baseline.
+async function seedThroughputViz(
+  request: APIRequestContext,
+  presetId: number,
+  name: string
+): Promise<number> {
+  const res = await request.post('/api/visualizations', {
+    data: {
+      name,
+      presetId,
+      templateConfig: {
+        templateId: 'throughput_over_time',
+        slots: { dateField: 'jira_created_at', timeBucket: 'week' },
+      },
+    },
+  });
+  expect(res.ok()).toBeTruthy();
+  const { id } = await res.json();
+  return id;
+}
+
 async function seedDashboard(
   request: APIRequestContext,
   name: string,
@@ -1101,6 +1124,69 @@ test.describe('field trend smoothing slot', () => {
     // single point: the smoothed value should differ from the raw main value.
     const boundedMainValue = boundedCard.chartJsConfig.data.datasets[0].data[0];
     expect(boundedSmoothValue).not.toBeCloseTo(boundedMainValue, 5);
+  });
+});
+
+// ── Bar chart y-axis baseline ───────────────────────────────────────────────
+// Bars encode magnitude by height, so their y-axis must start at zero;
+// otherwise Chart.js auto-fits the domain to the data (min 1 for a count
+// histogram with no empty buckets), which clips every count=1 bar to nothing.
+
+test.describe('bar chart y-axis baseline', () => {
+  test('a bar chart renders with its y-axis anchored at zero even when every bucket count is >= 1', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetBarZero'));
+    const vizId = await seedThroughputViz(request, presetId, uniqueName('BarZeroViz'));
+    const dashId = await seedDashboard(request, uniqueName('BarZeroD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const canvasSel = `.dashboard-viz-card[data-viz-id="${vizId}"] canvas`;
+    await expect(page.locator(canvasSel)).toBeVisible();
+
+    // Read the live Chart.js instance's rendered y-scale. All-time range does
+    // not gap-fill zero buckets, so the smallest count is >= 1 — the axis would
+    // start at 1 (hiding count=1 bars) unless beginAtZero forces a 0 baseline.
+    const yScale = await page.evaluate(async sel => {
+      const w = window as unknown as {
+        Chart: {
+          getChart(
+            c: HTMLCanvasElement
+          ): { config: { type: string }; scales: { y: { min: number; max: number } } } | undefined;
+        };
+      };
+      const canvas = document.querySelector(sel) as HTMLCanvasElement | null;
+      if (!canvas) return null;
+      const chart = w.Chart.getChart(canvas);
+      if (!chart) return null;
+      return { type: chart.config.type, min: chart.scales.y.min, max: chart.scales.y.max };
+    }, canvasSel);
+
+    expect(yScale).not.toBeNull();
+    expect(yScale!.type).toBe('bar');
+    expect(yScale!.min).toBe(0);
+    // The data actually rises above the baseline, so min===0 is a real floor
+    // rather than an artifact of an empty chart.
+    expect(yScale!.max).toBeGreaterThan(0);
+  });
+
+  test('bar charts set beginAtZero on the y-axis while line charts do not', async ({ request }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetBaseline'));
+    const barViz = await seedThroughputViz(request, presetId, uniqueName('BarBaseline'));
+    const lineViz = await seedFieldTrendViz(request, presetId, uniqueName('LineBaseline'));
+
+    const barRes = await request.get(`/api/chart-data/${barViz}`);
+    const { chartJsConfig: barConfig } = await barRes.json();
+    expect(barConfig.type).toBe('bar');
+    expect(barConfig.options.scales.y.beginAtZero).toBe(true);
+
+    const lineRes = await request.get(`/api/chart-data/${lineViz}`);
+    const { chartJsConfig: lineConfig } = await lineRes.json();
+    expect(lineConfig.type).toBe('line');
+    expect(lineConfig.options.scales.y.beginAtZero).toBe(false);
   });
 });
 

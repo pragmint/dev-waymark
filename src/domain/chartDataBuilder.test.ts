@@ -1001,6 +1001,33 @@ describe('buildChartJsConfig', () => {
     expect(title.text).toContain('days');
   });
 
+  test('bar chart y-axis begins at zero', () => {
+    const config: VisualizationConfig = {
+      chartType: 'bar',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'day' },
+      aggregation: { function: 'count' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    const scales = jsConfig.options.scales as Record<string, unknown>;
+    const yAxis = scales.y as Record<string, unknown>;
+    expect(yAxis.beginAtZero).toBe(true);
+  });
+
+  test('line chart y-axis does not begin at zero', () => {
+    const config: VisualizationConfig = {
+      chartType: 'line',
+      xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'week' },
+      yAxis: { metadataKey: 'lead_time_seconds', type: 'number' },
+      aggregation: { function: 'avg' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    const scales = jsConfig.options.scales as Record<string, unknown>;
+    const yAxis = scales.y as Record<string, unknown>;
+    expect(yAxis.beginAtZero).toBe(false);
+  });
+
   test('measureTransform unit label appears on the y-axis title', () => {
     const config: VisualizationConfig = {
       chartType: 'bar',
