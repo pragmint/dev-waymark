@@ -1195,12 +1195,54 @@ function buildChartOptions(
   };
 }
 
+// Chart.js draws nothing for a pie/doughnut with zero slices (or slices that
+// all sum to zero) — the card just goes blank, which reads as broken rather
+// than "no data in range." Swap in a single greyed-out placeholder slice so
+// the shape stays visible.
+const EMPTY_SLICE_LABEL = 'No data';
+const EMPTY_SLICE_COLOR = 'rgba(148, 163, 184, 0.35)';
+const EMPTY_SLICE_BORDER = 'rgba(148, 163, 184, 0.6)';
+
+function isEmptyCircularSeries(result: ChartDataResult): boolean {
+  const data = result.datasets[0]?.data ?? [];
+  return data.every(value => value == null || value === 0);
+}
+
+function buildEmptyCircularConfig(
+  chartType: ChartType,
+  result: ChartDataResult,
+  config: VisualizationConfig
+): ChartJsConfig {
+  const mainLabel = result.datasets[0]?.label ?? resolveMainLabel(config);
+  const dataset: ChartJsDataset = {
+    label: mainLabel,
+    data: [1],
+    backgroundColor: [EMPTY_SLICE_COLOR],
+    borderColor: EMPTY_SLICE_BORDER,
+  };
+  return {
+    type: chartType,
+    data: { labels: [EMPTY_SLICE_LABEL], datasets: [dataset] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true },
+        tooltip: { enabled: false },
+      },
+    },
+  };
+}
+
 export function buildChartJsConfig(
   result: ChartDataResult,
   config: VisualizationConfig
 ): ChartJsConfig {
   const { chartType } = config;
   const isCircular = chartType === 'pie' || chartType === 'doughnut';
+  if (isCircular && isEmptyCircularSeries(result)) {
+    return buildEmptyCircularConfig(chartType, result, config);
+  }
   const styledDatasets = result.datasets.map((ds, i) =>
     i === 0 ? styleMainDataset(ds, chartType, result.labels.length) : ds
   );

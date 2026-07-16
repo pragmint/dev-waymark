@@ -22,6 +22,9 @@ export type DurationTrendSlots = z.infer<typeof DurationTrendSlotsSchema>;
 
 export const CategoryBreakdownSlotsSchema = z.object({
   categoryField: z.string().min(1),
+  // Optional and blank-friendly (unlike the required slots above) — the client
+  // sends '' rather than omitting the key when the user leaves it unfilled.
+  dateField: z.string().optional(),
 });
 export type CategoryBreakdownSlots = z.infer<typeof CategoryBreakdownSlotsSchema>;
 

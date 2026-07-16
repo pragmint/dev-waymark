@@ -441,10 +441,11 @@ test.describe('create-viz modal', () => {
     await datasetSelect.selectOption({ label: presetName });
     const presetValue = await datasetSelect.inputValue();
 
-    // First template — category_breakdown — exposes a category_field slot.
+    // First template — category_breakdown — exposes a category_field slot
+    // (and an optional date_field, but no time_bucket — that's throughput's).
     await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
     await expect(page.locator('#viz-modal-form select[name="category_field"]')).toBeVisible();
-    await expect(page.locator('#viz-modal-form select[name="date_field"]')).toHaveCount(0);
+    await expect(page.locator('#viz-modal-form select[name="time_bucket"]')).toHaveCount(0);
 
     // Switch to a different template — slot fields swap with no walk-back step.
     await page.locator('.viz-modal-template-card:has-text("Throughput over time")').click();
@@ -512,6 +513,86 @@ test.describe('create-viz modal', () => {
     await expect(categorySelect.locator('option[value="ticket_type"]')).toHaveCount(1);
     await expect(categorySelect.locator('option[value="total_lead_time_seconds"]')).toHaveCount(0);
     await expect(categorySelect.locator('option[value="jira_created_at"]')).toHaveCount(0);
+  });
+
+  test('category breakdown exposes an optional date field, filtered to date-type fields', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetCatDate');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('CatDateD'));
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+
+    const dateSelect = page.locator('#viz-modal-form select[name="date_field"]');
+    await expect(dateSelect).toBeVisible();
+    await expect(dateSelect.locator('option[value="jira_created_at"]')).toHaveCount(1);
+    await expect(dateSelect.locator('option[value="ticket_type"]')).toHaveCount(0);
+    await expect(dateSelect.locator('option[value="total_lead_time_seconds"]')).toHaveCount(0);
+  });
+
+  test('leaving the category breakdown date field blank does not block saving', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetCatDateBlank');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('CatDateBlankD'));
+    const vizName = uniqueName('CatDateBlankViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', { index: 1 });
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    await expect(page.locator(`.dashboard-viz-card:has-text("${vizName}")`)).toBeVisible();
+  });
+
+  test('setting a date field on category breakdown makes it respect the dashboard date range', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetCatDateFiltered');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('CatDateFilteredD'));
+    const vizName = uniqueName('CatDateFilteredViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Category breakdown")').click();
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="category_field"]', 'ticket_type');
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    const canvas = card.locator('canvas');
+
+    // "All time" — the golden dataset has entities, so the pie has real slices.
+    await expect(canvas).not.toHaveAttribute('data-config', /"No data"/);
+
+    // A custom range with no overlapping entities (golden data is all 2024+):
+    // the dateField slot should narrow the query to nothing, and the pie
+    // should fall back to the empty-state placeholder slice instead of a
+    // blank canvas.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await page.locator('[data-date-range-custom-start]').fill('1999-01-01');
+    await page.locator('[data-date-range-custom-start]').dispatchEvent('change');
+    await page.locator('[data-date-range-custom-end]').fill('1999-01-02');
+    await page.locator('[data-date-range-custom-end]').dispatchEvent('change');
+
+    await expect(canvas).toHaveAttribute('data-config', /"No data"/);
   });
 });
 

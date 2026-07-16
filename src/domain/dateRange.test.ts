@@ -211,6 +211,16 @@ describe('resolveVizDateField', () => {
     };
     expect(resolveVizDateField(config)).toBeNull();
   });
+
+  test('resolves a pie chart with a bucket-less date xAxis (category_breakdown dateField slot)', () => {
+    const config: VisualizationConfig = {
+      chartType: 'pie',
+      category: { metadataKey: 'team' },
+      xAxis: { metadataKey: 'created_at', type: 'date' },
+      aggregation: { function: 'count' },
+    };
+    expect(resolveVizDateField(config)).toBe('created_at');
+  });
 });
 
 describe('buildDateRangeFilters', () => {

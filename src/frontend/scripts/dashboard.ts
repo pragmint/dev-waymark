@@ -795,6 +795,16 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       description:
         "Entities are counted and grouped by this field's value — one slice per distinct value.",
     },
+    {
+      slotKey: 'dateField',
+      formName: 'date_field',
+      label: 'Date field (optional)',
+      kind: 'field',
+      primaryType: 'date',
+      required: false,
+      description:
+        "Lets the dashboard's date range filter narrow this chart based on this date. Leave blank to always include all entities regardless of the selected range.",
+    },
   ],
   phase_snapshot: [
     {

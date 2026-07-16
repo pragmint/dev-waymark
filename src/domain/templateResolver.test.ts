@@ -36,6 +36,20 @@ describe('resolveTemplate', () => {
     expect(config.chartType).toBe('pie');
     expect(config.category?.metadataKey).toBe('ticket_type');
     expect(config.aggregation.function).toBe('count');
+    expect(config.xAxis).toBeUndefined();
+  });
+
+  test('category_breakdown with a date field sets a bucket-less xAxis for date-range filtering', () => {
+    const config = resolveTemplate({
+      templateId: 'category_breakdown',
+      slots: { categoryField: 'ticket_type', dateField: 'created_at' },
+    });
+
+    expect(config.chartType).toBe('pie');
+    expect(config.category?.metadataKey).toBe('ticket_type');
+    expect(config.xAxis?.metadataKey).toBe('created_at');
+    expect(config.xAxis?.type).toBe('date');
+    expect(config.xAxis?.timeBucket).toBeUndefined();
   });
 
   test('phase_snapshot produces bar chart with category', () => {

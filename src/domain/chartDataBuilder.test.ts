@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import type { EntityWithMetadata } from '../schemas/entity';
 import type { VisualizationConfig } from '../schemas/visualization';
 import type { Waymark } from '../schemas/waymark';
-import type { ChartJsDataset } from './chartDataBuilder';
+import type { ChartDataResult, ChartJsDataset } from './chartDataBuilder';
 import {
   aggregate,
   anchorBoundariesToAdjacentData,
@@ -1043,6 +1043,49 @@ describe('buildChartJsConfig', () => {
     const plugins = jsConfig.options.plugins as Record<string, unknown>;
     const tooltip = plugins.tooltip as Record<string, unknown>;
     expect(tooltip.unitLabel).toBeUndefined();
+  });
+
+  test('pie chart with no entities in range gets a placeholder slice instead of going blank', () => {
+    const config: VisualizationConfig = {
+      chartType: 'pie',
+      category: { metadataKey: 'issue_type' },
+      aggregation: { function: 'count' },
+    };
+    const result = buildChartData([], config);
+    const jsConfig = buildChartJsConfig(result, config);
+    expect(jsConfig.data.labels.length).toBe(1);
+    expect(jsConfig.data.datasets[0].data).toEqual([1]);
+    expect(jsConfig.data.datasets[0].backgroundColor).toBeDefined();
+  });
+
+  test('doughnut chart where all values sum to zero also gets a placeholder slice', () => {
+    const config: VisualizationConfig = {
+      chartType: 'doughnut',
+      category: { metadataKey: 'issue_type' },
+      aggregation: { function: 'sum' },
+    };
+    const result: ChartDataResult = {
+      labels: ['bug', 'feature'],
+      datasets: [{ label: 'Count', data: [0, 0] }],
+      warnings: [],
+      excludedEntityCount: 0,
+      smoothingDatasetIndex: null,
+    };
+    const jsConfig = buildChartJsConfig(result, config);
+    expect(jsConfig.data.labels.length).toBe(1);
+    expect(jsConfig.data.datasets[0].data).toEqual([1]);
+  });
+
+  test('pie chart with real data is left untouched', () => {
+    const config: VisualizationConfig = {
+      chartType: 'pie',
+      category: { metadataKey: 'issue_type' },
+      aggregation: { function: 'count' },
+    };
+    const result = buildChartData(tickets, config);
+    const jsConfig = buildChartJsConfig(result, config);
+    expect(jsConfig.data.labels).toEqual(result.labels);
+    expect(jsConfig.data.labels.length).toBeGreaterThan(1);
   });
 });
 

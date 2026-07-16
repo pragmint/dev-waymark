@@ -84,6 +84,9 @@ function resolveCategoryBreakdown(slots: CategoryBreakdownSlots): VisualizationC
       sortBy: 'value_desc',
     },
     aggregation: { function: 'count' },
+    // No time bucket — this xAxis exists only so resolveVizDateField picks it
+    // up for the dashboard date-range filter; category still drives the slices.
+    ...(slots.dateField ? { xAxis: { metadataKey: slots.dateField, type: 'date' } } : {}),
   };
 }
 
