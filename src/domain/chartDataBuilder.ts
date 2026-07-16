@@ -25,9 +25,10 @@ export type ChartJsDataset = {
   fill?: boolean | string;
   tension?: number;
   borderDash?: number[];
-  pointRadius?: number;
+  pointRadius?: number | number[];
   type?: string;
   order?: number;
+  spanGaps?: boolean;
 };
 
 export type ChartDataResult = {
@@ -206,6 +207,38 @@ function nextBucketLabel(label: string, bucket: TimeBucket): string | null {
 }
 
 const MAX_SYNTHETIC_LABELS = 1000;
+
+// Given a bounded computed date range (week/month/quarter/year/custom — never
+// 'all', which has no fixed start/end), returns every bucket label from the
+// range's start through its end, inclusive — so a chart's x-axis reflects the
+// full period even when real data only covers part of it (e.g. a month view
+// with entities only through the 7th still shows the whole month). Returns
+// null when the range is unbounded on either side, since there is no fixed
+// span to fill.
+export function fillRangeGapLabels(
+  bucket: TimeBucket,
+  computedRange: ComputedDateRange
+): string[] | null {
+  if (!computedRange.start || !computedRange.end) return null;
+  const startLabel = bucketDate(computedRange.start.toISOString(), bucket);
+  const endLabel = bucketDate(computedRange.end.toISOString(), bucket);
+  if (!startLabel || !endLabel || endLabel < startLabel) return null;
+
+  const labels: string[] = [startLabel];
+  let cursor = startLabel;
+  while (cursor < endLabel && labels.length < MAX_SYNTHETIC_LABELS) {
+    const next = nextBucketLabel(cursor, bucket);
+    if (!next) break;
+    labels.push(next);
+    cursor = next;
+  }
+  return labels;
+}
+
+// Aggregations where an empty bucket genuinely means zero (no entities to
+// count/sum) rather than an undefined value — used to decide whether a
+// gap-filled bucket gets 0 or null (a rendered gap) in the main series.
+const ZERO_FILLABLE_AGGREGATIONS: AggregationFunction[] = ['count', 'sum'];
 
 // Waymarks are stored per-visualization with no inherent tie to the currently
 // viewed date range, so a goal line whose [startDate, endDate] doesn't
@@ -539,8 +572,9 @@ function buildExclusionWarning(count: number, config: VisualizationConfig): stri
 
 function computeMainSeries(
   entities: EntityWithMetadata[],
-  config: VisualizationConfig
-): { labels: string[]; data: number[]; excludedCount: number } {
+  config: VisualizationConfig,
+  computedRange?: ComputedDateRange
+): { labels: string[]; data: (number | null)[]; excludedCount: number } {
   let excludedCount = 0;
   const rows: Array<{ label: string; value: number }> = [];
 
@@ -563,8 +597,21 @@ function computeMainSeries(
     groups.get(label)!.push(value);
   }
 
+  if (config.xAxis?.timeBucket && computedRange) {
+    const rangeLabels = fillRangeGapLabels(config.xAxis.timeBucket, computedRange);
+    if (rangeLabels) {
+      for (const l of rangeLabels) if (!groups.has(l)) groups.set(l, []);
+    }
+  }
+
   const labels = sortGroupLabels(groups, config);
-  const data = labels.map(l => aggregate(groups.get(l)!, config.aggregation.function));
+  const data = labels.map(l => {
+    const values = groups.get(l)!;
+    if (values.length === 0 && !ZERO_FILLABLE_AGGREGATIONS.includes(config.aggregation.function)) {
+      return null;
+    }
+    return aggregate(values, config.aggregation.function);
+  });
   return { labels, data, excludedCount };
 }
 
@@ -578,10 +625,11 @@ function resolveMainLabel(config: VisualizationConfig): string {
 
 export function buildChartData(
   entities: EntityWithMetadata[],
-  config: VisualizationConfig
+  config: VisualizationConfig,
+  computedRange?: ComputedDateRange
 ): ChartDataResult {
   const warnings: string[] = [];
-  const { labels, data, excludedCount } = computeMainSeries(entities, config);
+  const { labels, data, excludedCount } = computeMainSeries(entities, config, computedRange);
   const mainLabel = resolveMainLabel(config);
 
   const datasets = buildDatasets(mainLabel, data, labels, config);
@@ -613,7 +661,7 @@ export function buildLookbackSmoothingDataset(
   return {
     dataset: {
       ...smoothingDatasetStyle(mainLabel, config.smoothing.windowSize),
-      data: visibleLabels.map(label => valueByLabel.get(label)!),
+      data: visibleLabels.map(label => valueByLabel.get(label) ?? null),
     },
     extendedLabels,
   };
@@ -621,7 +669,7 @@ export function buildLookbackSmoothingDataset(
 
 function buildDatasets(
   mainLabel: string,
-  data: number[],
+  data: (number | null)[],
   labels: string[],
   config: VisualizationConfig
 ): ChartJsDataset[] {
@@ -663,10 +711,15 @@ function buildTargetDatasets(target: TargetConfig, labels: string[]): ChartJsDat
 // always spans the full input — callers that need a TRUE average for the
 // first few visible points (see buildLookbackSmoothingDataset) pass in data
 // extended with history from before the visible range instead of relying on
-// this clamping.
-function computeRollingAverage(data: number[], windowSize: number): number[] {
+// this clamping. Gap-filled buckets (null) are excluded from the window
+// rather than treated as zero, so a period with no data doesn't drag the
+// average down; a window with no real values yields null.
+function computeRollingAverage(data: (number | null)[], windowSize: number): (number | null)[] {
   return data.map((_, i) => {
-    const window = data.slice(Math.max(0, i - windowSize + 1), i + 1);
+    const window = data
+      .slice(Math.max(0, i - windowSize + 1), i + 1)
+      .filter((v): v is number => v != null);
+    if (window.length === 0) return null;
     return window.reduce((a, b) => a + b, 0) / window.length;
   });
 }
@@ -683,13 +736,17 @@ function smoothingDatasetStyle(
     fill: false,
     tension: 0.2,
     type: 'line',
+    // A gap-filled bucket with no data is null, not a real value — draw the
+    // line straight through it to the next real point instead of breaking,
+    // so a sparse time series still reads as one continuous trend line.
+    spanGaps: true,
   };
 }
 
 function buildSmoothingDataset(
   smoothing: SmoothingConfig,
   mainLabel: string,
-  data: number[]
+  data: (number | null)[]
 ): ChartJsDataset {
   return {
     ...smoothingDatasetStyle(mainLabel, smoothing.windowSize),
@@ -745,7 +802,7 @@ export function resolveWaymarkAnchors(
     ? computeRollingAverage(fullData, config.smoothing!.windowSize)
     : null;
 
-  const valueAtOrBefore = (series: number[], targetLabel: string): number | null => {
+  const valueAtOrBefore = (series: (number | null)[], targetLabel: string): number | null => {
     let lo = 0;
     let hi = fullLabels.length - 1;
     let ans = -1;
@@ -774,6 +831,192 @@ export function resolveWaymarkAnchors(
     result.set(w.id, valueAtOrBefore(series, startLabel));
   }
   return result;
+}
+
+// ── Boundary anchoring ────────────────────────────────────────────────────────
+
+export type BoundaryAnchorEdges = { leading: boolean; trailing: boolean };
+
+export type BoundaryAnchorInfo = {
+  main: BoundaryAnchorEdges;
+  smoothing: BoundaryAnchorEdges | null;
+};
+
+type LabeledValue = { label: string; value: number };
+
+function nearestBefore(
+  labels: string[],
+  data: (number | null)[],
+  targetLabel: string
+): LabeledValue | null {
+  for (let i = labels.length - 1; i >= 0; i--) {
+    if (labels[i] < targetLabel && data[i] != null) return { label: labels[i], value: data[i]! };
+  }
+  return null;
+}
+
+function nearestAfter(
+  labels: string[],
+  data: (number | null)[],
+  targetLabel: string
+): LabeledValue | null {
+  for (let i = 0; i < labels.length; i++) {
+    if (labels[i] > targetLabel && data[i] != null) return { label: labels[i], value: data[i]! };
+  }
+  return null;
+}
+
+// The value a straight line from (a.label, a.value) to (b.label, b.value)
+// would have at `atLabel`, positioned by true bucket-ordinal distance (not
+// array index) — so a value that's actually several buckets away from the
+// edge produces a gentle partial slope at the edge, rather than the full
+// swing between the two values landing entirely within one visible bucket
+// (which would misrepresent a multi-day transition as happening overnight).
+function interpolateAtLabel(
+  a: LabeledValue,
+  b: LabeledValue,
+  atLabel: string,
+  bucket: TimeBucket
+): number | null {
+  const aOrd = bucketOrdinal(a.label, bucket);
+  const bOrd = bucketOrdinal(b.label, bucket);
+  const atOrd = bucketOrdinal(atLabel, bucket);
+  if (aOrd == null || bOrd == null || atOrd == null || bOrd === aOrd) return null;
+  const t = (atOrd - aOrd) / (bOrd - aOrd);
+  return a.value + t * (b.value - a.value);
+}
+
+// Fills a series' leading/trailing edge (if it has no data of its own) with
+// the value a straight line to the nearest real point outside the window
+// would have there — so the line reaches all the way to the edge of the
+// chart, sloped at the true pace of the transition, instead of dangling or
+// assuming the outside data point sits right at the edge. Only ever touches
+// index 0 and the last index — gaps in between are left alone, since
+// spanGaps already draws one straight line across them.
+function anchorSeriesEdges(
+  labels: string[],
+  data: (number | null)[],
+  fullLabels: string[],
+  fullData: (number | null)[],
+  computedRange: ComputedDateRange,
+  bucket: TimeBucket
+): BoundaryAnchorEdges {
+  const edges: BoundaryAnchorEdges = { leading: false, trailing: false };
+  if (labels.length === 0) return edges;
+
+  const firstRealIdx = data.findIndex(v => v != null);
+  let lastRealIdx = -1;
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (data[i] != null) {
+      lastRealIdx = i;
+      break;
+    }
+  }
+
+  if (computedRange.start && data[0] == null && firstRealIdx !== -1) {
+    const anchor = nearestBefore(fullLabels, fullData, labels[0]);
+    const nextReal = { label: labels[firstRealIdx], value: data[firstRealIdx]! };
+    const interpolated = anchor && interpolateAtLabel(anchor, nextReal, labels[0], bucket);
+    if (interpolated != null) {
+      data[0] = interpolated;
+      edges.leading = true;
+    }
+  }
+
+  const lastIdx = labels.length - 1;
+  if (computedRange.end && data[lastIdx] == null && lastRealIdx !== -1) {
+    const anchor = nearestAfter(fullLabels, fullData, labels[lastIdx]);
+    const prevReal = { label: labels[lastRealIdx], value: data[lastRealIdx]! };
+    const interpolated = anchor && interpolateAtLabel(prevReal, anchor, labels[lastIdx], bucket);
+    if (interpolated != null) {
+      data[lastIdx] = interpolated;
+      edges.trailing = true;
+    }
+  }
+  return edges;
+}
+
+// When the visible window's leading or trailing bucket has no data of its own
+// but real data exists in the adjacent period just outside the range (e.g.
+// viewing May while the nearest completed item was in late April), sets that
+// edge bucket's value — on both the main series and, if configured, the
+// smoothing series — to the nearest real value from outside the window. This
+// makes the line slope in from the edge toward the elided point instead of
+// starting from nowhere, so the chart reads as a window onto a continuous
+// series rather than a series that only exists within the visible range.
+// Mutates chartResult's datasets in place. Must run after any lookback
+// smoothing has already been applied (so it patches the final smoothing
+// values, not a version about to be replaced) and before waymark label
+// extension (so "last index" still means the true end of the visible range,
+// not a synthetic future tail). Returns which edges were anchored per series,
+// so the caller can suppress the point marker there — an anchored edge is a
+// carried-forward value, not a real data point, and shouldn't render as one.
+export function anchorBoundariesToAdjacentData(
+  chartResult: ChartDataResult,
+  fullHistoryEntities: EntityWithMetadata[],
+  config: VisualizationConfig,
+  computedRange: ComputedDateRange
+): BoundaryAnchorInfo {
+  const bucket = config.xAxis?.timeBucket;
+  const mainDataset = chartResult.datasets[0];
+  const none: BoundaryAnchorInfo = { main: { leading: false, trailing: false }, smoothing: null };
+  if (!bucket || !mainDataset) return none;
+
+  const { labels: fullLabels, data: fullMainData } = computeMainSeries(fullHistoryEntities, config);
+  const main = anchorSeriesEdges(
+    chartResult.labels,
+    mainDataset.data,
+    fullLabels,
+    fullMainData,
+    computedRange,
+    bucket
+  );
+
+  let smoothing: BoundaryAnchorEdges | null = null;
+  if (config.smoothing && chartResult.smoothingDatasetIndex != null) {
+    const smoothingDataset = chartResult.datasets[chartResult.smoothingDatasetIndex];
+    const fullSmoothedData = computeRollingAverage(fullMainData, config.smoothing.windowSize);
+    smoothing = anchorSeriesEdges(
+      chartResult.labels,
+      smoothingDataset.data,
+      fullLabels,
+      fullSmoothedData,
+      computedRange,
+      bucket
+    );
+  }
+
+  return { main, smoothing };
+}
+
+function applyEdgeRadiusMask(
+  dataset: ChartJsDataset | undefined,
+  edges: BoundaryAnchorEdges
+): void {
+  if (!dataset || (!edges.leading && !edges.trailing)) return;
+  const length = dataset.data.length;
+  const base = typeof dataset.pointRadius === 'number' ? dataset.pointRadius : 3;
+  dataset.pointRadius = Array.from({ length }, (_, i) => {
+    if (edges.leading && i === 0) return 0;
+    if (edges.trailing && i === length - 1) return 0;
+    return base;
+  });
+}
+
+// Hides the point marker at any edge anchored by anchorBoundariesToAdjacentData
+// — a carried-forward value, not a real data point, shouldn't render a dot.
+// Must run after buildChartJsConfig, since that's what sets the base
+// pointRadius this overrides.
+export function suppressAnchoredPointMarkers(
+  chartJsConfig: ChartJsConfig,
+  smoothingDatasetIndex: number | null,
+  anchorInfo: BoundaryAnchorInfo
+): void {
+  const datasets = chartJsConfig.data.datasets;
+  applyEdgeRadiusMask(datasets[0], anchorInfo.main);
+  if (smoothingDatasetIndex != null && anchorInfo.smoothing) {
+    applyEdgeRadiusMask(datasets[smoothingDatasetIndex], anchorInfo.smoothing);
+  }
 }
 
 const WAYMARK_COLOR = 'rgba(168, 85, 247, 0.85)';
@@ -847,6 +1090,9 @@ function styleMainDataset(
       tension: 0.2,
       fill: false,
       pointRadius: 3,
+      // Same reasoning as smoothingDatasetStyle — gap-filled nulls shouldn't
+      // break the line into disconnected segments.
+      spanGaps: true,
     };
   }
   if (chartType === 'bar') {
@@ -907,7 +1153,13 @@ function buildChartOptions(
   const scalesConfig = isCircular
     ? undefined
     : {
-        x: { title: { display: !!xAxisLabel, text: xAxisLabel } },
+        x: {
+          title: { display: !!xAxisLabel, text: xAxisLabel },
+          // Angle labels diagonally and thin them out with autoSkip, so a dense
+          // time axis (e.g. a full month of daily buckets) stays legible instead
+          // of overlapping into an unreadable smear.
+          ticks: { autoSkip: true, maxRotation: 60, minRotation: 60 },
+        },
         y: { title: { display: !!yAxisLabel, text: yAxisLabel }, beginAtZero: false },
       };
   return {

@@ -5,6 +5,7 @@ import type { Waymark } from '../schemas/waymark';
 import type { ChartJsDataset } from './chartDataBuilder';
 import {
   aggregate,
+  anchorBoundariesToAdjacentData,
   bucketDate,
   convertUnit,
   computeDerivedMetric,
@@ -16,9 +17,11 @@ import {
   buildSmoothingWindowEntityFilters,
   buildWaymarkDataset,
   extendLabelsForWaymarks,
+  fillRangeGapLabels,
   filterWaymarksInRange,
   padDatasetsToLength,
   resolveWaymarkAnchors,
+  suppressAnchoredPointMarkers,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 import { isGroup, isLeaf } from '../schemas/filterTree';
@@ -1266,6 +1269,300 @@ describe('filterWaymarksInRange', () => {
   test('keeps every waymark when the range is unbounded (all time)', () => {
     const waymark = makeWaymark({ startDate: '2020-01-01', endDate: '2020-01-31' });
     expect(filterWaymarksInRange([waymark], makeRange())).toEqual([waymark]);
+  });
+});
+
+// ── fillRangeGapLabels ────────────────────────────────────────────────────────
+
+describe('fillRangeGapLabels', () => {
+  test('returns null when the range is unbounded', () => {
+    expect(fillRangeGapLabels('day', makeRange())).toBeNull();
+  });
+
+  test('returns null when only one side of the range is bounded', () => {
+    expect(
+      fillRangeGapLabels('day', makeRange({ start: new Date('2026-04-01T00:00:00Z') }))
+    ).toBeNull();
+  });
+
+  test('fills every day bucket across the range, inclusive of both ends', () => {
+    const range = makeRange({
+      start: new Date('2026-04-27T00:00:00Z'),
+      end: new Date('2026-05-01T23:59:59Z'),
+    });
+    expect(fillRangeGapLabels('day', range)).toEqual([
+      '2026-04-27',
+      '2026-04-28',
+      '2026-04-29',
+      '2026-04-30',
+      '2026-05-01',
+    ]);
+  });
+
+  test('fills a full month of week buckets', () => {
+    const range = makeRange({
+      start: new Date('2026-04-01T00:00:00Z'),
+      end: new Date('2026-04-30T23:59:59Z'),
+    });
+    expect(fillRangeGapLabels('week', range)).toEqual([
+      'Week of 2026-03-30',
+      'Week of 2026-04-06',
+      'Week of 2026-04-13',
+      'Week of 2026-04-20',
+      'Week of 2026-04-27',
+    ]);
+  });
+
+  test('returns a single label when start and end fall in the same bucket', () => {
+    const range = makeRange({
+      start: new Date('2026-04-05T00:00:00Z'),
+      end: new Date('2026-04-05T23:59:59Z'),
+    });
+    expect(fillRangeGapLabels('day', range)).toEqual(['2026-04-05']);
+  });
+});
+
+// ── buildChartData — gap-filling to the full range ────────────────────────────
+
+describe('buildChartData — gap-filling to the full range', () => {
+  const config: VisualizationConfig = {
+    chartType: 'bar',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'day' },
+    aggregation: { function: 'count' },
+  };
+  const range = makeRange({
+    start: new Date('2026-04-27T00:00:00Z'),
+    end: new Date('2026-05-01T23:59:59Z'),
+  });
+  // buildChartData never filters entities by date range itself — that's done
+  // upstream by the SQL query (see dashboardsHandler) — so these tests mimic
+  // that by only passing entities that actually fall within `range`.
+  const entitiesInRange = tickets.filter(e => e.id === 1 || e.id === 2);
+
+  test('zero-fills count buckets across the whole range, not just where data exists', () => {
+    const result = buildChartData(entitiesInRange, config, range);
+    expect(result.labels).toEqual([
+      '2026-04-27',
+      '2026-04-28',
+      '2026-04-29',
+      '2026-04-30',
+      '2026-05-01',
+    ]);
+    // entity 1 done 04-27, entity 2 done 04-29, nothing else in range.
+    expect(result.datasets[0].data).toEqual([1, 0, 1, 0, 0]);
+  });
+
+  test('null-fills non-additive aggregations instead of showing a fake zero', () => {
+    const avgConfig: VisualizationConfig = {
+      ...config,
+      yAxis: {
+        metadataKey: 'lead_time_seconds',
+        type: 'number',
+        unit: 'seconds',
+        displayUnit: 'days',
+      },
+      aggregation: { function: 'avg' },
+    };
+    const result = buildChartData(entitiesInRange, avgConfig, range);
+    expect(result.datasets[0].data).toEqual([7, null, 5, null, null]);
+  });
+
+  test('leaves labels as data-driven when the range is unbounded (all time)', () => {
+    const result = buildChartData(tickets, config, makeRange());
+    expect(result.labels).toEqual([
+      '2026-04-27',
+      '2026-04-29',
+      '2026-05-05',
+      '2026-05-07',
+      '2026-05-12',
+    ]);
+  });
+
+  test('leaves labels as data-driven when no range is passed at all', () => {
+    const result = buildChartData(tickets, config);
+    expect(result.labels).toEqual([
+      '2026-04-27',
+      '2026-04-29',
+      '2026-05-05',
+      '2026-05-07',
+      '2026-05-12',
+    ]);
+  });
+});
+
+// ── anchorBoundariesToAdjacentData ────────────────────────────────────────────
+
+describe('anchorBoundariesToAdjacentData', () => {
+  function dayEntity(id: number, isoDate: string, value: number): EntityWithMetadata {
+    return makeEntity(id, {
+      done_at: { value: isoDate, value_type: 'date' },
+      value: { value: String(value), value_type: 'number' },
+    });
+  }
+
+  const config: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'day' },
+    yAxis: { metadataKey: 'value', type: 'number' },
+    aggregation: { function: 'avg' },
+  };
+
+  // Visible window is 04-27..05-01. Real data sits just outside both edges
+  // (04-25 before, 05-03 after), plus one real point in the middle (04-29).
+  const beforeEntity = dayEntity(1, '2026-04-25T00:00:00Z', 100);
+  const middleEntity = dayEntity(2, '2026-04-29T00:00:00Z', 50);
+  const afterEntity = dayEntity(3, '2026-05-03T00:00:00Z', 200);
+  const fullHistory = [beforeEntity, middleEntity, afterEntity];
+
+  const range = makeRange({
+    start: new Date('2026-04-27T00:00:00Z'),
+    end: new Date('2026-05-01T23:59:59Z'),
+  });
+
+  test('anchors both edges, interpolated by true distance to the outside value', () => {
+    // Only the visible entity would actually be queried in production.
+    const chartResult = buildChartData([middleEntity], config, range);
+    const info = anchorBoundariesToAdjacentData(chartResult, fullHistory, config, range);
+    // Leading: a straight line from 04-25 (100) to 04-29 (50) evaluated at
+    // 04-27 (halfway) is 75 — not 100, which would claim the outside point
+    // sits right at the edge.
+    // Trailing: a straight line from 04-29 (50) to 05-03 (200) evaluated at
+    // 05-01 (halfway) is 125.
+    expect(chartResult.datasets[0].data).toEqual([75, null, 50, null, 125]);
+    expect(info).toEqual({ main: { leading: true, trailing: true }, smoothing: null });
+  });
+
+  test('does not overwrite an edge bucket that already has real data', () => {
+    const edgeEntity = dayEntity(4, '2026-04-27T00:00:00Z', 5);
+    const chartResult = buildChartData([edgeEntity, middleEntity], config, range);
+    const info = anchorBoundariesToAdjacentData(
+      chartResult,
+      [edgeEntity, ...fullHistory],
+      config,
+      range
+    );
+    expect(chartResult.datasets[0].data[0]).toBe(5);
+    expect(info.main.leading).toBe(false);
+  });
+
+  test('a farther-away outside value produces a gentler edge slope than a closer one', () => {
+    // Same real in-view point (04-29, 50) and same edge (04-27), but the
+    // outside value is 4 days before the edge in one case and 1 day before it
+    // in the other — this is the exact bug being fixed: treating the outside
+    // value as if it sat right at the edge exaggerates the slope the farther
+    // away it actually is.
+    const farBefore = dayEntity(5, '2026-04-23T00:00:00Z', 100); // 4 days before the edge
+    const nearBefore = dayEntity(6, '2026-04-26T00:00:00Z', 100); // 1 day before the edge
+
+    const farResult = buildChartData([middleEntity], config, range);
+    anchorBoundariesToAdjacentData(farResult, [farBefore, middleEntity], config, range);
+
+    const nearResult = buildChartData([middleEntity], config, range);
+    anchorBoundariesToAdjacentData(nearResult, [nearBefore, middleEntity], config, range);
+
+    // Far case: line from 04-23 (100) to 04-29 (50) evaluated at 04-27
+    // (4/6 of the way along) sits much closer to 50 than to 100.
+    expect(farResult.datasets[0].data[0]).toBeCloseTo(66.67, 1);
+    // Near case: line from 04-26 (100) to 04-29 (50) evaluated at 04-27
+    // (1/3 of the way along) is still mostly at the outside value, since
+    // barely any of the transition has happened by the edge.
+    expect(nearResult.datasets[0].data[0]).toBeCloseTo(83.33, 1);
+    // The nearer outside value pulls the edge closer to its own value than
+    // the farther one does.
+    expect(nearResult.datasets[0].data[0]!).toBeGreaterThan(farResult.datasets[0].data[0]!);
+  });
+
+  test('leaves an edge null when there is no history on that side', () => {
+    const chartResult = buildChartData([middleEntity], config, range);
+    const info = anchorBoundariesToAdjacentData(chartResult, [middleEntity], config, range);
+    expect(chartResult.datasets[0].data).toEqual([null, null, 50, null, null]);
+    expect(info).toEqual({ main: { leading: false, trailing: false }, smoothing: null });
+  });
+
+  test('is a no-op when the range is unbounded (all time)', () => {
+    const chartResult = buildChartData(fullHistory, config, makeRange());
+    const before = [...chartResult.datasets[0].data];
+    const info = anchorBoundariesToAdjacentData(chartResult, fullHistory, config, makeRange());
+    expect(chartResult.datasets[0].data).toEqual(before);
+    expect(info).toEqual({ main: { leading: false, trailing: false }, smoothing: null });
+  });
+
+  test('is a no-op for category (non-time-bucketed) configs', () => {
+    const categoryConfig: VisualizationConfig = {
+      chartType: 'bar',
+      category: { metadataKey: 'team' },
+      aggregation: { function: 'count' },
+    };
+    const chartResult = buildChartData([middleEntity], categoryConfig, range);
+    const before = [...chartResult.datasets[0].data];
+    const info = anchorBoundariesToAdjacentData(chartResult, fullHistory, categoryConfig, range);
+    expect(chartResult.datasets[0].data).toEqual(before);
+    expect(info).toEqual({ main: { leading: false, trailing: false }, smoothing: null });
+  });
+
+  test('anchors the smoothing series independently, to its own rolling-average history', () => {
+    const smoothingConfig: VisualizationConfig = { ...config, smoothing: { windowSize: 2 } };
+    const chartResult = buildChartData([middleEntity], smoothingConfig, range);
+    const info = anchorBoundariesToAdjacentData(chartResult, fullHistory, smoothingConfig, range);
+
+    // Main series interpolates between the raw values at 04-25 (100) and
+    // 05-03 (200), by way of the real 04-29 (50) point in view.
+    expect(chartResult.datasets[0].data).toEqual([75, null, 50, null, 125]);
+    // Smoothing series interpolates between the 2-point rolling average AS OF
+    // those same boundary buckets — a different pair of numbers than the raw
+    // main-series anchors (avg(100) = 100 at 04-25, avg(50, 200) = 125 at
+    // 05-03), so it produces a different interpolated edge value too.
+    expect(chartResult.datasets[chartResult.smoothingDatasetIndex!].data).toEqual([
+      75,
+      null,
+      50,
+      50,
+      75,
+    ]);
+    expect(info).toEqual({
+      main: { leading: true, trailing: true },
+      smoothing: { leading: true, trailing: true },
+    });
+  });
+});
+
+// ── suppressAnchoredPointMarkers ──────────────────────────────────────────────
+
+describe('suppressAnchoredPointMarkers', () => {
+  const config: VisualizationConfig = {
+    chartType: 'line',
+    xAxis: { metadataKey: 'done_at', type: 'date', timeBucket: 'day' },
+    yAxis: { metadataKey: 'value', type: 'number' },
+    aggregation: { function: 'avg' },
+    smoothing: { windowSize: 2 },
+  };
+
+  test('hides the marker only at anchored edges, on both main and smoothing datasets', () => {
+    const chartResult = buildChartData([], config);
+    chartResult.labels = ['a', 'b', 'c'];
+    chartResult.datasets[0].data = [1, 2, 3];
+    chartResult.datasets[1].data = [1, 2, 3];
+    const chartJsConfig = buildChartJsConfig(chartResult, config);
+
+    suppressAnchoredPointMarkers(chartJsConfig, chartResult.smoothingDatasetIndex, {
+      main: { leading: true, trailing: true },
+      smoothing: { leading: true, trailing: false },
+    });
+
+    expect(chartJsConfig.data.datasets[0].pointRadius).toEqual([0, 3, 0]);
+    expect(chartJsConfig.data.datasets[1].pointRadius).toEqual([0, 3, 3]);
+  });
+
+  test('leaves pointRadius untouched when neither edge was anchored', () => {
+    const chartResult = buildChartData([], config);
+    const chartJsConfig = buildChartJsConfig(chartResult, config);
+
+    suppressAnchoredPointMarkers(chartJsConfig, chartResult.smoothingDatasetIndex, {
+      main: { leading: false, trailing: false },
+      smoothing: null,
+    });
+
+    expect(chartJsConfig.data.datasets[0].pointRadius).toBe(3);
   });
 });
 

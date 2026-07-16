@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
 import { getEntityRepo } from '../db/source/index';
 import {
+  anchorBoundariesToAdjacentData,
   buildChartData,
   buildChartJsConfig,
   buildExcludedEntityFilters,
@@ -13,8 +14,10 @@ import {
   filterWaymarksInRange,
   padDatasetsToLength,
   resolveWaymarkAnchors,
+  suppressAnchoredPointMarkers,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
+import type { BoundaryAnchorInfo } from '../domain/chartDataBuilder';
 import {
   buildDateRangeFilters,
   computeDateRange,
@@ -182,7 +185,7 @@ async function buildCard(
   const entityRepo = getEntityRepo();
   const entities = await entityRepo.list(filteredTree);
 
-  const chartResult = buildChartData(entities, viz.config);
+  const chartResult = buildChartData(entities, viz.config, computedRange);
   const extendedLabelsForSmoothing = await applyLookbackSmoothing(
     chartResult,
     viz.config,
@@ -191,6 +194,21 @@ async function buildCard(
     dateField,
     entityRepo
   );
+
+  // Must run after lookback smoothing (patches its final values, not a
+  // version about to be replaced) and before waymark label extension (so
+  // "last index" still means the true end of the visible range).
+  let anchorInfo: BoundaryAnchorInfo | null = null;
+  if (viz.config.xAxis?.timeBucket) {
+    const fullHistoryEntities = await entityRepo.list(preset.tree);
+    anchorInfo = anchorBoundariesToAdjacentData(
+      chartResult,
+      fullHistoryEntities,
+      viz.config,
+      computedRange
+    );
+  }
+
   const realLabelCount = await applyWaymarks(
     vizId,
     chartResult,
@@ -202,6 +220,9 @@ async function buildCard(
   );
 
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
+  if (anchorInfo) {
+    suppressAnchoredPointMarkers(chartJsConfig, chartResult.smoothingDatasetIndex, anchorInfo);
+  }
 
   const pointUrls: (string | null)[] = chartResult.labels.map((label, i) =>
     i < realLabelCount
