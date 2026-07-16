@@ -17,6 +17,7 @@ import {
   dashboardCardsApiHandler,
   dashboardSaveHandler,
   dashboardUpdateHandler,
+  dashboardReorderApiHandler,
   dashboardDeleteHandler,
   dashboardDuplicateHandler,
   dashboardAddVisualizationHandler,
@@ -94,6 +95,7 @@ app.post('/api/waymarks/:id', waymarkUpdateApiHandler);
 app.post('/api/waymarks/:id/delete', waymarkDeleteApiHandler);
 
 app.get('/api/dashboards/:id/cards', dashboardCardsApiHandler);
+app.post('/api/dashboards/:id/reorder', dashboardReorderApiHandler);
 
 app.get('/api/chart-data/:id', chartDataByIdHandler);
 app.post('/api/chart-data/preview', chartDataPreviewHandler);

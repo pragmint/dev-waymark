@@ -301,6 +301,27 @@ export async function dashboardUpdateHandler(c: Context) {
   return c.redirect(`/visualizations?dashboard=${id}`);
 }
 
+// Persists a drag-and-drop reorder independently of the rename form — the name
+// is read back from the existing row so a reorder never touches it.
+export async function dashboardReorderApiHandler(c: Context) {
+  const repo = getAppStateRepo();
+  const id = parseInt(c.req.param('id') ?? '', 10);
+  if (isNaN(id)) return c.json({ error: 'Invalid id' }, 400);
+
+  const existing = await repo.getDashboard(id);
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+
+  const body = await c.req.json<{ vizIds?: unknown }>();
+  const rawVizIds = body.vizIds;
+  if (!Array.isArray(rawVizIds) || !rawVizIds.every((v): v is number => typeof v === 'number')) {
+    return c.json({ error: 'Invalid vizIds' }, 400);
+  }
+  const vizIds = rawVizIds;
+
+  await repo.updateDashboard(id, existing.name, vizIds);
+  return c.json({ ok: true });
+}
+
 export async function dashboardDeleteHandler(c: Context) {
   const repo = getAppStateRepo();
   const id = parseInt(c.req.param('id') ?? '', 10);

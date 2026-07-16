@@ -344,11 +344,11 @@ function currentName(): string {
   return input?.value ?? '';
 }
 
+// Viz order is auto-saved on drop (see wireDragReorder), so dirty-tracking —
+// and the Save Changes button it drives — covers only the name field.
 function isDirty(): boolean {
   if (state.dashboardId == null) return false;
-  if (currentName().trim() !== state.originalName.trim()) return true;
-  if (state.currentVizIds.length !== state.savedVizIds.length) return true;
-  return state.currentVizIds.some((id, i) => id !== state.savedVizIds[i]);
+  return currentName().trim() !== state.originalName.trim();
 }
 
 function recomputeDirty(): void {
@@ -682,7 +682,8 @@ function wireDragReorder(): void {
     const targetIndex = state.currentVizIds.indexOf(targetId);
     if (sourceIndex === -1 || targetIndex === -1) return;
 
-    const next = state.currentVizIds.slice();
+    const previous = state.currentVizIds;
+    const next = previous.slice();
     next.splice(sourceIndex, 1);
     // Recompute target index after removal: if source came before target, the
     // target index has shifted left by one.
@@ -693,7 +694,29 @@ function wireDragReorder(): void {
     reorderGridDom();
     clearDropFeedback(grid);
     recomputeDirty();
+    void persistReorder(next, previous);
   });
+}
+
+// Persists the new order immediately so a drag-and-drop rearrangement never
+// depends on the (name-only) Save Changes button. On failure, snap back to
+// the last known-good order rather than leaving the UI showing a layout that
+// isn't actually saved.
+async function persistReorder(vizIds: number[], previous: number[]): Promise<void> {
+  if (state.dashboardId == null) return;
+  try {
+    const resp = await fetch(`/api/dashboards/${state.dashboardId}/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vizIds }),
+    });
+    if (!resp.ok) throw new Error('reorder failed');
+    state.savedVizIds = vizIds.slice();
+  } catch {
+    state.currentVizIds = previous;
+    reorderGridDom();
+    recomputeDirty();
+  }
 }
 
 // ── Create-viz modal ─────────────────────────────────────────────────────────

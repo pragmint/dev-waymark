@@ -1068,7 +1068,7 @@ test.describe('drag-and-drop reorder', () => {
     await expect(grips.first()).toHaveText('⋮⋮');
   });
 
-  test('dragging past a card reorders the DOM and marks the dashboard dirty', async ({
+  test('dragging past a card reorders the DOM and auto-saves the layout', async ({
     page,
     request,
   }) => {
@@ -1166,7 +1166,14 @@ test.describe('drag-and-drop reorder', () => {
     }, v3);
 
     await expect.poll(async () => await orderedVizIds(page)).toEqual([v2, v3, v1]);
-    await expect(page.locator('[data-dashboard-save-submit]')).toBeVisible();
+    // Reordering auto-saves — it must never require the (name-only) Save
+    // Changes button, which drives from name-dirty state alone.
+    await expect(page.locator('[data-dashboard-save-submit]')).toBeHidden();
+
+    // Confirm the new order was actually persisted server-side, not just in the DOM.
+    await page.reload();
+    await waitForDashboardHydrated(page);
+    expect(await orderedVizIds(page)).toEqual([v2, v3, v1]);
   });
 });
 
