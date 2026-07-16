@@ -2,10 +2,25 @@
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
   getChart(canvas: HTMLCanvasElement): ChartInstance | undefined;
+  register(plugin: ChartPlugin): void;
 };
 
+interface ChartScale {
+  getPixelForValue(value: number): number;
+  getValueForPixel(pixel: number): number | undefined;
+}
+
 interface ChartInstance {
+  scales: Record<string, ChartScale | undefined>;
+  chartArea: { top: number; bottom: number };
+  ctx: CanvasRenderingContext2D;
+  draw(): void;
   destroy(): void;
+}
+
+interface ChartPlugin {
+  id: string;
+  afterDraw(chart: ChartInstance): void;
 }
 
 interface ChartActiveElement {
@@ -13,12 +28,16 @@ interface ChartActiveElement {
   index: number;
 }
 
+interface ChartEvent {
+  type: string;
+  x: number | null;
+  y: number | null;
+  native?: { target?: EventTarget | null };
+}
+
 interface ChartOptions {
   onClick?: (event: unknown, elements: ChartActiveElement[]) => void;
-  onHover?: (
-    event: { native?: { target?: EventTarget | null } },
-    elements: ChartActiveElement[]
-  ) => void;
+  onHover?: (event: ChartEvent, elements: ChartActiveElement[], chart: ChartInstance) => void;
   [key: string]: unknown;
 }
 
@@ -164,7 +183,11 @@ function attachUnitTooltip(config: ChartConfig): void {
 }
 
 function renderCardChart(canvas: HTMLCanvasElement): void {
-  Chart.getChart(canvas)?.destroy();
+  const oldChart = Chart.getChart(canvas);
+  if (oldChart) {
+    oldChart.destroy();
+    crosshairIndex.delete(oldChart);
+  }
   const raw = canvas.getAttribute('data-config');
   if (!raw) return;
   let config: ChartConfig;
@@ -183,12 +206,135 @@ function renderCardChart(canvas: HTMLCanvasElement): void {
     );
   }
   attachUnitTooltip(config);
-  new Chart(canvas, config);
+  const dates = extractBucketDates(config);
+  const hasDates = dates.some(d => d != null);
+  if (hasDates) attachCrosshairHover(config, dates);
+  const chart = new Chart(canvas, config);
+  wireCrosshair(canvas, chart, hasDates ? dates : []);
 }
 
 function renderCardCharts(): void {
   const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas[data-config]');
   for (const canvas of canvases) renderCardChart(canvas);
+}
+
+// ── Crosshair sync ───────────────────────────────────────────────────────────
+// Hovering a point on one time-series chart draws a thin vertical line at the
+// matching date on every other time-series chart on the dashboard — even when
+// charts use different time buckets (day/week/month/quarter/year) — by mapping
+// through each chart's own parsed bucket-start dates rather than raw label text
+// or shared index position.
+
+function parseBucketLabelStart(label: string): number | null {
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(label);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = /^Week of (\d{4})-(\d{2})-(\d{2})$/.exec(label);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = /^(\d{4})-(\d{2})$/.exec(label);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, 1);
+  m = /^(\d{4})-Q(\d)$/.exec(label);
+  if (m) return Date.UTC(Number(m[1]), (Number(m[2]) - 1) * 3, 1);
+  m = /^(\d{4})$/.exec(label);
+  if (m) return Date.UTC(Number(m[1]), 0, 1);
+  return null;
+}
+
+function extractBucketDates(config: ChartConfig): (number | null)[] {
+  const data = config.data as { labels?: unknown } | undefined;
+  const labels = data?.labels;
+  if (!Array.isArray(labels)) return [];
+  return labels.map(l => (typeof l === 'string' ? parseBucketLabelStart(l) : null));
+}
+
+interface CrosshairEntry {
+  chart: ChartInstance;
+  dates: (number | null)[];
+}
+
+const crosshairEntries = new Map<HTMLCanvasElement, CrosshairEntry>();
+const crosshairIndex = new Map<ChartInstance, number>();
+
+const crosshairPlugin: ChartPlugin = {
+  id: 'crosshairSync',
+  afterDraw(chart) {
+    const index = crosshairIndex.get(chart);
+    const xScale = chart.scales.x;
+    if (index == null || !xScale) return;
+    const x = xScale.getPixelForValue(index);
+    const { top, bottom } = chart.chartArea;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+Chart.register(crosshairPlugin);
+
+function setCrosshair(chart: ChartInstance, index: number | null): void {
+  if (index == null) {
+    if (!crosshairIndex.has(chart)) return;
+    crosshairIndex.delete(chart);
+  } else {
+    crosshairIndex.set(chart, index);
+  }
+  chart.draw();
+}
+
+// dates is ascending per chart (buckets are emitted in calendar order), so the
+// match for a target date is the last bucket whose start falls at or before it.
+function nearestIndexForDate(dates: (number | null)[], target: number): number | null {
+  let best: number | null = null;
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    if (d == null) continue;
+    if (d <= target) best = i;
+    else break;
+  }
+  if (best != null) return best;
+  const firstValid = dates.findIndex(d => d != null);
+  return firstValid === -1 ? null : firstValid;
+}
+
+function clearAllCrosshairs(): void {
+  for (const entry of crosshairEntries.values()) setCrosshair(entry.chart, null);
+}
+
+function attachCrosshairHover(config: ChartConfig, dates: (number | null)[]): void {
+  const options: ChartOptions = config.options ?? (config.options = {});
+  const prevOnHover = options.onHover;
+  options.onHover = (event, elements, chart) => {
+    prevOnHover?.(event, elements, chart);
+    if (event.x == null) return;
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+    const rawIndex = xScale.getValueForPixel(event.x);
+    if (rawIndex == null) return;
+    const clamped = Math.max(0, Math.min(dates.length - 1, Math.round(rawIndex)));
+    const targetDate = dates[clamped];
+    if (targetDate == null) return;
+    for (const entry of crosshairEntries.values()) {
+      setCrosshair(entry.chart, nearestIndexForDate(entry.dates, targetDate));
+    }
+  };
+}
+
+function wireCrosshair(
+  canvas: HTMLCanvasElement,
+  chart: ChartInstance,
+  dates: (number | null)[]
+): void {
+  if (dates.length === 0) {
+    crosshairEntries.delete(canvas);
+    canvas.onmouseleave = null;
+    return;
+  }
+  crosshairEntries.set(canvas, { chart, dates });
+  canvas.onmouseleave = clearAllCrosshairs;
 }
 
 // ── Dirty-state tracking ─────────────────────────────────────────────────────
