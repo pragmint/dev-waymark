@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=23.6"
+  },
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "start": "bun scripts/start.ts",
