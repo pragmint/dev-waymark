@@ -280,3 +280,36 @@ test('nav bar has no Saved Presets link', async ({ page }) => {
   await page.goto('/entities');
   await expect(page.locator('a[href="/presets"]')).toHaveCount(0);
 });
+
+test('open preset dropdown is not clipped by the filter bar', async ({ page }) => {
+  // Seed enough presets
+  for (let i = 0; i < 6; i++) {
+    const name = `E2E Clip ${i} ${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    await page.goto(uniqueUrl(`clip-${i}`));
+    await page.click('#save-preset-btn');
+    await page.fill('#save-preset-panel input[name="name"]', name);
+    await page.locator('#save-preset-panel button[type="submit"]').click();
+    await expect(page.locator('[data-preset-name-input]')).toHaveValue(name);
+  }
+
+  // A preset is selected, so the combobox (with its toggle) renders in the top row.
+  await page.locator('[data-preset-combo-toggle]').click();
+  const list = page.locator('[data-preset-combo-list]');
+  await expect(list).toBeVisible();
+
+  // Hit-test a point inside the dropdown's own visible body that also lies below
+  // the filter bar's bottom edge
+  const result = await page.evaluate(() => {
+    const bar = document.querySelector('[data-filter-bar]')!.getBoundingClientRect();
+    const listRect = document.querySelector('[data-preset-combo-list]')!.getBoundingClientRect();
+    const belowBar = listRect.bottom > bar.bottom + 20;
+    // A y just below the bar, still within the list's visible body.
+    const probeY = bar.bottom + 5;
+    const hit = document.elementFromPoint(listRect.left + listRect.width / 2, probeY);
+    return {
+      belowBar,
+      hitInList: !!hit?.closest('[data-preset-combo-list]'),
+    };
+  });
+  expect(result).toEqual({ belowBar: true, hitInList: true });
+});
