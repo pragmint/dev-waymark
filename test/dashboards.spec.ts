@@ -619,6 +619,63 @@ test.describe('create-viz modal', () => {
   });
 });
 
+// ── Custom date-range memory ─────────────────────────────────────────────────
+
+test.describe('custom date-range memory', () => {
+  test('returning to custom restores the dates entered earlier in the session', async ({
+    page,
+    request,
+  }) => {
+    const dashId = await seedDashboard(request, uniqueName('CustomMemD'));
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const start = page.locator('[data-date-range-custom-start]');
+    const end = page.locator('[data-date-range-custom-end]');
+
+    // Enter a custom range.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await start.fill('2024-01-01');
+    await start.dispatchEvent('change');
+    await end.fill('2024-03-31');
+    await end.dispatchEvent('change');
+
+    // Switch away to another period — the custom inputs are hidden and cleared.
+    await page.selectOption('[data-date-range-period]', 'month');
+    await expect(start).toBeHidden();
+
+    // Switch back to custom — the previously entered dates return without re-typing.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await expect(start).toHaveValue('2024-01-01');
+    await expect(end).toHaveValue('2024-03-31');
+  });
+
+  test('a page refresh clears the remembered custom dates', async ({ page, request }) => {
+    const dashId = await seedDashboard(request, uniqueName('CustomMemRefreshD'));
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const start = page.locator('[data-date-range-custom-start]');
+    const end = page.locator('[data-date-range-custom-end]');
+
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await start.fill('2024-01-01');
+    await start.dispatchEvent('change');
+    await end.fill('2024-03-31');
+    await end.dispatchEvent('change');
+
+    // Move off custom so the URL no longer carries the custom dates, then reload.
+    await page.selectOption('[data-date-range-period]', 'month');
+    await page.reload();
+    await waitForDashboardHydrated(page);
+
+    // Memory is in-page only: after a refresh, custom starts empty again.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await expect(start).toHaveValue('');
+    await expect(end).toHaveValue('');
+  });
+});
+
 // ── Extra-wide viz layout ───────────────────────────────────────────────────
 
 test.describe('extra-wide viz layout', () => {

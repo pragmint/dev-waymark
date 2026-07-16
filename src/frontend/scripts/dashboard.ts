@@ -95,6 +95,9 @@ function hydrate(): void {
   state.currentVizIds = state.savedVizIds.slice();
   state.vizDashboardCounts = readJsonEmbed<Record<number, number>>('viz-dashboard-counts', {});
   state.dateRange = readJsonEmbed<DateRangeState>('date-range-config', state.dateRange);
+  if (state.dateRange.period === 'custom') {
+    rememberedCustom = { start: state.dateRange.customStart, end: state.dateRange.customEnd };
+  }
 
   const nameInput = document.querySelector<HTMLInputElement>('[data-dashboard-name-input]');
   state.originalName = nameInput?.dataset.originalName ?? nameInput?.value ?? '';
@@ -1807,9 +1810,16 @@ function applyCardUpdate(card: CardPayload): void {
 // Sequence guards stale responses: if the user clicks the arrow several times
 // in quick succession, only the latest fetch is allowed to mutate the DOM.
 let rangeRequestSeq = 0;
+let rememberedCustom: { start: string | null; end: string | null } = {
+  start: null,
+  end: null,
+};
 
 async function applyRange(range: DateRangeState, opts: { pushHistory: boolean }): Promise<void> {
   state.dateRange = range;
+  if (range.period === 'custom' && (range.customStart || range.customEnd)) {
+    rememberedCustom = { start: range.customStart, end: range.customEnd };
+  }
   syncDateRangeRowUI(range);
 
   if (opts.pushHistory) {
@@ -1878,14 +1888,11 @@ function wireDateRange(): void {
   const periodSelect = row.querySelector<HTMLSelectElement>('[data-date-range-period]');
   periodSelect?.addEventListener('change', () => {
     const period = periodSelect.value as DateRangePeriod;
-    // Switching the period type always resets the stepper offset and clears
-    // custom dates — picking a fresh granularity should land on the current
-    // period, not carry over an offset that meant something else.
     const next: DateRangeState = {
       period,
       offset: 0,
-      customStart: period === 'custom' ? state.dateRange.customStart : null,
-      customEnd: period === 'custom' ? state.dateRange.customEnd : null,
+      customStart: period === 'custom' ? rememberedCustom.start : null,
+      customEnd: period === 'custom' ? rememberedCustom.end : null,
     };
     void applyRange(next, { pushHistory: true });
   });
