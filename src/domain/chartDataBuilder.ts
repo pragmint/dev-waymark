@@ -1164,7 +1164,12 @@ function buildChartOptions(
       };
   return {
     responsive: true,
-    maintainAspectRatio: true,
+    // Circular charts keep their aspect ratio so pies/doughnuts stay round.
+    // Cartesian charts fill the CSS-defined container height instead — with
+    // maintainAspectRatio left on, narrow cards would derive height from
+    // width via Chart.js's default 2:1 ratio and end up shorter than the
+    // container, squishing the plot area.
+    maintainAspectRatio: isCircular,
     plugins,
     ...(scalesConfig ? { scales: scalesConfig } : {}),
     ...(config.chartOptions ?? {}),
