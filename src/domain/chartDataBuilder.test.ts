@@ -1569,9 +1569,12 @@ describe('suppressAnchoredPointMarkers', () => {
 // ── extendLabelsForWaymarks ───────────────────────────────────────────────────
 
 describe('extendLabelsForWaymarks', () => {
+  // "All time" / an open-ended custom range — nothing to cap the tail at.
+  const unboundedRange: ComputedDateRange = { start: null, end: null, label: 'All time' };
+
   test('returns labels unchanged when there are no waymarks', () => {
     const labels = ['2026-01', '2026-02'];
-    const result = extendLabelsForWaymarks(labels, 'month', []);
+    const result = extendLabelsForWaymarks(labels, 'month', [], unboundedRange);
     expect(result.labels).toEqual(labels);
     expect(result.realLabelCount).toBe(2);
   });
@@ -1579,15 +1582,15 @@ describe('extendLabelsForWaymarks', () => {
   test('does not extend when the waymark end date is already covered by existing labels', () => {
     const labels = ['2026-01', '2026-02', '2026-03'];
     const waymark = makeWaymark({ endDate: '2026-02-10' });
-    const result = extendLabelsForWaymarks(labels, 'month', [waymark]);
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark], unboundedRange);
     expect(result.labels).toEqual(labels);
     expect(result.realLabelCount).toBe(3);
   });
 
-  test('extends past the last label up to a waymark end date a few months out', () => {
+  test('extends past the last label up to a waymark end date a few months out, when the range is unbounded', () => {
     const labels = ['2026-01', '2026-02', '2026-03'];
     const waymark = makeWaymark({ endDate: '2026-06-15' });
-    const result = extendLabelsForWaymarks(labels, 'month', [waymark]);
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark], unboundedRange);
     expect(result.labels).toEqual([
       '2026-01',
       '2026-02',
@@ -1599,11 +1602,11 @@ describe('extendLabelsForWaymarks', () => {
     expect(result.realLabelCount).toBe(3);
   });
 
-  test('extends only as far as the furthest of multiple waymarks', () => {
+  test('extends only as far as the furthest of multiple waymarks, when the range is unbounded', () => {
     const labels = ['2026-01', '2026-02'];
     const nearer = makeWaymark({ id: 1, endDate: '2026-04-15' });
     const furthest = makeWaymark({ id: 2, endDate: '2026-07-20' });
-    const result = extendLabelsForWaymarks(labels, 'month', [nearer, furthest]);
+    const result = extendLabelsForWaymarks(labels, 'month', [nearer, furthest], unboundedRange);
     expect(result.labels).toEqual([
       '2026-01',
       '2026-02',
@@ -1618,7 +1621,7 @@ describe('extendLabelsForWaymarks', () => {
 
   test('returns empty labels unchanged even when a waymark is present', () => {
     const waymark = makeWaymark({ endDate: '2026-06-15' });
-    const result = extendLabelsForWaymarks([], 'month', [waymark]);
+    const result = extendLabelsForWaymarks([], 'month', [waymark], unboundedRange);
     expect(result.labels).toEqual([]);
     expect(result.realLabelCount).toBe(0);
   });
@@ -1626,8 +1629,39 @@ describe('extendLabelsForWaymarks', () => {
   test('does not mutate the original labels array when extending', () => {
     const labels = ['2026-01', '2026-02'];
     const waymark = makeWaymark({ endDate: '2026-04-15' });
-    extendLabelsForWaymarks(labels, 'month', [waymark]);
+    extendLabelsForWaymarks(labels, 'month', [waymark], unboundedRange);
     expect(labels).toEqual(['2026-01', '2026-02']);
+  });
+
+  test('never extends past a bounded computed range, even when the waymark ends much further out', () => {
+    // Mirrors the normal case: labels are already gap-filled out to
+    // computedRange.end (e.g. viewing "this week" with a quarter-long goal),
+    // so the tail must not stretch the chart past the selected window.
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const waymark = makeWaymark({ endDate: '2026-06-15' });
+    const boundedRange: ComputedDateRange = {
+      start: new Date('2026-01-01T00:00:00Z'),
+      end: new Date('2026-03-15T00:00:00Z'),
+      label: 'Q1 2026',
+    };
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark], boundedRange);
+    expect(result.labels).toEqual(labels);
+    expect(result.realLabelCount).toBe(3);
+  });
+
+  test('extends only up to the bounded range end, not the waymark end, when real labels fall short of it', () => {
+    // A custom range with only an end date set skips gap-fill (fillRangeGapLabels
+    // requires both bounds), so real labels can end before computedRange.end.
+    const labels = ['2026-01', '2026-02'];
+    const waymark = makeWaymark({ endDate: '2026-06-15' });
+    const boundedRange: ComputedDateRange = {
+      start: null,
+      end: new Date('2026-04-10T00:00:00Z'),
+      label: 'Until Apr 10, 2026',
+    };
+    const result = extendLabelsForWaymarks(labels, 'month', [waymark], boundedRange);
+    expect(result.labels).toEqual(['2026-01', '2026-02', '2026-03', '2026-04']);
+    expect(result.realLabelCount).toBe(2);
   });
 });
 

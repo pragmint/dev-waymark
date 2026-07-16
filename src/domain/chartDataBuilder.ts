@@ -253,24 +253,43 @@ export function filterWaymarksInRange(
 
 // Appends synthetic future bucket labels after the last real label, up to the
 // furthest waymark end date, so a goal line can extend past the last bucket
-// that actually has entities. Only ever extends the tail — never inserts
-// mid-array — so existing index-based logic elsewhere (click-through filters,
-// smoothing window filters) keeps working unmodified against the labels it
-// already knows about. `realLabelCount` tells the caller where the synthetic
-// tail starts, so it can skip click-through URLs for those indices.
+// that actually has entities — but never past the currently selected date
+// range. A waymark's [startDate, endDate] has no inherent tie to the
+// dashboard's current window (e.g. a goal set for the whole quarter while
+// viewing a single week within it), so without a cap the chart would grow
+// wider than the range the user actually picked. When `computedRange.end` is
+// set (every bounded period — week/month/quarter/year/custom), `labels` is
+// already gap-filled out to that boundary (see `fillRangeGapLabels`), so
+// capping at it is normally a no-op; it only does real work for a custom
+// range with an end but no start, where gap-fill doesn't run and real labels
+// can fall short of the boundary. Only unbounded ranges (`computedRange.end`
+// null — "all time", or custom with no end) let the tail extend all the way
+// to the waymark's own end date. Only ever extends the tail — never inserts
+// mid-array — so existing index-based logic elsewhere (click-through
+// filters, smoothing window filters) keeps working unmodified against the
+// labels it already knows about. `realLabelCount` tells the caller where the
+// synthetic tail starts, so it can skip click-through URLs for those
+// indices.
 export function extendLabelsForWaymarks(
   labels: string[],
   bucket: TimeBucket,
-  waymarks: Waymark[]
+  waymarks: Waymark[],
+  computedRange: ComputedDateRange
 ): { labels: string[]; realLabelCount: number } {
   const realLabelCount = labels.length;
   if (labels.length === 0 || waymarks.length === 0) return { labels, realLabelCount };
 
-  const maxEndLabel = waymarks
+  const rangeEndLabel = computedRange.end
+    ? bucketDate(computedRange.end.toISOString(), bucket)
+    : null;
+
+  let maxEndLabel = waymarks
     .map(w => bucketDate(w.endDate, bucket))
     .filter((l): l is string => l != null)
     .sort((a, b) => a.localeCompare(b))
     .pop();
+  if (rangeEndLabel && (!maxEndLabel || rangeEndLabel < maxEndLabel)) maxEndLabel = rangeEndLabel;
+
   const lastReal = labels[labels.length - 1];
   if (!maxEndLabel || maxEndLabel <= lastReal) return { labels, realLabelCount };
 

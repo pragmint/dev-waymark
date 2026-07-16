@@ -145,7 +145,7 @@ async function applyWaymarks(
   const historyEntities = await entityRepo.list(presetTree);
   const anchors = resolveWaymarkAnchors(waymarks, historyEntities, viz.config);
 
-  const extended = extendLabelsForWaymarks(chartResult.labels, bucket, waymarks);
+  const extended = extendLabelsForWaymarks(chartResult.labels, bucket, waymarks, computedRange);
   if (extended.labels.length > chartResult.labels.length) {
     padDatasetsToLength(chartResult.datasets, extended.labels.length);
     chartResult.labels = extended.labels;
