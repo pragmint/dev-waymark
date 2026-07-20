@@ -9,6 +9,17 @@ import { Layout } from '../components/Layout';
 
 const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
 
+export type DashboardCardComparison = {
+  label: string;
+  chartJsConfig: ChartJsConfig;
+  pointUrls: (string | null)[];
+  smoothingPointUrls: (string | null)[] | null;
+  smoothingDatasetIndex: number | null;
+  warnings: string[];
+  excludedEntityCount: number;
+  excludedEntitiesUrl: string | null;
+};
+
 export type DashboardCard = {
   id: number;
   name: string;
@@ -20,6 +31,9 @@ export type DashboardCard = {
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
   layout: 'normal' | 'wide';
+  // The immediately preceding period's data, when "Compare Time Periods" is on
+  // and this viz has a resolvable date field. Null otherwise.
+  comparison: DashboardCardComparison | null;
 };
 
 type Props = {
@@ -69,7 +83,11 @@ export const DashboardPage: FC<Props> = ({
         <>
           <div class="dashboard-viz-grid" data-viz-grid>
             {cards.map(card => (
-              <DashboardCardView card={card} dashboardCount={vizDashboardCounts[card.id] ?? 1} />
+              <DashboardCardView
+                card={card}
+                dashboardCount={vizDashboardCounts[card.id] ?? 1}
+                dateRangeLabel={dateRangeLabel}
+              />
             ))}
           </div>
 
@@ -330,6 +348,33 @@ const DateRangeRow: FC<{ dateRange: DateRange; dateRangeLabel: string }> = ({
           aria-label="Range end"
         />
       </div>
+
+      <label class="date-range-compare" hidden={dateRange.period === 'all'}>
+        <input type="checkbox" data-date-range-compare checked={dateRange.compare} />
+        Compare Time Periods
+      </label>
+
+      <div
+        class="date-range-compare-custom"
+        hidden={!(dateRange.period === 'custom' && dateRange.compare)}
+      >
+        <span class="date-range-compare-custom-label">Compare to</span>
+        <input
+          type="date"
+          class="filter-input date-range-date-input"
+          data-date-range-compare-custom-start
+          value={dateRange.compareCustomStart ?? ''}
+          aria-label="Comparison range start"
+        />
+        <span class="date-range-dash">–</span>
+        <input
+          type="date"
+          class="filter-input date-range-date-input"
+          data-date-range-compare-custom-end
+          value={dateRange.compareCustomEnd ?? ''}
+          aria-label="Comparison range end"
+        />
+      </div>
     </div>
   );
 };
@@ -349,10 +394,11 @@ const EmptyState: FC<{ hasAnyDashboards: boolean }> = ({ hasAnyDashboards }) => 
   </div>
 );
 
-const WarningIndicator: FC<{ warnings: string[]; excludedEntitiesUrl: string | null }> = ({
-  warnings,
-  excludedEntitiesUrl,
-}) => (
+const WarningIndicator: FC<{
+  warnings: string[];
+  excludedEntitiesUrl: string | null;
+  comparison?: DashboardCardComparison | null;
+}> = ({ warnings, excludedEntitiesUrl, comparison }) => (
   <span class="warning-indicator" tabIndex={0} aria-label="Visualization warnings">
     <span class="warning-icon" aria-hidden="true">
       !
@@ -368,26 +414,66 @@ const WarningIndicator: FC<{ warnings: string[]; excludedEntitiesUrl: string | n
           </a>
         </p>
       )}
+      {comparison?.warnings.map(w => (
+        <p class="warning">
+          {comparison.label}: {w}
+        </p>
+      ))}
+      {comparison?.excludedEntitiesUrl && (
+        <p class="warning">
+          <a class="warning-link" href={comparison.excludedEntitiesUrl}>
+            View excluded entities ({comparison.label}) →
+          </a>
+        </p>
+      )}
     </span>
   </span>
 );
 
-const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = ({
-  card,
-  dashboardCount,
-}) => (
-  <div
-    class={`dashboard-viz-card${card.layout === 'wide' ? ' dashboard-viz-card--wide' : ''}`}
-    data-viz-id={card.id}
-    draggable={true}
-  >
+// Sizing class while comparing two periods: a normal card grows to the
+// existing "wide" footprint (one section per panel); a wide card grows to a
+// new "extra-wide" footprint (1.5 sections per panel) instead of doubling
+// again, so it doesn't dominate the grid.
+function cardSizeClass(card: DashboardCard): string {
+  if (card.comparison)
+    return card.layout === 'wide' ? ' dashboard-viz-card--extra-wide' : ' dashboard-viz-card--wide';
+  return card.layout === 'wide' ? ' dashboard-viz-card--wide' : '';
+}
+
+const CardCanvas: FC<{
+  chartJsConfig: ChartJsConfig;
+  pointUrls: (string | null)[];
+  smoothingPointUrls: (string | null)[] | null;
+  smoothingDatasetIndex: number | null;
+}> = ({ chartJsConfig, pointUrls, smoothingPointUrls, smoothingDatasetIndex }) => (
+  <div class="dashboard-viz-canvas-wrap">
+    <canvas
+      class="dashboard-viz-canvas"
+      data-config={JSON.stringify(chartJsConfig)}
+      data-point-urls={JSON.stringify(pointUrls)}
+      data-smoothing-point-urls={JSON.stringify(smoothingPointUrls)}
+      data-smoothing-dataset-index={JSON.stringify(smoothingDatasetIndex)}
+    />
+  </div>
+);
+
+const DashboardCardView: FC<{
+  card: DashboardCard;
+  dashboardCount: number;
+  dateRangeLabel: string;
+}> = ({ card, dashboardCount, dateRangeLabel }) => (
+  <div class={`dashboard-viz-card${cardSizeClass(card)}`} data-viz-id={card.id} draggable={true}>
     <div class="dashboard-viz-card-header">
       <span class="dashboard-viz-card-grip" aria-hidden="true">
         ⋮⋮
       </span>
       <span class="dashboard-viz-card-title">{card.name}</span>
-      {card.warnings.length > 0 && (
-        <WarningIndicator warnings={card.warnings} excludedEntitiesUrl={card.excludedEntitiesUrl} />
+      {(card.warnings.length > 0 || (card.comparison?.warnings.length ?? 0) > 0) && (
+        <WarningIndicator
+          warnings={card.warnings}
+          excludedEntitiesUrl={card.excludedEntitiesUrl}
+          comparison={card.comparison}
+        />
       )}
       <button
         type="button"
@@ -423,14 +509,39 @@ const DashboardCardView: FC<{ card: DashboardCard; dashboardCount: number }> = (
         ×
       </button>
     </div>
-    <div class="dashboard-viz-canvas-wrap">
-      <canvas
-        class="dashboard-viz-canvas"
-        data-config={JSON.stringify(card.chartJsConfig)}
-        data-point-urls={JSON.stringify(card.pointUrls)}
-        data-smoothing-point-urls={JSON.stringify(card.smoothingPointUrls)}
-        data-smoothing-dataset-index={JSON.stringify(card.smoothingDatasetIndex)}
-      />
+    <div class="dashboard-viz-chart-area" data-chart-area>
+      {card.comparison ? (
+        // Chronological order: the comparison period is always earlier than
+        // the selected one, so it renders on the left with the current
+        // period on the right.
+        <div class="dashboard-viz-compare-panels">
+          <div class="dashboard-viz-panel">
+            <div class="dashboard-viz-panel-label">{card.comparison.label}</div>
+            <CardCanvas
+              chartJsConfig={card.comparison.chartJsConfig}
+              pointUrls={card.comparison.pointUrls}
+              smoothingPointUrls={card.comparison.smoothingPointUrls}
+              smoothingDatasetIndex={card.comparison.smoothingDatasetIndex}
+            />
+          </div>
+          <div class="dashboard-viz-panel">
+            <div class="dashboard-viz-panel-label">{dateRangeLabel}</div>
+            <CardCanvas
+              chartJsConfig={card.chartJsConfig}
+              pointUrls={card.pointUrls}
+              smoothingPointUrls={card.smoothingPointUrls}
+              smoothingDatasetIndex={card.smoothingDatasetIndex}
+            />
+          </div>
+        </div>
+      ) : (
+        <CardCanvas
+          chartJsConfig={card.chartJsConfig}
+          pointUrls={card.pointUrls}
+          smoothingPointUrls={card.smoothingPointUrls}
+          smoothingDatasetIndex={card.smoothingDatasetIndex}
+        />
+      )}
     </div>
   </div>
 );

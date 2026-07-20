@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildDateRangeFilters,
+  computeComparisonRange,
   computeDateRange,
   DEFAULT_DATE_RANGE,
   dateRangeToQueryParts,
@@ -49,13 +50,29 @@ describe('dateRangeToQueryParts', () => {
 
   test('emits range + offset when shifted', () => {
     expect(
-      dateRangeToQueryParts({ period: 'month', offset: -1, customStart: null, customEnd: null })
+      dateRangeToQueryParts({
+        period: 'month',
+        offset: -1,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      })
     ).toEqual(['range=month', 'offset=-1']);
   });
 
   test('omits offset when zero', () => {
     expect(
-      dateRangeToQueryParts({ period: 'month', offset: 0, customStart: null, customEnd: null })
+      dateRangeToQueryParts({
+        period: 'month',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      })
     ).toEqual(['range=month']);
   });
 
@@ -66,8 +83,39 @@ describe('dateRangeToQueryParts', () => {
         offset: 0,
         customStart: '2026-01-01',
         customEnd: '2026-03-31',
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
       })
     ).toEqual(['range=custom', 'rs=2026-01-01', 're=2026-03-31']);
+  });
+
+  test('emits cmp=1 when compare is on', () => {
+    expect(
+      dateRangeToQueryParts({
+        period: 'quarter',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: true,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      })
+    ).toEqual(['range=quarter', 'cmp=1']);
+  });
+
+  test('omits cmp for all-time even if compare is set', () => {
+    expect(
+      dateRangeToQueryParts({
+        period: 'all',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: true,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      })
+    ).toEqual([]);
   });
 });
 
@@ -81,7 +129,15 @@ describe('computeDateRange', () => {
 
   test('month offset 0 spans June 2026', () => {
     const c = computeDateRange(
-      { period: 'month', offset: 0, customStart: null, customEnd: null },
+      {
+        period: 'month',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.start!.toISOString()).toBe('2026-06-01T00:00:00.000Z');
@@ -91,7 +147,15 @@ describe('computeDateRange', () => {
 
   test('month offset -1 spans May 2026', () => {
     const c = computeDateRange(
-      { period: 'month', offset: -1, customStart: null, customEnd: null },
+      {
+        period: 'month',
+        offset: -1,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.start!.toISOString()).toBe('2026-05-01T00:00:00.000Z');
@@ -100,7 +164,15 @@ describe('computeDateRange', () => {
 
   test('month offset crosses year boundary backwards', () => {
     const c = computeDateRange(
-      { period: 'month', offset: -7, customStart: null, customEnd: null },
+      {
+        period: 'month',
+        offset: -7,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.label).toBe('November 2025');
@@ -108,7 +180,15 @@ describe('computeDateRange', () => {
 
   test('quarter offset 0 spans Q2 2026', () => {
     const c = computeDateRange(
-      { period: 'quarter', offset: 0, customStart: null, customEnd: null },
+      {
+        period: 'quarter',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.start!.toISOString()).toBe('2026-04-01T00:00:00.000Z');
@@ -118,7 +198,15 @@ describe('computeDateRange', () => {
 
   test('quarter offset -3 wraps backwards across year', () => {
     const c = computeDateRange(
-      { period: 'quarter', offset: -3, customStart: null, customEnd: null },
+      {
+        period: 'quarter',
+        offset: -3,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.label).toBe('Q3 2025');
@@ -126,7 +214,15 @@ describe('computeDateRange', () => {
 
   test('quarter offset +2 wraps forward across year', () => {
     const c = computeDateRange(
-      { period: 'quarter', offset: 2, customStart: null, customEnd: null },
+      {
+        period: 'quarter',
+        offset: 2,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.label).toBe('Q4 2026');
@@ -134,7 +230,15 @@ describe('computeDateRange', () => {
 
   test('year offset 0', () => {
     const c = computeDateRange(
-      { period: 'year', offset: 0, customStart: null, customEnd: null },
+      {
+        period: 'year',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.label).toBe('2026');
@@ -144,7 +248,15 @@ describe('computeDateRange', () => {
 
   test('week offset 0 starts on Monday', () => {
     const c = computeDateRange(
-      { period: 'week', offset: 0, customStart: null, customEnd: null },
+      {
+        period: 'week',
+        offset: 0,
+        customStart: null,
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW // Fri 2026-06-26
     );
     expect(c.start!.toISOString()).toBe('2026-06-22T00:00:00.000Z');
@@ -158,6 +270,9 @@ describe('computeDateRange', () => {
         offset: 0,
         customStart: '2026-01-15',
         customEnd: '2026-02-20',
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
       },
       NOW
     );
@@ -168,12 +283,100 @@ describe('computeDateRange', () => {
 
   test('custom range with only start', () => {
     const c = computeDateRange(
-      { period: 'custom', offset: 0, customStart: '2026-01-15', customEnd: null },
+      {
+        period: 'custom',
+        offset: 0,
+        customStart: '2026-01-15',
+        customEnd: null,
+        compare: false,
+        compareCustomStart: null,
+        compareCustomEnd: null,
+      },
       NOW
     );
     expect(c.start).not.toBeNull();
     expect(c.end).toBeNull();
     expect(c.label).toBe('From Jan 15, 2026');
+  });
+});
+
+describe('computeComparisonRange', () => {
+  test('all has no comparison period', () => {
+    expect(computeComparisonRange(DEFAULT_DATE_RANGE, NOW)).toBeNull();
+  });
+
+  test('quarter shifts one quarter further back than offset', () => {
+    const range = {
+      period: 'quarter' as const,
+      offset: 0,
+      customStart: null,
+      customEnd: null,
+      compare: true,
+      compareCustomStart: null,
+      compareCustomEnd: null,
+    };
+    const prior = computeComparisonRange(range, NOW);
+    expect(prior?.label).toBe('Q1 2026');
+  });
+
+  test('month shifts one month further back than offset, crossing year boundary', () => {
+    const range = {
+      period: 'month' as const,
+      offset: -6,
+      customStart: null,
+      customEnd: null,
+      compare: true,
+      compareCustomStart: null,
+      compareCustomEnd: null,
+    };
+    const computed = computeDateRange(range, NOW);
+    const prior = computeComparisonRange(range, NOW);
+    expect(computed.label).toBe('December 2025');
+    expect(prior?.label).toBe('November 2025');
+  });
+
+  test('custom range uses the explicitly configured comparison dates, not an auto-shift', () => {
+    const range = {
+      period: 'custom' as const,
+      offset: 0,
+      customStart: '2026-02-01',
+      customEnd: '2026-02-10',
+      compare: true,
+      compareCustomStart: '2025-06-01',
+      compareCustomEnd: '2025-06-05',
+    };
+    const prior = computeComparisonRange(range, NOW);
+    expect(prior?.start!.toISOString()).toBe('2025-06-01T00:00:00.000Z');
+    expect(prior?.end!.toISOString()).toBe('2025-06-05T23:59:59.999Z');
+  });
+
+  test('custom range with no comparison dates configured has no comparison period', () => {
+    const range = {
+      period: 'custom' as const,
+      offset: 0,
+      customStart: '2026-02-01',
+      customEnd: '2026-02-10',
+      compare: true,
+      compareCustomStart: null,
+      compareCustomEnd: null,
+    };
+    expect(computeComparisonRange(range, NOW)).toBeNull();
+  });
+
+  test('custom range comparison can have just one bound configured', () => {
+    const range = {
+      period: 'custom' as const,
+      offset: 0,
+      customStart: '2026-02-01',
+      customEnd: '2026-02-10',
+      compare: true,
+      compareCustomStart: '2025-06-01',
+      compareCustomEnd: null,
+    };
+    const prior = computeComparisonRange(range, NOW);
+    expect(prior?.start).not.toBeNull();
+    expect(prior?.end).toBeNull();
+    expect(prior?.label).toBe('From Jun 1, 2025');
   });
 });
 

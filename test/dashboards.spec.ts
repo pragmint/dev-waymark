@@ -105,6 +105,34 @@ async function seedThroughputViz(
   return id;
 }
 
+// Same shape as seedFieldTrendViz, but with layout: 'wide' — used to exercise
+// the "extra-wide" sizing tier a wide viz grows into while comparing periods.
+async function seedWideFieldTrendViz(
+  request: APIRequestContext,
+  presetId: number,
+  name: string
+): Promise<number> {
+  const res = await request.post('/api/visualizations', {
+    data: {
+      name,
+      presetId,
+      layout: 'wide',
+      templateConfig: {
+        templateId: 'field_trend',
+        slots: {
+          dateField: 'jira_created_at',
+          numericFields: ['total_lead_time_seconds'],
+          timeBucket: 'week',
+          aggregation: 'avg',
+        },
+      },
+    },
+  });
+  expect(res.ok()).toBeTruthy();
+  const { id } = await res.json();
+  return id;
+}
+
 async function seedDashboard(
   request: APIRequestContext,
   name: string,
@@ -1244,6 +1272,267 @@ test.describe('bar chart y-axis baseline', () => {
     const { chartJsConfig: lineConfig } = await lineRes.json();
     expect(lineConfig.type).toBe('line');
     expect(lineConfig.options.scales.y.beginAtZero).toBe(false);
+  });
+});
+
+// ── Compare Time Periods ─────────────────────────────────────────────────────
+// Checking "Compare Time Periods" renders each viz twice: the comparison
+// period on the left, the selected period on the right. For week/month/
+// quarter/year the comparison period is auto-selected (one offset step
+// back); for custom ranges the user must pick it explicitly via a second
+// pair of date inputs that only appear once both period === 'custom' and the
+// checkbox is checked — nothing is ever auto-shifted for custom ranges.
+
+test.describe('Compare Time Periods', () => {
+  test('checkbox is hidden at "All time" and appears once a bounded period is selected', async ({
+    page,
+    request,
+  }) => {
+    const dashId = await seedDashboard(request, uniqueName('CompareVisD'));
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const compareLabel = page.locator('.date-range-compare');
+    await expect(compareLabel).toBeHidden();
+
+    await page.selectOption('[data-date-range-period]', 'quarter');
+    await expect(compareLabel).toBeVisible();
+
+    await page.selectOption('[data-date-range-period]', 'all');
+    await expect(compareLabel).toBeHidden();
+  });
+
+  test('checking it for an offset-based period renders the prior period on the left and current on the right', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareQ'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareQViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareQD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-date-range-period]', 'quarter');
+
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+    await expect(card.locator('canvas')).toHaveCount(1);
+
+    await page.check('[data-date-range-compare]');
+    await expect(card.locator('canvas')).toHaveCount(2);
+
+    const labels = card.locator('.dashboard-viz-panel-label');
+    await expect(labels).toHaveCount(2);
+    const [priorLabel, currentLabel] = await labels.allTextContents();
+    const currentRangeLabel = await page.locator('[data-date-range-label]').textContent();
+    expect(currentLabel).toBe(currentRangeLabel);
+    expect(priorLabel).not.toBe(currentLabel);
+
+    // Unchecking collapses back to a single canvas and drops the panel labels.
+    await page.uncheck('[data-date-range-compare]');
+    await expect(card.locator('canvas')).toHaveCount(1);
+    await expect(card.locator('.dashboard-viz-panel-label')).toHaveCount(0);
+  });
+
+  test('stepping to the previous quarter while comparing updates both panels in place', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareStep'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareStepViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareStepD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-date-range-period]', 'quarter');
+    await page.check('[data-date-range-compare]');
+
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+    const labels = card.locator('.dashboard-viz-panel-label');
+    await expect(labels).toHaveCount(2);
+    const [priorBefore, currentBefore] = await labels.allTextContents();
+
+    await page.click('[data-date-range-prev]');
+    await expect(card.locator('canvas')).toHaveCount(2);
+    await expect(labels).toHaveCount(2);
+    await expect(labels.nth(1)).toHaveText(priorBefore);
+    await expect(labels.nth(0)).not.toHaveText(priorBefore);
+    const [, currentAfter] = await labels.allTextContents();
+    expect(currentAfter).not.toBe(currentBefore);
+  });
+
+  test('a normal viz becomes wide and a wide viz becomes extra-wide while comparing', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareSize'));
+    const normalVizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareSizeNormal'));
+    const wideVizId = await seedWideFieldTrendViz(request, presetId, uniqueName('CompareSizeWide'));
+    const dashId = await seedDashboard(request, uniqueName('CompareSizeD'), [
+      normalVizId,
+      wideVizId,
+    ]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-date-range-period]', 'quarter');
+
+    const normalCard = page.locator(`.dashboard-viz-card[data-viz-id="${normalVizId}"]`);
+    const wideCard = page.locator(`.dashboard-viz-card[data-viz-id="${wideVizId}"]`);
+    await expect(wideCard).toHaveClass(/dashboard-viz-card--wide/);
+    await expect(normalCard).not.toHaveClass(/dashboard-viz-card--(wide|extra-wide)/);
+
+    await page.check('[data-date-range-compare]');
+    await expect(normalCard).toHaveClass(/dashboard-viz-card--wide/);
+    await expect(wideCard).toHaveClass(/dashboard-viz-card--extra-wide/);
+  });
+
+  test('custom range comparison requires explicit dates — nothing is auto-selected', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareCustom'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareCustomViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareCustomD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    const compareCustom = page.locator('.date-range-compare-custom');
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+
+    // Not shown for an offset-based period, even once checked.
+    await page.selectOption('[data-date-range-period]', 'quarter');
+    await page.check('[data-date-range-compare]');
+    await expect(compareCustom).toBeHidden();
+
+    // Switch to custom — the checked state carries over, so the "Compare to"
+    // pickers appear as soon as the main custom range is set.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await page.fill('[data-date-range-custom-start]', '2026-03-01');
+    await page.locator('[data-date-range-custom-start]').dispatchEvent('change');
+    await page.fill('[data-date-range-custom-end]', '2026-03-31');
+    await page.locator('[data-date-range-custom-end]').dispatchEvent('change');
+    await expect(compareCustom).toBeVisible();
+
+    // No comparison dates entered yet — nothing is auto-shifted, so no
+    // comparison panel renders.
+    await expect(card.locator('canvas')).toHaveCount(1);
+
+    // Filling in explicit comparison dates renders the two panels,
+    // comparison (earlier) on the left, main range on the right.
+    await page.fill('[data-date-range-compare-custom-start]', '2025-01-01');
+    await page.locator('[data-date-range-compare-custom-start]').dispatchEvent('change');
+    await page.fill('[data-date-range-compare-custom-end]', '2025-01-31');
+    await page.locator('[data-date-range-compare-custom-end]').dispatchEvent('change');
+
+    await expect(card.locator('canvas')).toHaveCount(2);
+    const labels = await card.locator('.dashboard-viz-panel-label').allTextContents();
+    expect(labels[0]).toContain('2025');
+    expect(labels[1]).toContain('2026');
+  });
+
+  test('comparison state round-trips through the URL and survives a full reload', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareUrl'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareUrlViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareUrlD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await page.fill('[data-date-range-custom-start]', '2026-03-01');
+    await page.locator('[data-date-range-custom-start]').dispatchEvent('change');
+    await page.fill('[data-date-range-custom-end]', '2026-03-31');
+    await page.locator('[data-date-range-custom-end]').dispatchEvent('change');
+    await page.check('[data-date-range-compare]');
+    await page.fill('[data-date-range-compare-custom-start]', '2025-01-01');
+    await page.locator('[data-date-range-compare-custom-start]').dispatchEvent('change');
+    await page.fill('[data-date-range-compare-custom-end]', '2025-01-31');
+    await page.locator('[data-date-range-compare-custom-end]').dispatchEvent('change');
+
+    await expect(page).toHaveURL(/cmp=1/);
+    await expect(page).toHaveURL(/ccs=2025-01-01/);
+    await expect(page).toHaveURL(/cce=2025-01-31/);
+
+    await page.reload();
+    await waitForDashboardHydrated(page);
+
+    await expect(page.locator('[data-date-range-compare]')).toBeChecked();
+    await expect(page.locator('[data-date-range-compare-custom-start]')).toHaveValue('2025-01-01');
+    await expect(page.locator('[data-date-range-compare-custom-end]')).toHaveValue('2025-01-31');
+
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+    await expect(card.locator('canvas')).toHaveCount(2);
+  });
+
+  test('a visualization with no date field is unaffected by the compare toggle', async ({
+    page,
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareNoDate'));
+    // seedViz defaults to category_breakdown with no dateField slot set, so
+    // it has no resolvable date field for the range filter to apply to.
+    const vizId = await seedViz(request, presetId, uniqueName('CompareNoDateViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareNoDateD'), [vizId]);
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-date-range-period]', 'quarter');
+    await page.check('[data-date-range-compare]');
+
+    const card = page.locator(`.dashboard-viz-card[data-viz-id="${vizId}"]`);
+    await expect(card.locator('canvas')).toHaveCount(1);
+    await expect(card.locator('.dashboard-viz-panel-label')).toHaveCount(0);
+  });
+
+  test('the cards API returns a comparison payload with a synced y-axis and a distinct label', async ({
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareApi'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareApiViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareApiD'), [vizId]);
+
+    // The e2e seed's jira_created_at values are deterministic (2024-01-02
+    // through 2024-01-26) rather than tied to the real current date, so a
+    // relative period like "quarter" would find no entities in either
+    // window today — a custom range explicitly targeting that seed data
+    // guarantees both periods have real values for the y-axis sync to act on.
+    const res = await request.get(
+      `/api/dashboards/${dashId}/cards?range=custom&rs=2024-01-15&re=2024-01-26&cmp=1&ccs=2024-01-01&cce=2024-01-14`
+    );
+    expect(res.ok()).toBeTruthy();
+    const { cards, dateRangeLabel } = await res.json();
+    const card = cards.find((c: { id: number }) => c.id === vizId);
+    expect(card.comparison).not.toBeNull();
+    expect(card.comparison.label).not.toBe(dateRangeLabel);
+
+    const scalesMain = card.chartJsConfig.options.scales?.y;
+    const scalesCompare = card.comparison.chartJsConfig.options.scales?.y;
+    expect(scalesMain).toBeDefined();
+    expect(scalesCompare).toBeDefined();
+    expect(scalesMain.suggestedMax).toBe(scalesCompare.suggestedMax);
+    expect(scalesMain.suggestedMax).toBeGreaterThan(0);
+  });
+
+  test('the cards API omits comparison entirely for "all" and for an unconfigured custom range', async ({
+    request,
+  }) => {
+    const presetId = await seedPreset(request, uniqueName('PresetCompareApiOff'));
+    const vizId = await seedFieldTrendViz(request, presetId, uniqueName('CompareApiOffViz'));
+    const dashId = await seedDashboard(request, uniqueName('CompareApiOffD'), [vizId]);
+
+    const allRes = await request.get(`/api/dashboards/${dashId}/cards?cmp=1`);
+    const { cards: allCards } = await allRes.json();
+    expect(allCards.find((c: { id: number }) => c.id === vizId).comparison).toBeNull();
+
+    const customRes = await request.get(
+      `/api/dashboards/${dashId}/cards?range=custom&rs=2026-03-01&re=2026-03-31&cmp=1`
+    );
+    const { cards: customCards } = await customRes.json();
+    expect(customCards.find((c: { id: number }) => c.id === vizId).comparison).toBeNull();
   });
 });
 

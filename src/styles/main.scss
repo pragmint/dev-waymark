@@ -1278,6 +1278,13 @@ form {
   grid-column: span 2;
 }
 
+// A wide viz's footprint while comparing two periods (see .dashboard-viz-compare-panels
+// below) — 3 sections instead of 2, so each panel still gets 1.5 sections of room
+// rather than shrinking to a single section each.
+.dashboard-viz-card--extra-wide {
+  grid-column: span 3;
+}
+
 .dashboard-viz-card-header {
   display: flex;
   align-items: center;
@@ -1335,6 +1342,27 @@ form {
 
 .dashboard-viz-canvas {
   max-height: 330px;
+}
+
+// "Compare Time Periods": two panels side by side, one per period, sharing the
+// wide/extra-wide card's footprint evenly. Stacks vertically below 720px (see
+// media query), matching the card's own single-column collapse at that width.
+.dashboard-viz-compare-panels {
+  display: flex;
+  gap: 16px;
+}
+
+.dashboard-viz-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-viz-panel-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+  text-align: center;
+  margin-bottom: 4px;
 }
 
 .dashboard-date-range-row {
@@ -1395,6 +1423,40 @@ form {
 .date-range-dash {
   color: var(--color-muted);
   font-size: 13px;
+}
+
+.date-range-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height);
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+
+  &[hidden] {
+    display: none;
+  }
+
+  input[type='checkbox'] {
+    cursor: pointer;
+  }
+}
+
+.date-range-compare-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.date-range-compare-custom-label {
+  font-size: 13px;
+  color: var(--color-muted);
 }
 
 .dashboard-add-viz-row {
@@ -1635,9 +1697,16 @@ form {
     grid-template-columns: 1fr;
   }
 
-  // Single-column grid: a wide card has nothing to span into, so drop the span.
-  .dashboard-viz-card--wide {
+  // Single-column grid: a wide/extra-wide card has nothing to span into, so drop the span.
+  .dashboard-viz-card--wide,
+  .dashboard-viz-card--extra-wide {
     grid-column: span 1;
+  }
+
+  // The card is already full width at this breakpoint, so there's no room for
+  // two panels side by side — stack the compared periods instead.
+  .dashboard-viz-compare-panels {
+    flex-direction: column;
   }
 
   // Keep the dashboard picker + date range visible while scrolling a long

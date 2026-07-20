@@ -22,6 +22,7 @@ import {
   padDatasetsToLength,
   resolveWaymarkAnchors,
   suppressAnchoredPointMarkers,
+  syncComparisonYAxis,
   validateVisualizationConfig,
 } from './chartDataBuilder';
 import { isGroup, isLeaf } from '../schemas/filterTree';
@@ -1113,6 +1114,40 @@ describe('buildChartJsConfig', () => {
     const jsConfig = buildChartJsConfig(result, config);
     expect(jsConfig.data.labels).toEqual(result.labels);
     expect(jsConfig.data.labels.length).toBeGreaterThan(1);
+  });
+});
+
+// ── syncComparisonYAxis ────────────────────────────────────────────────────────
+
+describe('syncComparisonYAxis', () => {
+  const barConfig: VisualizationConfig = {
+    chartType: 'bar',
+    category: { metadataKey: 'team' },
+    aggregation: { function: 'count' },
+  };
+
+  test('sets the same suggestedMax on both charts, taken from whichever has the larger value', () => {
+    const small = buildChartJsConfig(buildChartData(tickets.slice(0, 2), barConfig), barConfig);
+    const large = buildChartJsConfig(buildChartData(tickets, barConfig), barConfig);
+
+    syncComparisonYAxis(small, large);
+
+    const scalesSmall = small.options.scales as Record<string, Record<string, unknown>>;
+    const scalesLarge = large.options.scales as Record<string, Record<string, unknown>>;
+    expect(scalesSmall.y.suggestedMax).toBe(scalesLarge.y.suggestedMax);
+    expect(scalesSmall.y.suggestedMax).toBeGreaterThan(0);
+  });
+
+  test('no-ops for circular charts, which have no y-axis', () => {
+    const pieConfig: VisualizationConfig = {
+      chartType: 'pie',
+      category: { metadataKey: 'issue_type' },
+      aggregation: { function: 'count' },
+    };
+    const a = buildChartJsConfig(buildChartData(tickets, pieConfig), pieConfig);
+    const b = buildChartJsConfig(buildChartData(tickets, pieConfig), pieConfig);
+    expect(() => syncComparisonYAxis(a, b)).not.toThrow();
+    expect(a.options.scales).toBeUndefined();
   });
 });
 

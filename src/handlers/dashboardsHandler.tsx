@@ -15,11 +15,13 @@ import {
   padDatasetsToLength,
   resolveWaymarkAnchors,
   suppressAnchoredPointMarkers,
+  syncComparisonYAxis,
   validateVisualizationConfig,
 } from '../domain/chartDataBuilder';
 import type { BoundaryAnchorInfo } from '../domain/chartDataBuilder';
 import {
   buildDateRangeFilters,
+  computeComparisonRange,
   computeDateRange,
   parseDateRangeFromQuery,
   resolveVizDateField,
@@ -30,7 +32,7 @@ import { buildEntityUrl } from '../domain/filterUrl';
 import { resolveTemplate } from '../domain/templateResolver';
 import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
 import { DashboardPage } from '../frontend/Pages/DashboardPage';
-import type { DashboardCard } from '../frontend/Pages/DashboardPage';
+import type { DashboardCard, DashboardCardComparison } from '../frontend/Pages/DashboardPage';
 import type { FilterNode, FilterTree } from '../schemas/filterTree';
 import { VisualizationLayoutSchema } from '../schemas/visualization';
 import type {
@@ -38,7 +40,7 @@ import type {
   VisualizationConfig,
   VisualizationSummary,
 } from '../schemas/visualization';
-import type { ChartDataResult } from '../domain/chartDataBuilder';
+import type { ChartDataResult, ChartJsConfig } from '../domain/chartDataBuilder';
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
 // under a fresh root AND group, so click-through URLs narrow the entity list
@@ -161,10 +163,38 @@ async function applyWaymarks(
   return extended.realLabelCount;
 }
 
+// Builds the "prior period" half of a Compare Time Periods card by recursing
+// into buildCard for comparisonRange (no third arg, so it never nests further),
+// then syncs the two chart's Y-axes so bar/line heights read as comparable.
+// Comparison is meaningless for a viz with no date dimension (every entity
+// would land in both periods identically), so the caller only reaches here
+// when dateField is resolvable.
+async function buildComparisonCard(
+  vizId: number,
+  repo: ReturnType<typeof getAppStateRepo>,
+  comparisonRange: ComputedDateRange,
+  mainChartJsConfig: ChartJsConfig
+): Promise<DashboardCardComparison | null> {
+  const comparisonCard = await buildCard(vizId, repo, comparisonRange);
+  if (!comparisonCard) return null;
+  syncComparisonYAxis(mainChartJsConfig, comparisonCard.chartJsConfig);
+  return {
+    label: comparisonRange.label,
+    chartJsConfig: comparisonCard.chartJsConfig,
+    pointUrls: comparisonCard.pointUrls,
+    smoothingPointUrls: comparisonCard.smoothingPointUrls,
+    smoothingDatasetIndex: comparisonCard.smoothingDatasetIndex,
+    warnings: comparisonCard.warnings,
+    excludedEntityCount: comparisonCard.excludedEntityCount,
+    excludedEntitiesUrl: comparisonCard.excludedEntitiesUrl,
+  };
+}
+
 async function buildCard(
   vizId: number,
   repo: ReturnType<typeof getAppStateRepo>,
-  computedRange: ComputedDateRange
+  computedRange: ComputedDateRange,
+  comparisonRange?: ComputedDateRange | null
 ): Promise<DashboardCard | null> {
   const viz = await repo.getVisualization(vizId);
   if (!viz) return null;
@@ -249,6 +279,11 @@ async function buildCard(
       ? buildEntityUrl(combineWithExtras(filteredTree, excludedFilters))
       : null;
 
+  const comparison =
+    comparisonRange && dateField
+      ? await buildComparisonCard(vizId, repo, comparisonRange, chartJsConfig)
+      : null;
+
   return {
     id: viz.id,
     name: viz.name,
@@ -260,6 +295,7 @@ async function buildCard(
     excludedEntityCount: chartResult.excludedEntityCount,
     excludedEntitiesUrl,
     layout: viz.config.layout ?? 'normal',
+    comparison,
   };
 }
 
@@ -520,10 +556,12 @@ export async function dashboardCardsApiHandler(c: Context) {
 
   const queryString = new URL(c.req.url).search.slice(1);
   const dateRange = parseDateRangeFromQuery(new URLSearchParams(queryString));
-  const computedRange = computeDateRange(dateRange, new Date());
+  const now = new Date();
+  const computedRange = computeDateRange(dateRange, now);
+  const comparisonRange = dateRange.compare ? computeComparisonRange(dateRange, now) : null;
 
   const built = await Promise.all(
-    dashboard.visualizationIds.map(vizId => buildCard(vizId, repo, computedRange))
+    dashboard.visualizationIds.map(vizId => buildCard(vizId, repo, computedRange, comparisonRange))
   );
   const cards = built.filter((c): c is DashboardCard => c !== null);
 
@@ -546,14 +584,16 @@ export async function dashboardsPageHandler(c: Context) {
 
   const queryString = new URL(c.req.url).search.slice(1);
   const dateRange: DateRange = parseDateRangeFromQuery(new URLSearchParams(queryString));
-  const computedRange = computeDateRange(dateRange, new Date());
+  const now = new Date();
+  const computedRange = computeDateRange(dateRange, now);
+  const comparisonRange = dateRange.compare ? computeComparisonRange(dateRange, now) : null;
 
   let cards: DashboardCard[] = [];
   let availableVisualizations: VisualizationSummary[] = [];
 
   if (selected) {
     const built = await Promise.all(
-      selected.visualizationIds.map(id => buildCard(id, repo, computedRange))
+      selected.visualizationIds.map(id => buildCard(id, repo, computedRange, comparisonRange))
     );
     cards = built.filter((c): c is DashboardCard => c !== null);
     availableVisualizations = await repo.listVisualizationsNotOnDashboard(selected.id);

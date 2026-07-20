@@ -16,6 +16,16 @@ export type DateRange = {
   // YYYY-MM-DD strings, only meaningful when period === 'custom'.
   customStart: string | null;
   customEnd: string | null;
+  // Whether to also render a comparison period alongside this one.
+  // Meaningless (and ignored) when period === 'all'.
+  compare: boolean;
+  // YYYY-MM-DD strings for the comparison period when period === 'custom' —
+  // unlike week/month/quarter/year (which compare against the immediately
+  // preceding period automatically), a custom range has no implicit "prior"
+  // period, so the user picks one explicitly. Meaningless when period isn't
+  // 'custom', or when compare is false.
+  compareCustomStart: string | null;
+  compareCustomEnd: string | null;
 };
 
 export type ComputedDateRange = {
@@ -32,6 +42,9 @@ export const DEFAULT_DATE_RANGE: DateRange = {
   offset: 0,
   customStart: null,
   customEnd: null,
+  compare: false,
+  compareCustomStart: null,
+  compareCustomEnd: null,
 };
 
 // ── Query-string round-trip ───────────────────────────────────────────────────
@@ -52,7 +65,22 @@ export function parseDateRangeFromQuery(params: URLSearchParams): DateRange {
   const customStart = rsRaw && ISO_DATE.test(rsRaw) ? rsRaw : null;
   const customEnd = reRaw && ISO_DATE.test(reRaw) ? reRaw : null;
 
-  return { period, offset, customStart, customEnd };
+  const compare = params.get('cmp') === '1';
+
+  const ccsRaw = params.get('ccs');
+  const cceRaw = params.get('cce');
+  const compareCustomStart = ccsRaw && ISO_DATE.test(ccsRaw) ? ccsRaw : null;
+  const compareCustomEnd = cceRaw && ISO_DATE.test(cceRaw) ? cceRaw : null;
+
+  return {
+    period,
+    offset,
+    customStart,
+    customEnd,
+    compare,
+    compareCustomStart,
+    compareCustomEnd,
+  };
 }
 
 // Returns a query string fragment (e.g. "range=month&offset=-1") with only the
@@ -67,6 +95,11 @@ export function dateRangeToQueryParts(range: DateRange): string[] {
   if (range.period === 'custom') {
     if (range.customStart) parts.push(`rs=${encodeURIComponent(range.customStart)}`);
     if (range.customEnd) parts.push(`re=${encodeURIComponent(range.customEnd)}`);
+  }
+  if (range.compare && range.period !== 'all') parts.push('cmp=1');
+  if (range.compare && range.period === 'custom') {
+    if (range.compareCustomStart) parts.push(`ccs=${encodeURIComponent(range.compareCustomStart)}`);
+    if (range.compareCustomEnd) parts.push(`cce=${encodeURIComponent(range.compareCustomEnd)}`);
   }
   return parts;
 }
@@ -132,20 +165,26 @@ function formatDayUTC(d: Date): string {
 
 // ── Range computation ─────────────────────────────────────────────────────────
 
+function computeCustomRange(
+  customStart: string | null,
+  customEnd: string | null
+): ComputedDateRange {
+  const start = customStart ? new Date(`${customStart}T00:00:00Z`) : null;
+  const end = customEnd ? new Date(`${customEnd}T23:59:59.999Z`) : null;
+  let label = 'Custom';
+  if (start && end) label = `${formatDayUTC(start)} – ${formatDayUTC(end)}`;
+  else if (start) label = `From ${formatDayUTC(start)}`;
+  else if (end) label = `Until ${formatDayUTC(end)}`;
+  return { start, end, label };
+}
+
 export function computeDateRange(range: DateRange, now: Date): ComputedDateRange {
   switch (range.period) {
     case 'all':
       return { start: null, end: null, label: 'All time' };
 
-    case 'custom': {
-      const start = range.customStart ? new Date(`${range.customStart}T00:00:00Z`) : null;
-      const end = range.customEnd ? new Date(`${range.customEnd}T23:59:59.999Z`) : null;
-      let label = 'Custom';
-      if (start && end) label = `${formatDayUTC(start)} – ${formatDayUTC(end)}`;
-      else if (start) label = `From ${formatDayUTC(start)}`;
-      else if (end) label = `Until ${formatDayUTC(end)}`;
-      return { start, end, label };
-    }
+    case 'custom':
+      return computeCustomRange(range.customStart, range.customEnd);
 
     case 'week': {
       const baseMonday = startOfWeekUTC(now);
@@ -183,6 +222,25 @@ export function computeDateRange(range: DateRange, now: Date): ComputedDateRange
       return { start, end, label: `${year}` };
     }
   }
+}
+
+// Computes the comparison period for "Compare Time Periods". For
+// week/month/quarter/year there's an obvious "prior period" (one offset step
+// back), reusing computeDateRange's own offset math. A custom range has no
+// implicit prior period of its own — the user picks the comparison dates
+// explicitly (range.compareCustomStart/compareCustomEnd) rather than having
+// one auto-selected. Returns null when there's nothing to compare against:
+// 'all' has no fixed span to shift, and a custom comparison range with both
+// bounds left blank hasn't been configured yet.
+export function computeComparisonRange(range: DateRange, now: Date): ComputedDateRange | null {
+  if (range.period === 'all') return null;
+
+  if (range.period === 'custom') {
+    if (!range.compareCustomStart && !range.compareCustomEnd) return null;
+    return computeCustomRange(range.compareCustomStart, range.compareCustomEnd);
+  }
+
+  return computeDateRange({ ...range, offset: range.offset - 1 }, now);
 }
 
 // ── Visualization date-field resolution ───────────────────────────────────────

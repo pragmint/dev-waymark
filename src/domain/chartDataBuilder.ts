@@ -1254,3 +1254,33 @@ export function buildChartJsConfig(
   const options = buildChartOptions(result, config, isCircular);
   return { type: chartType, data: { labels: result.labels, datasets: styledDatasets }, options };
 }
+
+type ScalesWithY = { y?: { suggestedMin?: number; suggestedMax?: number } };
+
+function collectNumericValues(config: ChartJsConfig): number[] {
+  return config.data.datasets.flatMap(ds =>
+    ds.data.filter((v): v is number => typeof v === 'number')
+  );
+}
+
+// Gives both halves of a "Compare Time Periods" card the same Y-axis scale, so
+// bar/line heights are visually comparable at a glance across the two panels —
+// otherwise each chart auto-scales to its own data and a small "prior" value
+// could look misleadingly tall next to a large "current" one. No-ops for
+// circular charts (pie/doughnut), which have no y-axis, or when either config
+// carries no plottable numeric data.
+export function syncComparisonYAxis(a: ChartJsConfig, b: ChartJsConfig): void {
+  const scalesA = (a.options as { scales?: ScalesWithY }).scales;
+  const scalesB = (b.options as { scales?: ScalesWithY }).scales;
+  if (!scalesA?.y || !scalesB?.y) return;
+
+  const values = [...collectNumericValues(a), ...collectNumericValues(b)];
+  if (values.length === 0) return;
+
+  const max = Math.max(...values);
+  const min = Math.min(0, ...values);
+  scalesA.y.suggestedMax = max;
+  scalesA.y.suggestedMin = min;
+  scalesB.y.suggestedMax = max;
+  scalesB.y.suggestedMin = min;
+}

@@ -54,6 +54,9 @@ interface DateRangeState {
   offset: number;
   customStart: string | null;
   customEnd: string | null;
+  compare: boolean;
+  compareCustomStart: string | null;
+  compareCustomEnd: string | null;
 }
 
 interface DashboardState {
@@ -71,7 +74,15 @@ const state: DashboardState = {
   currentVizIds: [],
   originalName: '',
   vizDashboardCounts: {},
-  dateRange: { period: 'all', offset: 0, customStart: null, customEnd: null },
+  dateRange: {
+    period: 'all',
+    offset: 0,
+    customStart: null,
+    customEnd: null,
+    compare: false,
+    compareCustomStart: null,
+    compareCustomEnd: null,
+  },
 };
 
 // ── Hydration ────────────────────────────────────────────────────────────────
@@ -97,6 +108,10 @@ function hydrate(): void {
   state.dateRange = readJsonEmbed<DateRangeState>('date-range-config', state.dateRange);
   if (state.dateRange.period === 'custom') {
     rememberedCustom = { start: state.dateRange.customStart, end: state.dateRange.customEnd };
+    rememberedCompareCustom = {
+      start: state.dateRange.compareCustomStart,
+      end: state.dateRange.compareCustomEnd,
+    };
   }
 
   const nameInput = document.querySelector<HTMLInputElement>('[data-dashboard-name-input]');
@@ -1686,9 +1701,11 @@ function reloadDashboard(): void {
 
 // ── Date range stepper ───────────────────────────────────────────────────────
 
-function buildDashboardUrl(range: DateRangeState): string {
+// Mirrors dateRangeToQueryParts in src/domain/dateRange.ts — kept as a
+// client-side duplicate since this script is a standalone bundle with no
+// server-side imports.
+function buildRangeQueryParams(range: DateRangeState): string[] {
   const params: string[] = [];
-  if (state.dashboardId != null) params.push(`dashboard=${state.dashboardId}`);
   if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
   if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
     params.push(`offset=${range.offset}`);
@@ -1697,11 +1714,47 @@ function buildDashboardUrl(range: DateRangeState): string {
     if (range.customStart) params.push(`rs=${encodeURIComponent(range.customStart)}`);
     if (range.customEnd) params.push(`re=${encodeURIComponent(range.customEnd)}`);
   }
+  if (range.compare && range.period !== 'all') params.push('cmp=1');
+  if (range.compare && range.period === 'custom') {
+    if (range.compareCustomStart)
+      params.push(`ccs=${encodeURIComponent(range.compareCustomStart)}`);
+    if (range.compareCustomEnd) params.push(`cce=${encodeURIComponent(range.compareCustomEnd)}`);
+  }
+  return params;
+}
+
+function buildDashboardUrl(range: DateRangeState): string {
+  const params: string[] = [];
+  if (state.dashboardId != null) params.push(`dashboard=${state.dashboardId}`);
+  params.push(...buildRangeQueryParams(range));
   return params.length === 0 ? '/visualizations' : `/visualizations?${params.join('&')}`;
 }
 
 function isStepperPeriod(period: DateRangePeriod): boolean {
   return period === 'week' || period === 'month' || period === 'quarter' || period === 'year';
+}
+
+function syncCompareCheckboxUI(row: HTMLElement, range: DateRangeState): void {
+  const compareLabel = row.querySelector<HTMLElement>('.date-range-compare');
+  if (compareLabel) compareLabel.hidden = range.period === 'all';
+  const compareCheckbox = row.querySelector<HTMLInputElement>('[data-date-range-compare]');
+  if (compareCheckbox) compareCheckbox.checked = range.compare;
+
+  const compareCustom = row.querySelector<HTMLElement>('.date-range-compare-custom');
+  if (compareCustom) compareCustom.hidden = !(range.period === 'custom' && range.compare);
+
+  const compareStartInput = row.querySelector<HTMLInputElement>(
+    '[data-date-range-compare-custom-start]'
+  );
+  if (compareStartInput && document.activeElement !== compareStartInput) {
+    compareStartInput.value = range.compareCustomStart ?? '';
+  }
+  const compareEndInput = row.querySelector<HTMLInputElement>(
+    '[data-date-range-compare-custom-end]'
+  );
+  if (compareEndInput && document.activeElement !== compareEndInput) {
+    compareEndInput.value = range.compareCustomEnd ?? '';
+  }
 }
 
 function syncDateRangeRowUI(range: DateRangeState): void {
@@ -1725,11 +1778,14 @@ function syncDateRangeRowUI(range: DateRangeState): void {
   if (endInput && document.activeElement !== endInput) {
     endInput.value = range.customEnd ?? '';
   }
+
+  syncCompareCheckboxUI(row, range);
 }
 
 function buildWarningIndicator(
   warnings: string[],
-  excludedEntitiesUrl: string | null
+  excludedEntitiesUrl: string | null,
+  comparison: CardComparisonPayload | null
 ): HTMLSpanElement {
   const wrap = document.createElement('span');
   wrap.className = 'warning-indicator';
@@ -1745,24 +1801,47 @@ function buildWarningIndicator(
   const popover = document.createElement('span');
   popover.className = 'warning-popover';
   popover.setAttribute('role', 'tooltip');
-  for (const text of warnings) {
+  const addWarningLine = (text: string): void => {
     const p = document.createElement('p');
     p.className = 'warning';
     p.textContent = text;
     popover.appendChild(p);
-  }
-  if (excludedEntitiesUrl) {
+  };
+  const addWarningLink = (href: string, text: string): void => {
     const p = document.createElement('p');
     p.className = 'warning';
     const a = document.createElement('a');
     a.className = 'warning-link';
-    a.href = excludedEntitiesUrl;
-    a.textContent = 'View excluded entities →';
+    a.href = href;
+    a.textContent = text;
     p.appendChild(a);
     popover.appendChild(p);
+  };
+
+  for (const text of warnings) addWarningLine(text);
+  if (excludedEntitiesUrl) addWarningLink(excludedEntitiesUrl, 'View excluded entities →');
+  if (comparison) {
+    for (const text of comparison.warnings) addWarningLine(`${comparison.label}: ${text}`);
+    if (comparison.excludedEntitiesUrl) {
+      addWarningLink(
+        comparison.excludedEntitiesUrl,
+        `View excluded entities (${comparison.label}) →`
+      );
+    }
   }
   wrap.appendChild(popover);
   return wrap;
+}
+
+interface CardComparisonPayload {
+  label: string;
+  chartJsConfig: unknown;
+  pointUrls: (string | null)[];
+  smoothingPointUrls: (string | null)[] | null;
+  smoothingDatasetIndex: number | null;
+  warnings: string[];
+  excludedEntityCount: number;
+  excludedEntitiesUrl: string | null;
 }
 
 interface CardPayload {
@@ -1775,6 +1854,154 @@ interface CardPayload {
   excludedEntityCount: number;
   excludedEntitiesUrl: string | null;
   layout: 'normal' | 'wide';
+  comparison: CardComparisonPayload | null;
+}
+
+function setCanvasData(
+  canvas: HTMLCanvasElement,
+  chartJsConfig: unknown,
+  pointUrls: (string | null)[],
+  smoothingPointUrls: (string | null)[] | null,
+  smoothingDatasetIndex: number | null
+): void {
+  canvas.setAttribute('data-config', JSON.stringify(chartJsConfig));
+  canvas.setAttribute('data-point-urls', JSON.stringify(pointUrls));
+  canvas.setAttribute('data-smoothing-point-urls', JSON.stringify(smoothingPointUrls));
+  canvas.setAttribute('data-smoothing-dataset-index', JSON.stringify(smoothingDatasetIndex));
+}
+
+function buildCanvasWrap(): { wrap: HTMLDivElement; canvas: HTMLCanvasElement } {
+  const wrap = document.createElement('div');
+  wrap.className = 'dashboard-viz-canvas-wrap';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'dashboard-viz-canvas';
+  wrap.appendChild(canvas);
+  return { wrap, canvas };
+}
+
+function buildComparePanel(label: string): { panel: HTMLDivElement; canvas: HTMLCanvasElement } {
+  const panel = document.createElement('div');
+  panel.className = 'dashboard-viz-panel';
+  const labelEl = document.createElement('div');
+  labelEl.className = 'dashboard-viz-panel-label';
+  labelEl.textContent = label;
+  panel.appendChild(labelEl);
+  const { wrap, canvas } = buildCanvasWrap();
+  panel.appendChild(wrap);
+  return { panel, canvas };
+}
+
+// A Chart.js instance tied to a canvas that's about to be removed from the DOM
+// isn't destroyed automatically — mirrors the cleanup renderCardChart does
+// when it reuses a canvas in place, but for canvases discarded outright.
+function destroyCanvasChart(canvas: HTMLCanvasElement): void {
+  const chart = Chart.getChart(canvas);
+  if (chart) {
+    chart.destroy();
+    crosshairIndex.delete(chart);
+  }
+  crosshairEntries.delete(canvas);
+}
+
+function currentPeriodLabel(): string {
+  return document.querySelector<HTMLElement>('[data-date-range-label]')?.textContent ?? '';
+}
+
+// Rebuilds the card's chart area from scratch — used only when comparison is
+// being switched on or off, since that changes the number of canvases (1 vs
+// 2). The common case (stepping through periods, whether comparing or not)
+// takes the cheaper in-place path below instead.
+function rebuildChartArea(chartArea: HTMLElement, card: CardPayload): void {
+  for (const canvas of chartArea.querySelectorAll<HTMLCanvasElement>('canvas')) {
+    destroyCanvasChart(canvas);
+  }
+  chartArea.innerHTML = '';
+
+  if (!card.comparison) {
+    const { wrap, canvas } = buildCanvasWrap();
+    setCanvasData(
+      canvas,
+      card.chartJsConfig,
+      card.pointUrls,
+      card.smoothingPointUrls,
+      card.smoothingDatasetIndex
+    );
+    chartArea.appendChild(wrap);
+    renderCardChart(canvas);
+    return;
+  }
+
+  // Chronological order: the comparison period is always earlier than the
+  // selected one, so its panel/canvas comes first (left), current second (right).
+  const panels = document.createElement('div');
+  panels.className = 'dashboard-viz-compare-panels';
+
+  const { panel: priorPanel, canvas: priorCanvas } = buildComparePanel(card.comparison.label);
+  setCanvasData(
+    priorCanvas,
+    card.comparison.chartJsConfig,
+    card.comparison.pointUrls,
+    card.comparison.smoothingPointUrls,
+    card.comparison.smoothingDatasetIndex
+  );
+
+  const { panel: currentPanel, canvas: currentCanvas } = buildComparePanel(currentPeriodLabel());
+  setCanvasData(
+    currentCanvas,
+    card.chartJsConfig,
+    card.pointUrls,
+    card.smoothingPointUrls,
+    card.smoothingDatasetIndex
+  );
+
+  panels.appendChild(priorPanel);
+  panels.appendChild(currentPanel);
+  chartArea.appendChild(panels);
+  renderCardChart(priorCanvas);
+  renderCardChart(currentCanvas);
+}
+
+// Updates an already-comparing (or already-single) chart area in place,
+// reusing the existing canvas elements so their Chart.js instances are
+// destroyed and recreated by renderCardChart rather than leaked. When
+// comparing, index 0 is the (earlier) comparison panel and index 1 is the
+// current one — chronological, left to right.
+function updateChartAreaInPlace(chartArea: HTMLElement, card: CardPayload): void {
+  const canvases = chartArea.querySelectorAll<HTMLCanvasElement>('canvas');
+
+  if (!card.comparison) {
+    setCanvasData(
+      canvases[0],
+      card.chartJsConfig,
+      card.pointUrls,
+      card.smoothingPointUrls,
+      card.smoothingDatasetIndex
+    );
+    renderCardChart(canvases[0]);
+    return;
+  }
+
+  const labels = chartArea.querySelectorAll<HTMLElement>('.dashboard-viz-panel-label');
+  if (labels[0]) labels[0].textContent = card.comparison.label;
+  if (labels[1]) labels[1].textContent = currentPeriodLabel();
+
+  setCanvasData(
+    canvases[0],
+    card.comparison.chartJsConfig,
+    card.comparison.pointUrls,
+    card.comparison.smoothingPointUrls,
+    card.comparison.smoothingDatasetIndex
+  );
+  renderCardChart(canvases[0]);
+
+  setCanvasData(
+    canvases[1],
+    card.chartJsConfig,
+    card.pointUrls,
+    card.smoothingPointUrls,
+    card.smoothingDatasetIndex
+  );
+  renderCardChart(canvases[1]);
 }
 
 function applyCardUpdate(card: CardPayload): void {
@@ -1783,12 +2010,24 @@ function applyCardUpdate(card: CardPayload): void {
   );
   if (!cardEl) return;
 
-  cardEl.classList.toggle('dashboard-viz-card--wide', card.layout === 'wide');
+  const hasComparison = card.comparison != null;
+  cardEl.classList.toggle(
+    'dashboard-viz-card--wide',
+    hasComparison ? card.layout === 'normal' : card.layout === 'wide'
+  );
+  cardEl.classList.toggle(
+    'dashboard-viz-card--extra-wide',
+    hasComparison && card.layout === 'wide'
+  );
 
   const existingWarning = cardEl.querySelector('.warning-indicator');
   existingWarning?.remove();
-  if (card.warnings.length > 0) {
-    const indicator = buildWarningIndicator(card.warnings, card.excludedEntitiesUrl);
+  if (card.warnings.length > 0 || (card.comparison?.warnings.length ?? 0) > 0) {
+    const indicator = buildWarningIndicator(
+      card.warnings,
+      card.excludedEntitiesUrl,
+      card.comparison
+    );
     const editBtn = cardEl.querySelector('[data-edit-viz]');
     if (editBtn) {
       editBtn.before(indicator);
@@ -1797,13 +2036,14 @@ function applyCardUpdate(card: CardPayload): void {
     }
   }
 
-  const canvas = cardEl.querySelector<HTMLCanvasElement>('canvas');
-  if (canvas) {
-    canvas.setAttribute('data-config', JSON.stringify(card.chartJsConfig));
-    canvas.setAttribute('data-point-urls', JSON.stringify(card.pointUrls));
-    canvas.setAttribute('data-smoothing-point-urls', JSON.stringify(card.smoothingPointUrls));
-    canvas.setAttribute('data-smoothing-dataset-index', JSON.stringify(card.smoothingDatasetIndex));
-    renderCardChart(canvas);
+  const chartArea = cardEl.querySelector<HTMLElement>('[data-chart-area]');
+  if (!chartArea) return;
+
+  const hadComparison = chartArea.querySelectorAll('canvas').length === 2;
+  if (hasComparison === hadComparison) {
+    updateChartAreaInPlace(chartArea, card);
+  } else {
+    rebuildChartArea(chartArea, card);
   }
 }
 
@@ -1814,11 +2054,18 @@ let rememberedCustom: { start: string | null; end: string | null } = {
   start: null,
   end: null,
 };
+let rememberedCompareCustom: { start: string | null; end: string | null } = {
+  start: null,
+  end: null,
+};
 
 async function applyRange(range: DateRangeState, opts: { pushHistory: boolean }): Promise<void> {
   state.dateRange = range;
   if (range.period === 'custom' && (range.customStart || range.customEnd)) {
     rememberedCustom = { start: range.customStart, end: range.customEnd };
+  }
+  if (range.period === 'custom' && (range.compareCustomStart || range.compareCustomEnd)) {
+    rememberedCompareCustom = { start: range.compareCustomStart, end: range.compareCustomEnd };
   }
   syncDateRangeRowUI(range);
 
@@ -1848,15 +2095,7 @@ async function applyRange(range: DateRangeState, opts: { pushHistory: boolean })
 }
 
 function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): string {
-  const params: string[] = [];
-  if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
-  if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
-    params.push(`offset=${range.offset}`);
-  }
-  if (range.period === 'custom') {
-    if (range.customStart) params.push(`rs=${encodeURIComponent(range.customStart)}`);
-    if (range.customEnd) params.push(`re=${encodeURIComponent(range.customEnd)}`);
-  }
+  const params = buildRangeQueryParams(range);
   const query = params.length === 0 ? '' : `?${params.join('&')}`;
   return `/api/dashboards/${dashboardId}/cards${query}`;
 }
@@ -1872,12 +2111,17 @@ function readRangeFromUrl(): DateRangeState {
   const offset = Number.isFinite(offsetN) ? offsetN : 0;
   const rs = params.get('rs');
   const re = params.get('re');
+  const ccs = params.get('ccs');
+  const cce = params.get('cce');
   const isIsoDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
   return {
     period,
     offset,
     customStart: isIsoDate(rs) ? rs : null,
     customEnd: isIsoDate(re) ? re : null,
+    compare: params.get('cmp') === '1',
+    compareCustomStart: isIsoDate(ccs) ? ccs : null,
+    compareCustomEnd: isIsoDate(cce) ? cce : null,
   };
 }
 
@@ -1893,8 +2137,21 @@ function wireDateRange(): void {
       offset: 0,
       customStart: period === 'custom' ? rememberedCustom.start : null,
       customEnd: period === 'custom' ? rememberedCustom.end : null,
+      // 'all' has no prior period to compare against, so the checkbox is
+      // hidden and its state is reset rather than left dangling on.
+      compare: period === 'all' ? false : state.dateRange.compare,
+      compareCustomStart: period === 'custom' ? rememberedCompareCustom.start : null,
+      compareCustomEnd: period === 'custom' ? rememberedCompareCustom.end : null,
     };
     void applyRange(next, { pushHistory: true });
+  });
+
+  const compareCheckbox = row.querySelector<HTMLInputElement>('[data-date-range-compare]');
+  compareCheckbox?.addEventListener('change', () => {
+    void applyRange(
+      { ...state.dateRange, compare: compareCheckbox.checked },
+      { pushHistory: true }
+    );
   });
 
   const prevBtn = row.querySelector<HTMLButtonElement>('[data-date-range-prev]');
@@ -1921,10 +2178,32 @@ function wireDateRange(): void {
     // Don't fetch until at least one bound is set — saves an unbounded round-trip
     // on the very first focus into an empty date input.
     if (!customStart && !customEnd) return;
-    void applyRange({ period: 'custom', offset: 0, customStart, customEnd }, { pushHistory: true });
+    void applyRange(
+      { ...state.dateRange, period: 'custom', offset: 0, customStart, customEnd },
+      {
+        pushHistory: true,
+      }
+    );
   };
   startInput?.addEventListener('change', applyCustom);
   endInput?.addEventListener('change', applyCustom);
+
+  const compareStartInput = row.querySelector<HTMLInputElement>(
+    '[data-date-range-compare-custom-start]'
+  );
+  const compareEndInput = row.querySelector<HTMLInputElement>(
+    '[data-date-range-compare-custom-end]'
+  );
+  const applyCompareCustom = (): void => {
+    const compareCustomStart = compareStartInput?.value ? compareStartInput.value : null;
+    const compareCustomEnd = compareEndInput?.value ? compareEndInput.value : null;
+    void applyRange(
+      { ...state.dateRange, compareCustomStart, compareCustomEnd },
+      { pushHistory: true }
+    );
+  };
+  compareStartInput?.addEventListener('change', applyCompareCustom);
+  compareEndInput?.addEventListener('change', applyCompareCustom);
 
   window.addEventListener('popstate', () => {
     void applyRange(readRangeFromUrl(), { pushHistory: false });
