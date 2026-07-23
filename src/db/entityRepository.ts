@@ -331,7 +331,7 @@ async function fetchAvailableFilters(
        FROM entity_metadata em
        JOIN pop ON pop.id = em.entity_id
        WHERE em.value IS NOT NULL AND em.value_type = 'string'
-       GROUP BY pop.type, em.key, em.value
+       GROUP BY pop.type, em.key, em.value, em.value_type
      ),
      str_ranked AS (
        SELECT entity_type, key, value, value_type,

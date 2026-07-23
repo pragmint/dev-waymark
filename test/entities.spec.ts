@@ -18,6 +18,23 @@ test('filter tree container and add-filter control are present', async ({ page }
   await expect(page.locator('[data-filter-add-select]')).toBeAttached();
 });
 
+test('available filters populate distinct values for string metadata (regression)', async ({
+  page,
+}) => {
+  // Regression: the str_vals CTE behind getAvailableFilters selected
+  // em.value_type without including it in GROUP BY. SQLite tolerates this
+  // silently, but Postgres rejects it with "column ... must appear in the
+  // GROUP BY clause", which broke every /entities load. Read the embedded
+  // filter-available data directly rather than just checking the page didn't
+  // 500, so a future re-introduction of the same non-aggregated column fails
+  // this test even if the surrounding page still renders.
+  await page.goto(entitiesUrl('jira_ticket'));
+  const raw = await page.locator('#filter-available').textContent();
+  const available = JSON.parse(raw ?? '[]') as { key: string; distinctValues?: string[] }[];
+  const ticketType = available.find(f => f.key === 'ticket_type');
+  expect(ticketType?.distinctValues?.length).toBeGreaterThan(0);
+});
+
 test('entity detail page loads and shows metadata section', async ({ page }) => {
   await page.goto(entitiesUrl('jira_ticket'));
   const firstLink = page.locator('table.entity-table a.entity-link').first();
