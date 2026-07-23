@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wireDeletePresetConfirm();
   wireEntityTypeSelect();
   wirePresetSelect();
+  wirePagination();
   wireTreeContainer();
   wireAddFilter();
   wireSavePresetForm();
@@ -68,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wirePresetSaveChanges();
   wireSelectionToolbar();
   wireGlobalKeys();
+  wireBfcacheRestore();
   render();
 });
 
@@ -1054,7 +1056,10 @@ function wireEntityTypeSelect() {
   }
   select.addEventListener('change', () => {
     const t = template.find(x => x.type === select.value);
-    if (t) location.href = t.url;
+    if (t) {
+      document.body.classList.add('page-nav-loading');
+      location.href = t.url;
+    }
   });
 }
 
@@ -1063,7 +1068,37 @@ function wirePresetSelect() {
   if (!presetSelect) return;
   presetSelect.addEventListener('change', () => {
     const v = presetSelect.value;
-    if (v) location.href = v;
+    if (v) {
+      document.body.classList.add('page-nav-loading');
+      location.href = v;
+    }
+  });
+}
+
+// Pagination links are plain server-rendered anchors (full page reload) — a
+// large result set makes that reload noticeable, so show a full-page spinner
+// the instant a link is clicked rather than leaving the browser's own
+// (easy-to-miss) loading indicator as the only feedback. Delegated on
+// `document` because the pagination nav's DOM node is replaced wholesale by
+// `swapResults()` on every filter change, which would drop a listener bound
+// directly to it.
+function wirePagination() {
+  document.addEventListener('click', e => {
+    const link = (e.target as HTMLElement).closest('[data-pagination] a.pagination-link');
+    if (link) document.body.classList.add('page-nav-loading');
+  });
+}
+
+// Browser back/forward can restore a page from the bfcache: the DOM (and any
+// loading class added right before navigating away, e.g. by clicking a
+// pagination link mid-auto-apply-fetch) comes back exactly as it was, frozen
+// mid-navigation, with no fresh page load to reset it. `pageshow` fires again
+// on restore — `persisted` is true only then, not on a normal first load —
+// so that's the hook to clear the stale classes.
+function wireBfcacheRestore() {
+  window.addEventListener('pageshow', e => {
+    if (!e.persisted) return;
+    document.body.classList.remove('page-nav-loading', 'filter-results-loading');
   });
 }
 
@@ -1154,6 +1189,9 @@ function openLeafEditor(leafId: string) {
   // unrestricted value set can replace the rendered widget once it lands.
   let activeAvailable: AvailableFilter = initialAvailable;
   let body = renderWidgetBody(leaf, activeAvailable);
+  // The unrestricted value set is still loading (see fetch below) — dim the
+  // narrow set shown so far and show a spinner until it's replaced.
+  body.classList.add('is-loading');
   editor.appendChild(body);
 
   const apply = document.createElement('button');

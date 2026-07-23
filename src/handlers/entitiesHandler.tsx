@@ -110,18 +110,24 @@ export async function entitiesHandler(c: Context) {
   // — when `all_distinct=1` is set, lift the per-field cap.
   const allDistinctValues = c.req.query('all_distinct') === '1';
 
+  // Independent of the tree/entity-type branch below — kick it off now so it
+  // runs concurrently with that work instead of adding its own round trip
+  // after.
+  const presetsWithTreePromise = appStateRepo.listPresetsWithTree();
+
   let pagedResult: PagedEntities;
   let availableFilters: AvailableFilter[];
   let metadataKeys: string[];
   if (selectedEntityType) {
-    pagedResult = await repo.listPaged(activeTree, {
-      limit: perPage,
-      offset: (page - 1) * perPage,
-    });
-    availableFilters = await repo.getAvailableFilters(activeTree, { allDistinctValues });
-    // Columns reflect every key the type defines, not just keys with non-null
-    // values in the current (possibly null-filtered) population.
-    metadataKeys = await repo.listMetadataKeys(selectedEntityType);
+    // These three queries are independent of one another — run them
+    // concurrently rather than paying three sequential round trips.
+    [pagedResult, availableFilters, metadataKeys] = await Promise.all([
+      repo.listPaged(activeTree, { limit: perPage, offset: (page - 1) * perPage }),
+      repo.getAvailableFilters(activeTree, { allDistinctValues }),
+      // Columns reflect every key the type defines, not just keys with
+      // non-null values in the current (possibly null-filtered) population.
+      repo.listMetadataKeys(selectedEntityType),
+    ]);
   } else {
     // No entity types means a (near-)empty entities table — the unfiltered
     // population is the only case rendered without a type selected.
@@ -130,7 +136,7 @@ export async function entitiesHandler(c: Context) {
     metadataKeys = [];
   }
 
-  const presetsWithTree = await appStateRepo.listPresetsWithTree();
+  const presetsWithTree = await presetsWithTreePromise;
   const presets = presetsWithTree.map(p => ({
     id: p.id,
     name: p.name,

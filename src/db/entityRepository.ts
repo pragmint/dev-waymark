@@ -7,8 +7,10 @@ import type {
   EntityWithMetadata,
   AvailableFilter,
 } from '../schemas/entity';
-import { isGroup, isLeaf } from '../schemas/filterTree';
+import { isGroup, isLeaf, canonicalizeTree } from '../schemas/filterTree';
 import type { FilterLeaf, FilterNode, FilterTree } from '../schemas/filterTree';
+import { createTtlCache } from './queryCache';
+import type { TtlCache } from './queryCache';
 
 type WhereResult = { where: string; params: SqlParam[] };
 
@@ -156,7 +158,8 @@ function buildWhereFromTree(tree: FilterTree): WhereResult {
 
 async function attachMetadata(
   adapter: SourceDataAdapter,
-  entities: Entity[]
+  entities: Entity[],
+  keys?: string[]
 ): Promise<EntityWithMetadata[]> {
   if (entities.length === 0) return [];
 
@@ -164,9 +167,16 @@ async function attachMetadata(
     'entity_id',
     entities.map(e => e.id)
   );
+  // Callers that only read a handful of known metadata keys (e.g. chart
+  // building, which knows exactly which fields a viz config references) can
+  // scope this query instead of pulling every key for every matched entity —
+  // the dominant cost of this query at real metadata cardinality.
+  const keyFilter =
+    keys && keys.length > 0 ? ` AND key IN (${keys.map(() => '?').join(', ')})` : '';
+  const keyParams: SqlParam[] = keys && keys.length > 0 ? keys : [];
   const metaRows = await adapter.query(
-    `SELECT * FROM entity_metadata WHERE ${inSql} ORDER BY key`,
-    inParams
+    `SELECT * FROM entity_metadata WHERE ${inSql}${keyFilter} ORDER BY key`,
+    [...inParams, ...keyParams]
   );
   const allMetadata = metaRows.map(m => MetadataSchema.parse(m));
 
@@ -245,6 +255,106 @@ async function buildEntityFieldFilters(
   return filters;
 }
 
+// getAvailableFilters/listMetadataKeys are read-only aggregates over a source
+// database this app never writes to at runtime (see upsert's doc comment) —
+// staleness is bounded by CACHE_TTL_MS, not by any write path invalidating it.
+// If a feature ever lets users edit source entities/metadata in-app, this
+// needs to become invalidate-on-write instead.
+const CACHE_TTL_MS = 30_000;
+const CACHE_MAX_ENTRIES = 300;
+
+// Keyed by adapter identity (not a module-level singleton) so each adapter —
+// each test's fresh in-memory database, or a real long-lived process adapter
+// — gets its own isolated cache. A shared cache keyed only on tree+options
+// would leak results across unrelated adapters/tests.
+const cachesByAdapter = new WeakMap<
+  SourceDataAdapter,
+  { availableFilters: TtlCache<AvailableFilter[]>; metadataKeys: TtlCache<string[]> }
+>();
+
+function getCaches(adapter: SourceDataAdapter) {
+  let caches = cachesByAdapter.get(adapter);
+  if (!caches) {
+    caches = {
+      availableFilters: createTtlCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX_ENTRIES }),
+      metadataKeys: createTtlCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX_ENTRIES }),
+    };
+    cachesByAdapter.set(adapter, caches);
+  }
+  return caches;
+}
+
+async function fetchMetadataKeys(
+  adapter: SourceDataAdapter,
+  entityType: string
+): Promise<string[]> {
+  const rows = await adapter.query<{ key: string }>(
+    `SELECT DISTINCT em.key AS key
+     FROM entity_metadata em
+     JOIN entities e ON e.id = em.entity_id
+     WHERE e.type = ?
+     ORDER BY em.key`,
+    [entityType]
+  );
+  return rows.map(r => r.key);
+}
+
+async function fetchAvailableFilters(
+  adapter: SourceDataAdapter,
+  tree: FilterTree,
+  opts: { allDistinctValues?: boolean }
+): Promise<AvailableFilter[]> {
+  const { sql: condition, params } = buildConditionFromTree(tree);
+  const where = condition ? `WHERE ${condition}` : '';
+
+  const present = await adapter.query(`SELECT e.id FROM entities e ${where} LIMIT 1`, params);
+  if (present.length === 0) return [];
+
+  const distinctLimit = opts.allDistinctValues ? Infinity : 20;
+  // Fetch one value past the cap so buildMetaFilters can still tell
+  // over-the-cap keys apart and withhold their distinctValues.
+  const rankCap = Number.isFinite(distinctLimit) ? 'WHERE value_rank <= ?' : '';
+  const rankParams: SqlParam[] = Number.isFinite(distinctLimit) ? [distinctLimit + 1] : [];
+
+  // Split by value_type: only string-typed values ever surface as
+  // distinctValues downstream (buildMetaFilters), so number/date keys never
+  // need their (often near-unique) values grouped/ranked — just registered as
+  // filterable keys. Grouping the full population by (type, key, value) for
+  // those columns was the dominant cost of this query; grouping by (type,
+  // key) only for them is dramatically cheaper. Tie-break on value_type in
+  // the final ORDER BY keeps the reported value_type deterministic for the
+  // (rare) key whose value_type is inconsistent across entities.
+  const rows = await adapter.query<MetaValueRow>(
+    `WITH pop AS (SELECT e.id, e.type FROM entities e ${where}),
+     str_vals AS (
+       SELECT pop.type AS entity_type, em.key AS key, em.value AS value, em.value_type AS value_type
+       FROM entity_metadata em
+       JOIN pop ON pop.id = em.entity_id
+       WHERE em.value IS NOT NULL AND em.value_type = 'string'
+       GROUP BY pop.type, em.key, em.value
+     ),
+     str_ranked AS (
+       SELECT entity_type, key, value, value_type,
+              ROW_NUMBER() OVER (PARTITION BY entity_type, key ORDER BY value) AS value_rank
+       FROM str_vals
+     ),
+     other_keys AS (
+       SELECT DISTINCT pop.type AS entity_type, em.key AS key, em.value_type AS value_type
+       FROM entity_metadata em
+       JOIN pop ON pop.id = em.entity_id
+       WHERE em.value IS NOT NULL AND em.value_type != 'string'
+     )
+     SELECT entity_type, key, value, value_type FROM str_ranked ${rankCap}
+     UNION ALL
+     SELECT entity_type, key, NULL AS value, value_type FROM other_keys
+     ORDER BY entity_type, key, value, value_type`,
+    [...params, ...rankParams]
+  );
+
+  const entityFieldFilters = await buildEntityFieldFilters(adapter, condition, params);
+  return [...entityFieldFilters, ...buildMetaFilters(rows, distinctLimit)];
+}
+
 export type PageOptions = { limit: number; offset: number };
 
 export type PagedEntities = {
@@ -256,14 +366,18 @@ export type EntityRepository = ReturnType<typeof createEntityRepository>;
 
 export function createEntityRepository(adapter: SourceDataAdapter) {
   return {
-    async list(tree: FilterTree): Promise<EntityWithMetadata[]> {
+    // `opts.keys` scopes the metadata fetched per entity to a known subset
+    // (e.g. the fields a chart's config actually reads) instead of every key —
+    // omit it when the caller needs the full metadata set (e.g. rendering a
+    // metadata table).
+    async list(tree: FilterTree, opts: { keys?: string[] } = {}): Promise<EntityWithMetadata[]> {
       const { where, params } = buildWhereFromTree(tree);
       const rows = await adapter.query(
         `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
         params
       );
       const entities = rows.map(row => EntitySchema.parse(row));
-      return attachMetadata(adapter, entities);
+      return attachMetadata(adapter, entities, opts.keys);
     },
 
     async listEntityTypes(): Promise<string[]> {
@@ -279,15 +393,9 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
     // column even when every row in view is null (e.g. filtering to `key: null`).
     // Scoped to the type only — unaffected by the rest of the filter tree.
     async listMetadataKeys(entityType: string): Promise<string[]> {
-      const rows = await adapter.query<{ key: string }>(
-        `SELECT DISTINCT em.key AS key
-         FROM entity_metadata em
-         JOIN entities e ON e.id = em.entity_id
-         WHERE e.type = ?
-         ORDER BY em.key`,
-        [entityType]
+      return getCaches(adapter).metadataKeys.getOrCreate(entityType, () =>
+        fetchMetadataKeys(adapter, entityType)
       );
-      return rows.map(r => r.key);
     },
 
     // Paginated variant: returns one page of entities (with metadata) plus a
@@ -333,43 +441,18 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
     // `allDistinctValues: true` lifts the per-field 20-value cap — only the
     // filter editor's "values with this leaf disabled" fetch should pass it,
     // since other call sites embed the values in initial page HTML.
+    //
+    // Cached per (tree, allDistinctValues): this recomputes on every /entities
+    // request (initial load, pagination, filter tweaks) otherwise, and it's the
+    // most expensive query on that path by a wide margin at real data volumes.
     async getAvailableFilters(
       tree: FilterTree,
       opts: { allDistinctValues?: boolean } = {}
     ): Promise<AvailableFilter[]> {
-      const { sql: condition, params } = buildConditionFromTree(tree);
-      const where = condition ? `WHERE ${condition}` : '';
-
-      const present = await adapter.query(`SELECT e.id FROM entities e ${where} LIMIT 1`, params);
-      if (present.length === 0) return [];
-
-      const distinctLimit = opts.allDistinctValues ? Infinity : 20;
-      // Fetch one value past the cap so buildMetaFilters can still tell
-      // over-the-cap keys apart and withhold their distinctValues.
-      const rankCap = Number.isFinite(distinctLimit) ? 'WHERE value_rank <= ?' : '';
-      const rankParams: SqlParam[] = Number.isFinite(distinctLimit) ? [distinctLimit + 1] : [];
-      const rows = await adapter.query<MetaValueRow>(
-        `WITH pop AS (SELECT e.id, e.type FROM entities e ${where}),
-         distinct_vals AS (
-           SELECT pop.type AS entity_type, em.key AS key, em.value AS value,
-                  MIN(em.value_type) AS value_type
-           FROM entity_metadata em
-           JOIN pop ON pop.id = em.entity_id
-           WHERE em.value IS NOT NULL
-           GROUP BY pop.type, em.key, em.value
-         ),
-         ranked AS (
-           SELECT entity_type, key, value, value_type,
-                  ROW_NUMBER() OVER (PARTITION BY entity_type, key ORDER BY value) AS value_rank
-           FROM distinct_vals
-         )
-         SELECT entity_type, key, value, value_type FROM ranked ${rankCap}
-         ORDER BY entity_type, key, value`,
-        [...params, ...rankParams]
+      const cacheKey = `${JSON.stringify(canonicalizeTree(tree))}::${opts.allDistinctValues ? 1 : 0}`;
+      return getCaches(adapter).availableFilters.getOrCreate(cacheKey, () =>
+        fetchAvailableFilters(adapter, tree, opts)
       );
-
-      const entityFieldFilters = await buildEntityFieldFilters(adapter, condition, params);
-      return [...entityFieldFilters, ...buildMetaFilters(rows, distinctLimit)];
     },
 
     async upsert(entity: Entity, metadata: Metadata[]): Promise<void> {

@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
 import { getEntityRepo } from '../db/source/index';
+import { createTtlCache } from '../db/queryCache';
 import {
   anchorBoundariesToAdjacentData,
   buildChartData,
@@ -13,6 +14,7 @@ import {
   extendLabelsForWaymarks,
   filterWaymarksInRange,
   padDatasetsToLength,
+  requiredFieldKeys,
   resolveWaymarkAnchors,
   suppressAnchoredPointMarkers,
   syncComparisonYAxis,
@@ -30,6 +32,7 @@ import type { ComputedDateRange, DateRange } from '../domain/dateRange';
 import { nextDashboardCopyName } from '../domain/dashboardNaming';
 import { buildEntityUrl } from '../domain/filterUrl';
 import { resolveTemplate } from '../domain/templateResolver';
+import { canonicalizeTree } from '../schemas/filterTree';
 import { TemplateConfigSchema } from '../schemas/visualizationTemplate';
 import { DashboardPage } from '../frontend/Pages/DashboardPage';
 import type { DashboardCard, DashboardCardComparison } from '../frontend/Pages/DashboardPage';
@@ -41,6 +44,31 @@ import type {
   VisualizationSummary,
 } from '../schemas/visualization';
 import type { ChartDataResult, ChartJsConfig } from '../domain/chartDataBuilder';
+import type { EntityWithMetadata } from '../schemas/entity';
+
+// Fetches entities for a tree, scoped to the metadata keys the viz config
+// actually reads, and memoized by tree shape — a single card build can ask
+// for the same population more than once (e.g. boundary anchoring re-derives
+// full history, which for an unbounded date range is identical to the
+// lookback query or even the main query) and this avoids paying for an
+// identical fetch twice.
+type EntityLister = (tree: FilterTree) => Promise<EntityWithMetadata[]>;
+
+function makeEntityLister(
+  entityRepo: ReturnType<typeof getEntityRepo>,
+  keys: string[]
+): EntityLister {
+  const cache = new Map<string, Promise<EntityWithMetadata[]>>();
+  return tree => {
+    const cacheKey = JSON.stringify(canonicalizeTree(tree));
+    let hit = cache.get(cacheKey);
+    if (!hit) {
+      hit = entityRepo.list(tree, { keys });
+      cache.set(cacheKey, hit);
+    }
+    return hit;
+  };
+}
 
 // Wraps the preset's tree (the saved structure stays intact) plus extra leaves
 // under a fresh root AND group, so click-through URLs narrow the entity list
@@ -68,7 +96,7 @@ async function applyLookbackSmoothing(
   presetTree: FilterTree,
   computedRange: ComputedDateRange,
   dateField: string | null,
-  entityRepo: ReturnType<typeof getEntityRepo>
+  listEntities: EntityLister
 ): Promise<string[] | null> {
   if (!config.smoothing || !computedRange.start || !dateField) return null;
   if (chartResult.smoothingDatasetIndex == null) return null;
@@ -77,7 +105,7 @@ async function applyLookbackSmoothing(
     { start: null, end: computedRange.end, label: '' },
     dateField
   );
-  const lookbackEntities = await entityRepo.list(combineWithExtras(presetTree, lookbackFilters));
+  const lookbackEntities = await listEntities(combineWithExtras(presetTree, lookbackFilters));
 
   const mainLabel = chartResult.datasets[0].label;
   const lookback = buildLookbackSmoothingDataset(
@@ -135,7 +163,7 @@ async function applyWaymarks(
   presetTree: FilterTree,
   computedRange: ComputedDateRange,
   repo: ReturnType<typeof getAppStateRepo>,
-  entityRepo: ReturnType<typeof getEntityRepo>
+  listEntities: EntityLister
 ): Promise<number> {
   const bucket = viz.config.xAxis?.timeBucket;
   if (!bucket) return chartResult.labels.length;
@@ -144,7 +172,7 @@ async function applyWaymarks(
   const waymarks = filterWaymarksInRange(allWaymarks, computedRange);
   if (waymarks.length === 0) return chartResult.labels.length;
 
-  const historyEntities = await entityRepo.list(presetTree);
+  const historyEntities = await listEntities(presetTree);
   const anchors = resolveWaymarkAnchors(waymarks, historyEntities, viz.config);
 
   const extended = extendLabelsForWaymarks(chartResult.labels, bucket, waymarks, computedRange);
@@ -190,7 +218,7 @@ async function buildComparisonCard(
   };
 }
 
-async function buildCard(
+async function buildCardUncached(
   vizId: number,
   repo: ReturnType<typeof getAppStateRepo>,
   computedRange: ComputedDateRange,
@@ -213,7 +241,8 @@ async function buildCard(
   const filteredTree = combineWithExtras(preset.tree, rangeFilters);
 
   const entityRepo = getEntityRepo();
-  const entities = await entityRepo.list(filteredTree);
+  const listEntities = makeEntityLister(entityRepo, requiredFieldKeys(viz.config));
+  const entities = await listEntities(filteredTree);
 
   const chartResult = buildChartData(entities, viz.config, computedRange);
   const extendedLabelsForSmoothing = await applyLookbackSmoothing(
@@ -222,7 +251,7 @@ async function buildCard(
     preset.tree,
     computedRange,
     dateField,
-    entityRepo
+    listEntities
   );
 
   // Must run after lookback smoothing (patches its final values, not a
@@ -230,7 +259,7 @@ async function buildCard(
   // "last index" still means the true end of the visible range).
   let anchorInfo: BoundaryAnchorInfo | null = null;
   if (viz.config.xAxis?.timeBucket) {
-    const fullHistoryEntities = await entityRepo.list(preset.tree);
+    const fullHistoryEntities = await listEntities(preset.tree);
     anchorInfo = anchorBoundariesToAdjacentData(
       chartResult,
       fullHistoryEntities,
@@ -246,7 +275,7 @@ async function buildCard(
     preset.tree,
     computedRange,
     repo,
-    entityRepo
+    listEntities
   );
 
   const chartJsConfig = buildChartJsConfig(chartResult, viz.config);
@@ -297,6 +326,36 @@ async function buildCard(
     layout: viz.config.layout ?? 'normal',
     comparison,
   };
+}
+
+// Short-TTL cache over buildCardUncached — the dominant remaining cost on a
+// multi-chart dashboard, since bun:sqlite queries run synchronously on the
+// single JS thread and don't overlap across the Promise.all over cards, so
+// wall time scales with chart count. App state (visualizations, presets,
+// waymarks) is mutable at runtime — unlike the read-only source db — so this
+// cache is invalidated in full (see invalidateCardCache) whenever any of
+// those are written, rather than relying on the TTL alone to bound staleness.
+const CARD_CACHE_TTL_MS = 15_000;
+const CARD_CACHE_MAX_ENTRIES = 500;
+let cardCache = createTtlCache<DashboardCard | null>({
+  ttlMs: CARD_CACHE_TTL_MS,
+  maxEntries: CARD_CACHE_MAX_ENTRIES,
+});
+
+export function invalidateCardCache(): void {
+  cardCache = createTtlCache({ ttlMs: CARD_CACHE_TTL_MS, maxEntries: CARD_CACHE_MAX_ENTRIES });
+}
+
+async function buildCard(
+  vizId: number,
+  repo: ReturnType<typeof getAppStateRepo>,
+  computedRange: ComputedDateRange,
+  comparisonRange?: ComputedDateRange | null
+): Promise<DashboardCard | null> {
+  const cacheKey = `${vizId}::${JSON.stringify(computedRange)}::${JSON.stringify(comparisonRange ?? null)}`;
+  return cardCache.getOrCreate(cacheKey, () =>
+    buildCardUncached(vizId, repo, computedRange, comparisonRange)
+  );
 }
 
 function parseVizIds(formData: FormData): number[] {
@@ -492,6 +551,7 @@ export async function visualizationDeleteApiHandler(c: Context) {
   const id = parseInt(c.req.param('id') ?? '', 10);
   if (isNaN(id)) return c.json({ error: 'Invalid id' }, 400);
   await repo.deleteVisualization(id);
+  invalidateCardCache();
   return c.body(null, 204);
 }
 
@@ -539,6 +599,7 @@ export async function visualizationUpdateApiHandler(c: Context) {
     parsed.presetId,
     parsed.configWithTemplate
   );
+  invalidateCardCache();
   return c.json({ id });
 }
 

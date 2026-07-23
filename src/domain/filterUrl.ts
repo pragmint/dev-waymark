@@ -1,5 +1,5 @@
-import { emptyTree, isGroup, isLeaf } from '../schemas/filterTree';
-import type { FilterTree, FilterNode } from '../schemas/filterTree';
+import { emptyTree, canonicalizeTree } from '../schemas/filterTree';
+import type { FilterTree } from '../schemas/filterTree';
 import { decodeTreeHex, encodeTreeHex } from './filterTreeCodec';
 
 // Filter trees ride in the URL as a hex-encoded binary payload in the `f`
@@ -35,18 +35,8 @@ export function buildEntityUrl(tree: FilterTree, presetId?: number | null): stri
 // Canonical-stringify two trees and compare. Group child order IS significant
 // (it's what the user explicitly arranged). For `eq` leaves with array values,
 // element order IS also significant — UI should preserve the order the user picks.
-function canonicalize(node: FilterNode): unknown {
-  if (isLeaf(node)) {
-    return { type: 'filter', key: node.key, op: node.op, value: node.value };
-  }
-  if (isGroup(node)) {
-    return { type: 'group', op: node.op, children: node.children.map(canonicalize) };
-  }
-  return null;
-}
-
 export function treesEqual(a: FilterTree, b: FilterTree): boolean {
-  return JSON.stringify(canonicalize(a)) === JSON.stringify(canonicalize(b));
+  return JSON.stringify(canonicalizeTree(a)) === JSON.stringify(canonicalizeTree(b));
 }
 
 export type PresetWithTreeRef = { id: number; tree: FilterTree };

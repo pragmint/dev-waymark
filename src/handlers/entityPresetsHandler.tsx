@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
+import { invalidateCardCache } from './dashboardsHandler';
 import { buildEntityUrl, decodeTree } from '../domain/filterUrl';
 
 function readTreeFromForm(formData: FormData) {
@@ -38,6 +39,7 @@ export async function entityPresetsUpdateHandler(c: Context) {
   if (!existing) return c.redirect('/entities');
 
   await repo.updatePreset(id, name, tree);
+  invalidateCardCache();
   return c.redirect(buildEntityUrl(tree, id));
 }
 
@@ -49,6 +51,9 @@ export async function entityPresetsDeleteHandler(c: Context) {
   const returnTo = (formData.get('return_to') as string | null)?.trim();
   const target = returnTo && returnTo.startsWith('/entities') ? returnTo : '/entities';
 
-  if (!isNaN(id)) await repo.deletePreset(id);
+  if (!isNaN(id)) {
+    await repo.deletePreset(id);
+    invalidateCardCache();
+  }
   return c.redirect(target);
 }

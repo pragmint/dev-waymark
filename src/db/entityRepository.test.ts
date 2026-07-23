@@ -3,6 +3,7 @@ import { SqliteSourceAdapter } from './source/sqlite';
 import { createEntityRepository } from './entityRepository';
 import { emptyTree, makeGroup, makeLeaf } from '../schemas/filterTree';
 import type { Entity, Metadata } from '../schemas/entity';
+import type { SqlParam } from './source/adapter';
 
 // Tests use in-memory SQLite with schema applied — same as the no-config default.
 
@@ -64,6 +65,26 @@ describe('entityRepository', () => {
     const results = await repo.list(emptyTree());
     expect(results[0].metadata).toHaveLength(1);
     expect(results[0].metadata[0].key).toBe('status');
+  });
+
+  it('list with keys option only returns metadata for the requested keys', async () => {
+    await repo.upsert(makeEntity(), [
+      makeMetadata(1, { key: 'status', value: 'open' }),
+      makeMetadata(1, { key: 'priority', value: 'High' }),
+      makeMetadata(1, { key: 'assignee', value: 'dev-1' }),
+    ]);
+    const results = await repo.list(emptyTree(), { keys: ['priority'] });
+    expect(results[0].metadata).toHaveLength(1);
+    expect(results[0].metadata[0].key).toBe('priority');
+  });
+
+  it('list with empty keys array behaves like no keys filter (returns everything)', async () => {
+    await repo.upsert(makeEntity(), [
+      makeMetadata(1, { key: 'status', value: 'open' }),
+      makeMetadata(1, { key: 'priority', value: 'High' }),
+    ]);
+    const results = await repo.list(emptyTree(), { keys: [] });
+    expect(results[0].metadata).toHaveLength(2);
   });
 
   it('filters entities by metadata eq', async () => {
@@ -496,6 +517,104 @@ describe('entityRepository', () => {
         makeGroup('AND', [makeLeaf('status', 'eq', 'nonexistent')])
       );
       expect(available).toEqual([]);
+    });
+  });
+
+  describe('getAvailableFilters / listMetadataKeys caching', () => {
+    // Spies on every SQL statement adapter.query issues. Filtering on
+    // 'str_ranked' (only present in getAvailableFilters' main aggregate query)
+    // isolates "did the expensive query actually run" from the cheap
+    // presence-check / entity-field queries that also go through adapter.query.
+    function spyOnQueries(target: SqliteSourceAdapter): { sqlStatements: string[] } {
+      const original = target.query.bind(target);
+      const sqlStatements: string[] = [];
+      target.query = (async <T extends Record<string, unknown>>(
+        sql: string,
+        params: SqlParam[] = []
+      ): Promise<T[]> => {
+        sqlStatements.push(sql);
+        return original<T>(sql, params);
+      }) as typeof target.query;
+      return { sqlStatements };
+    }
+
+    it('reuses a cached result for an equivalent tree even though its node ids differ', async () => {
+      // FilterTree ids are random per node (see nextNodeId) — every decode of
+      // the same URL produces fresh ids. Two independently-built trees with
+      // identical filter content must still hit the same cache entry.
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), [
+        makeMetadata(1, { key: 'priority', value: 'high', value_type: 'string' }),
+      ]);
+      const treeA = makeGroup('AND', [makeLeaf('priority', 'eq', 'high')]);
+      const treeB = makeGroup('AND', [makeLeaf('priority', 'eq', 'high')]);
+      expect(treeA.id).not.toBe(treeB.id);
+      expect((treeA.children[0] as { id: string }).id).not.toBe(
+        (treeB.children[0] as { id: string }).id
+      );
+
+      const { sqlStatements } = spyOnQueries(adapter);
+      const first = await repo.getAvailableFilters(treeA);
+      const runsAfterFirst = sqlStatements.filter(s => s.includes('str_ranked')).length;
+      expect(runsAfterFirst).toBe(1);
+
+      const second = await repo.getAvailableFilters(treeB);
+      expect(sqlStatements.filter(s => s.includes('str_ranked')).length).toBe(1);
+      expect(second).toEqual(first);
+    });
+
+    it('keeps allDistinctValues=true and =false as separate cache entries', async () => {
+      for (let i = 1; i <= 25; i++) {
+        await repo.upsert(makeEntity({ id: i, name: `E-${i}` }), [
+          makeMetadata(i, { key: 'tag', value: `tag-${i}`, value_type: 'string' }),
+        ]);
+      }
+      const capped = await repo.getAvailableFilters(emptyTree());
+      const uncapped = await repo.getAvailableFilters(emptyTree(), { allDistinctValues: true });
+      expect(capped.find(f => f.key === 'tag')?.distinctValues).toBeUndefined();
+      expect(uncapped.find(f => f.key === 'tag')?.distinctValues).toHaveLength(25);
+    });
+
+    it('does not share cache entries across different adapters', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), [
+        makeMetadata(1, { key: 'priority', value: 'high', value_type: 'string' }),
+      ]);
+      await repo.getAvailableFilters(emptyTree());
+      expect(await repo.listMetadataKeys('ticket')).toEqual(['priority']);
+
+      const otherAdapter = new SqliteSourceAdapter(':memory:', true);
+      const otherRepo = createEntityRepository(otherAdapter);
+      await otherRepo.upsert(makeEntity({ id: 1, name: 'Z', type: 'ticket' }), [
+        makeMetadata(1, { key: 'severity', value: 'low', value_type: 'string' }),
+      ]);
+      const otherFilters = await otherRepo.getAvailableFilters(emptyTree());
+      expect(otherFilters.find(f => f.key === 'priority')).toBeUndefined();
+      expect(otherFilters.find(f => f.key === 'severity')?.distinctValues).toEqual(['low']);
+      expect(await otherRepo.listMetadataKeys('ticket')).toEqual(['severity']);
+      await otherAdapter.close();
+    });
+
+    it('de-dupes concurrent calls for the same tree into a single query', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), [
+        makeMetadata(1, { key: 'priority', value: 'high', value_type: 'string' }),
+      ]);
+      const { sqlStatements } = spyOnQueries(adapter);
+      const [a, b] = await Promise.all([
+        repo.getAvailableFilters(emptyTree()),
+        repo.getAvailableFilters(emptyTree()),
+      ]);
+      expect(a).toEqual(b);
+      expect(sqlStatements.filter(s => s.includes('str_ranked')).length).toBe(1);
+    });
+
+    it('reuses a cached listMetadataKeys result across calls', async () => {
+      await repo.upsert(makeEntity({ id: 1, name: 'A', type: 'ticket' }), [
+        makeMetadata(1, { key: 'priority', value: 'high', value_type: 'string' }),
+      ]);
+      const { sqlStatements } = spyOnQueries(adapter);
+      const first = await repo.listMetadataKeys('ticket');
+      const second = await repo.listMetadataKeys('ticket');
+      expect(second).toEqual(first);
+      expect(sqlStatements.filter(s => s.includes('entity_metadata')).length).toBe(1);
     });
   });
 });

@@ -107,6 +107,18 @@ export function collectLeaves(node: FilterNode): FilterLeaf[] {
   return out;
 }
 
+// Deterministic, id-free shape of a tree: two trees with identical op/key/value
+// structure canonicalize identically regardless of their node ids (which are
+// randomly generated DOM anchors, not semantic content — see nextNodeId).
+// Used both for tree-equality checks and as a cache key for tree-derived
+// queries, where relying on node ids would make every request look unique.
+export function canonicalizeTree(node: FilterNode): unknown {
+  if (isLeaf(node)) {
+    return { type: 'filter', key: node.key, op: node.op, value: node.value };
+  }
+  return { type: 'group', op: node.op, children: node.children.map(canonicalizeTree) };
+}
+
 // Return a copy of `tree` with every leaf whose key === `key` removed, and any
 // groups that end up empty as a result also removed. If the whole tree
 // collapses (root's only descendants were leaves with this key), returns a

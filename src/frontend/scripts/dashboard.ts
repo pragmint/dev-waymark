@@ -1312,6 +1312,7 @@ function renderConfigSection(): HTMLElement {
   section.appendChild(warningsBox);
 
   const previewWrap = document.createElement('div');
+  previewWrap.id = 'viz-modal-preview-wrap';
   previewWrap.style.marginTop = '12px';
   const canvas = document.createElement('canvas');
   canvas.id = 'viz-modal-preview';
@@ -1554,30 +1555,37 @@ async function runModalPreview(): Promise<void> {
 }
 
 async function fetchAndRenderModalPreview(slots: Record<string, string | string[]>): Promise<void> {
-  const resp = await fetch('/api/chart-data/preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      presetId: modalState.presetId,
-      templateConfig: { templateId: modalState.templateId, slots },
-    }),
-  });
-  if (!resp.ok) {
-    const err = (await resp.json()) as { details?: unknown; error?: string };
-    showModalWarnings(err.details ?? err.error ?? 'Unknown error');
-    return;
+  const previewWrap = document.getElementById('viz-modal-preview-wrap');
+  previewWrap?.classList.add('is-loading');
+  try {
+    const resp = await fetch('/api/chart-data/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        presetId: modalState.presetId,
+        templateConfig: { templateId: modalState.templateId, slots },
+      }),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json()) as { details?: unknown; error?: string };
+      showModalWarnings(err.details ?? err.error ?? 'Unknown error');
+      return;
+    }
+    const data = (await resp.json()) as {
+      chartJsConfig: ChartConfig;
+      warnings: string[];
+      excludedEntitiesUrl?: string | null;
+    };
+    if (data.warnings.length > 0)
+      showModalWarnings(data.warnings, data.excludedEntitiesUrl ?? null);
+    const canvas = document.getElementById('viz-modal-preview') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    if (modalPreviewChart) modalPreviewChart.destroy();
+    attachUnitTooltip(data.chartJsConfig);
+    modalPreviewChart = new Chart(canvas, data.chartJsConfig);
+  } finally {
+    previewWrap?.classList.remove('is-loading');
   }
-  const data = (await resp.json()) as {
-    chartJsConfig: ChartConfig;
-    warnings: string[];
-    excludedEntitiesUrl?: string | null;
-  };
-  if (data.warnings.length > 0) showModalWarnings(data.warnings, data.excludedEntitiesUrl ?? null);
-  const canvas = document.getElementById('viz-modal-preview') as HTMLCanvasElement | null;
-  if (!canvas) return;
-  if (modalPreviewChart) modalPreviewChart.destroy();
-  attachUnitTooltip(data.chartJsConfig);
-  modalPreviewChart = new Chart(canvas, data.chartJsConfig);
 }
 
 function showModalWarnings(details: unknown, excludedEntitiesUrl: string | null = null): void {
@@ -2077,21 +2085,31 @@ async function applyRange(range: DateRangeState, opts: { pushHistory: boolean })
   const seq = ++rangeRequestSeq;
   const apiUrl = buildDashboardCardsApiUrl(state.dashboardId, range);
 
-  let resp: Response;
+  const grid = document.querySelector<HTMLElement>('[data-viz-grid]');
+  grid?.classList.add('is-loading');
   try {
-    resp = await fetch(apiUrl, { headers: { Accept: 'application/json' } });
-  } catch {
-    return;
+    await fetchAndApplyRangeCards(apiUrl, seq);
+  } finally {
+    // A superseded request must not clear the flag for the newer, still-pending one.
+    if (seq === rangeRequestSeq) grid?.classList.remove('is-loading');
   }
-  if (seq !== rangeRequestSeq || !resp.ok) return;
+}
 
-  const data = (await resp.json()) as { cards: CardPayload[]; dateRangeLabel: string };
-  if (seq !== rangeRequestSeq) return;
+async function fetchAndApplyRangeCards(apiUrl: string, seq: number): Promise<void> {
+  try {
+    const resp = await fetch(apiUrl, { headers: { Accept: 'application/json' } });
+    if (seq !== rangeRequestSeq || !resp.ok) return;
 
-  const labelEl = document.querySelector<HTMLElement>('[data-date-range-label]');
-  if (labelEl) labelEl.textContent = data.dateRangeLabel;
+    const data = (await resp.json()) as { cards: CardPayload[]; dateRangeLabel: string };
+    if (seq !== rangeRequestSeq) return;
 
-  for (const card of data.cards) applyCardUpdate(card);
+    const labelEl = document.querySelector<HTMLElement>('[data-date-range-label]');
+    if (labelEl) labelEl.textContent = data.dateRangeLabel;
+
+    for (const card of data.cards) applyCardUpdate(card);
+  } catch {
+    // network failures: leave stale cards in place; the next range change retries
+  }
 }
 
 function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): string {
@@ -2634,5 +2652,20 @@ document.addEventListener('DOMContentLoaded', () => {
   wireWarningPopovers();
   wireDragReorder();
   wireDateRange();
+  wireBfcacheRestore();
   recomputeDirty();
 });
+
+// A page restored from the bfcache (browser back/forward) comes back frozen
+// exactly as it was when the user navigated away — including an `is-loading`
+// class left on by a fetch that was still in flight at that point, with no
+// fresh page load to reset it. `pageshow` fires again on restore (`persisted`
+// is true only then, not on a normal first load), so that's the hook to
+// clear it.
+function wireBfcacheRestore(): void {
+  window.addEventListener('pageshow', e => {
+    if (!e.persisted) return;
+    document.querySelector('[data-viz-grid]')?.classList.remove('is-loading');
+    document.getElementById('viz-modal-preview-wrap')?.classList.remove('is-loading');
+  });
+}

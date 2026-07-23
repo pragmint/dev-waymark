@@ -567,7 +567,7 @@ function sortCategoricalLabels(
   });
 }
 
-function requiredFieldKeys(config: VisualizationConfig): string[] {
+export function requiredFieldKeys(config: VisualizationConfig): string[] {
   const keys: string[] = [];
   if (config.xAxis?.timeBucket) keys.push(config.xAxis.metadataKey);
   if (config.category) keys.push(config.category.metadataKey);

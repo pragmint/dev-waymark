@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { getAppStateRepo } from '../db/appState/index';
+import { invalidateCardCache } from './dashboardsHandler';
 import { WaymarkInputSchema } from '../schemas/waymark';
 import type { WaymarkInput } from '../schemas/waymark';
 
@@ -42,6 +43,7 @@ export async function waymarkCreateApiHandler(c: Context) {
   if ('response' in parsed) return parsed.response;
 
   const waymarkId = await repo.createWaymark(id, parsed.input);
+  invalidateCardCache();
   return c.json({ id: waymarkId });
 }
 
@@ -54,6 +56,7 @@ export async function waymarkUpdateApiHandler(c: Context) {
   if ('response' in parsed) return parsed.response;
 
   await repo.updateWaymark(id, parsed.input);
+  invalidateCardCache();
   return c.json({ id });
 }
 
@@ -62,5 +65,6 @@ export async function waymarkDeleteApiHandler(c: Context) {
   const id = parseInt(c.req.param('id') ?? '', 10);
   if (isNaN(id)) return c.json({ error: 'Invalid id' }, 400);
   await repo.deleteWaymark(id);
+  invalidateCardCache();
   return c.body(null, 204);
 }
