@@ -1,0 +1,101 @@
+name: Deploy dev-waymark
+
+# Targets the waymark-poc sandbox (infra/gha-deploy-wip in engineering-excellence,
+# account 520510602362) while validating the deploy mechanism — swap
+# AWS_ROLE_ARN/AWS_REGION/ECR_REPOSITORY/ECS_CLUSTER/ECS_SERVICE once a real,
+# persistent AWS target exists for dev-waymark.
+#
+# Auth is OIDC role-assumption (aws-actions/configure-aws-credentials), not
+# static keys — no house convention exists for this org to follow (checked:
+# lifestance-webdev repos all run on self-hosted runners with host-baked AWS
+# credentials, which doesn't apply here since this target isn't LSH-managed
+# infra), so this uses the current AWS/GitHub-recommended default instead.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPOSITORY: waymark-poc
+      ECS_CLUSTER: waymark-poc-cluster
+      ECS_SERVICE: waymark-poc-waymark-app
+      ECS_TASK_DEFINITION_FAMILY: waymark-poc-waymark-app
+      CONTAINER_NAME: waymark-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      # DB config is never checked into VC, so it can't come from the repo
+      # checkout — the Dockerfile's final stage looks for a real .env first
+      # (that's the local-dev path; irrelevant here since none exists in this
+      # checkout) and otherwise synthesizes one from these --build-args. Bare
+      # `--build-arg NAME` (no `=value`) pulls from this step's own process
+      # env below, rather than interpolating the secret text directly into
+      # the script — safe against special characters, unlike inlining
+      # ${{ secrets.X }} straight into `run:`.
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DEV_WAYMARK_SOURCE_DB_ADAPTER: postgres
+          DEV_WAYMARK_SOURCE_DB_URL: ${{ secrets.DEV_WAYMARK_SOURCE_DB_URL }}
+          DEV_WAYMARK_SOURCE_DB_SEED: none
+          DEV_WAYMARK_APP_DB_ADAPTER: postgres
+          DEV_WAYMARK_APP_DB_URL: ${{ secrets.DEV_WAYMARK_APP_DB_URL }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+        run: |
+          docker build \
+            --build-arg DEV_WAYMARK_SOURCE_DB_ADAPTER \
+            --build-arg DEV_WAYMARK_SOURCE_DB_URL \
+            --build-arg DEV_WAYMARK_SOURCE_DB_SEED \
+            --build-arg DEV_WAYMARK_APP_DB_ADAPTER \
+            --build-arg DEV_WAYMARK_APP_DB_URL \
+            --build-arg LOG_LEVEL \
+            -t "$REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" \
+            -t "$REGISTRY/$ECR_REPOSITORY:latest" \
+            .
+          docker push "$REGISTRY/$ECR_REPOSITORY" --all-tags
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION_FAMILY" \
+            --query taskDefinition > task-definition.json
+
+      - name: Render new image into task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      # Registers the rendered definition as a new revision and updates the
+      # service to use it — without Terraform ever managing/knowing about
+      # this revision (infra/waymark-poc/main.tf's task definition, still the
+      # nginxdemos/hello placeholder, stays untouched; this always registers
+      # its own new revision on top of whatever main.tf last applied).
+      #
+      # No wait-for-service-stability: matches this session's decided
+      # rollback posture for dev-waymark hosting — plain revision-based
+      # deploys, no health gates. "If it's bad we revert and troubleshoot."
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          wait-for-service-stability: false
