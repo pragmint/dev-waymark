@@ -87,6 +87,35 @@ describe('entityRepository', () => {
     expect(results[0].metadata).toHaveLength(2);
   });
 
+  it('list with limit returns the first page ordered by id desc', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A-1' }), []);
+    await repo.upsert(makeEntity({ id: 2, name: 'B-1' }), []);
+    await repo.upsert(makeEntity({ id: 3, name: 'C-1' }), []);
+    const results = await repo.list(emptyTree(), { limit: 2 });
+    expect(results.map(e => e.name)).toEqual(['C-1', 'B-1']);
+  });
+
+  it('list with afterId continues the keyset walk from the given id', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A-1' }), []);
+    await repo.upsert(makeEntity({ id: 2, name: 'B-1' }), []);
+    await repo.upsert(makeEntity({ id: 3, name: 'C-1' }), []);
+    const results = await repo.list(emptyTree(), { limit: 2, afterId: 3 });
+    expect(results.map(e => e.name)).toEqual(['B-1', 'A-1']);
+  });
+
+  it('count returns the total matching rows regardless of limit', async () => {
+    await repo.upsert(makeEntity({ id: 1, name: 'A-1' }), []);
+    await repo.upsert(makeEntity({ id: 2, name: 'B-1' }), []);
+    expect(await repo.count(emptyTree())).toBe(2);
+  });
+
+  it('count respects the filter tree', async () => {
+    await repo.upsert(makeEntity({ id: 1, type: 'jira_ticket' }), []);
+    await repo.upsert(makeEntity({ id: 2, type: 'github_pr' }), []);
+    const tree = makeGroup('AND', [makeLeaf('entity_type', 'eq', 'jira_ticket')]);
+    expect(await repo.count(tree)).toBe(1);
+  });
+
   it('filters entities by metadata eq', async () => {
     await repo.upsert(makeEntity({ id: 1, name: 'J-1' }), [
       makeMetadata(1, { key: 'ticket_type', value: 'Story' }),

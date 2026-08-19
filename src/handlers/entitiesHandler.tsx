@@ -7,6 +7,8 @@ import type { PresetWithTree } from '../schemas/preset';
 import { collectLeaves, emptyTree, isLeaf, makeLeaf } from '../schemas/filterTree';
 import type { FilterTree } from '../schemas/filterTree';
 import { EntitiesPage } from '../frontend/Pages/EntitiesPage';
+import { entitiesToCsv, exportFilenameSlug, planExportChunks } from '../domain/entityCsv';
+import type { EntityWithMetadata } from '../schemas/entity';
 import {
   buildEntityUrl,
   encodeTree,
@@ -18,11 +20,25 @@ import {
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
 
+// A single export attempt is given this long to finish before it's abandoned
+// in favor of asking the user to split the job into chunks (see
+// entitiesExportHandler). Rows are fetched in EXPORT_BATCH_SIZE-row batches so
+// elapsed time can be checked between DB round trips instead of blocking for
+// the whole (potentially huge) unbounded query.
+const EXPORT_TIMEOUT_MS = 10_000;
+const EXPORT_BATCH_SIZE = 500;
+
 function parsePositiveInt(raw: string | undefined, fallback: number, max?: number): number {
   if (!raw) return fallback;
   const n = parseInt(raw, 10);
   if (isNaN(n) || n < 1) return fallback;
   return max ? Math.min(n, max) : n;
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const n = parseInt(raw, 10);
+  return isNaN(n) || n < 0 ? fallback : n;
 }
 
 function findEntityTypeValue(tree: FilterTree): string | null {
@@ -70,6 +86,93 @@ function resolvePreset(
     selectedPresetTree: matched?.tree ?? null,
     isDraft: false,
   };
+}
+
+function csvResponse(c: Context, csv: string, slug: string, nextCursor?: number): Response {
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="entities-${slug}.csv"`);
+  if (nextCursor != null) c.header('X-Next-Cursor', String(nextCursor));
+  return c.body(csv);
+}
+
+// Export the filtered population as a CSV download. Reuses the same tree
+// parsing and column derivation as the page so the file matches what the
+// table shows — just unbounded, not capped to one page.
+//
+// Two request shapes:
+//  - No `limit` param: a single-shot attempt at the *entire* filtered
+//    population. Rows are pulled in batches (keyset-paginated by id, not
+//    OFFSET — see repo.list) so elapsed time can be checked between DB round
+//    trips; if EXPORT_TIMEOUT_MS is exceeded before all rows are in, the job
+//    is abandoned (no partial CSV is served) and a 503 with the measured
+//    throughput + a suggested chunk plan is returned instead, so the client
+//    can offer to split the download.
+//  - `limit` present: one chunk of a client-driven split download. `afterId`
+//    (the previous chunk's last row id) continues the same keyset walk —
+//    omit it for the first chunk. The response carries the next chunk's
+//    cursor in `X-Next-Cursor` (absent once the walk is exhausted) since a
+//    plain CSV body has nowhere else to put it.
+export async function entitiesExportHandler(c: Context) {
+  const repo = getEntityRepo();
+  const url = new URL(c.req.url);
+  const activeTree = parseTreeFromUrl(url);
+  const selectedEntityType = findEntityTypeValue(activeTree);
+  const slug = exportFilenameSlug(selectedEntityType);
+
+  const metadataKeys = selectedEntityType ? await repo.listMetadataKeys(selectedEntityType) : [];
+
+  // Not scoped by `keys` here: CSV export always wants every metadata key the
+  // type has (metadataKeys already *is* the full set), so a keys filter would
+  // add zero selectivity — and on SQLite, combining a large `entity_id IN`
+  // list with a `key IN` list of every key for the type sends the planner
+  // down a full-table-scan plan instead of the entity_id index (confirmed via
+  // EXPLAIN QUERY PLAN against a 150k-row / 60-key load-test dataset: ~27s
+  // per 2000-row batch with the keys filter vs. ~170ms without it).
+  const limitParam = c.req.query('limit');
+  if (limitParam !== undefined) {
+    const limit = parsePositiveInt(limitParam, EXPORT_BATCH_SIZE);
+    const afterIdParam = c.req.query('afterId');
+    const afterId = afterIdParam !== undefined ? parseNonNegativeInt(afterIdParam, 0) : undefined;
+    const entities = await repo.list(activeTree, { limit, afterId });
+    const nextCursor = entities.length === limit ? entities[entities.length - 1].id : undefined;
+    return csvResponse(c, entitiesToCsv(entities, metadataKeys), slug, nextCursor);
+  }
+
+  const totalCount = await repo.count(activeTree);
+  const start = performance.now();
+  const entities: EntityWithMetadata[] = [];
+  let cursor: number | undefined;
+  let fetched = 0;
+  while (fetched < totalCount) {
+    const batch = await repo.list(activeTree, {
+      limit: EXPORT_BATCH_SIZE,
+      afterId: cursor,
+    });
+    if (batch.length === 0) break;
+    entities.push(...batch);
+    fetched += batch.length;
+    cursor = batch[batch.length - 1].id;
+
+    const elapsedMs = performance.now() - start;
+    if (elapsedMs > EXPORT_TIMEOUT_MS && fetched < totalCount) {
+      const measuredRowsPerSecond = fetched / (elapsedMs / 1000);
+      // Apply a conservative safety factor: assume real-world throughput is lower
+      // than what we measured during the timeout window (which may have favorable
+      // caching, low contention, etc.). This ensures chunks finish well under
+      // their planned time window.
+      const conservativeRowsPerSecond = measuredRowsPerSecond / 1.5;
+      const { chunks, rowsPerChunk } = planExportChunks(totalCount, conservativeRowsPerSecond);
+      c.status(503);
+      return c.json({
+        error: 'timeout',
+        totalCount,
+        rowsPerChunk,
+        chunks,
+      });
+    }
+  }
+
+  return csvResponse(c, entitiesToCsv(entities, metadataKeys), slug);
 }
 
 export async function entitiesHandler(c: Context) {

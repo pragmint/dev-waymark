@@ -4,7 +4,7 @@ import type { FilterTree } from '../../schemas/filterTree';
 import { Layout } from '../components/Layout';
 import { FilterBar } from '../components/FilterBar';
 import type { PresetWithUrl } from '../components/FilterBar';
-import { buildEntityUrl } from '../../domain/filterUrl';
+import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
 import { getEntityTitle, getMetadataValue } from '../../domain/entityQueries';
 
 type EntitiesPageProps = {
@@ -62,7 +62,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
   const noEntityTypes = entityTypes.length === 0;
 
   return (
-    <Layout title="Entities" extraScripts={['/tableScroller.js', '/filters.js']}>
+    <Layout title="Entities" extraScripts={['/tableScroller.js', '/filters.js', '/exportCsv.js']}>
       <div class="page-header">
         <h1>Entities</h1>
         <span class="count" data-results-count>
@@ -70,7 +70,37 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
             ? '0 results'
             : `${rangeStart}–${rangeEnd} of ${totalCount} result${totalCount !== 1 ? 's' : ''}`}
         </span>
+        {!noEntityTypes && (
+          <div class="page-header-actions">
+            <a
+              class="filter-btn filter-btn-secondary export-btn"
+              href={`/entities/export?f=${encodeTree(activeTree)}`}
+              data-export-csv
+              hidden={totalCount === 0}
+            >
+              Export CSV
+            </a>
+          </div>
+        )}
       </div>
+
+      <dialog id="export-split-modal" class="waymark-dialog">
+        <div class="viz-modal-header">
+          <h2 class="viz-modal-title">Export is too large</h2>
+        </div>
+        <div class="viz-modal-body">
+          <p data-export-split-message></p>
+          <p class="count" data-export-split-progress hidden></p>
+        </div>
+        <div class="viz-modal-footer">
+          <button type="button" class="filter-btn filter-btn-secondary" data-export-split-cancel>
+            Cancel
+          </button>
+          <button type="button" class="filter-btn" data-export-split-confirm>
+            Download files
+          </button>
+        </div>
+      </dialog>
 
       <FilterBar
         activeTree={activeTree}
@@ -83,7 +113,7 @@ export const EntitiesPage: FC<EntitiesPageProps> = ({
         isDraft={isDraft}
       />
 
-      <div data-results-region>
+      <div data-results-region data-has-results={entities.length > 0 ? 'true' : 'false'}>
         {noEntityTypes ? (
           <p class="empty">No entity types found. Run a pipeline to populate data.</p>
         ) : entities.length === 0 ? (
