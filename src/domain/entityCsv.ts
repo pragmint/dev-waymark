@@ -1,10 +1,24 @@
 import type { EntityWithMetadata } from '../schemas/entity';
 import { getEntityTitle, getMetadataValue } from './entityQueries';
 
+// Excel and Sheets treat a leading `=` or `@` as the start of a formula or a
+// DDE call, so an entity name like `=cmd|/c calc!A1` — which can arrive from a
+// Jira title or a branch name — would execute when the file is opened, and this
+// CSV exists to be opened in a spreadsheet. A leading apostrophe forces the
+// cell to be read as literal text.
+//
+// `-` and `+` are deliberately NOT guarded: they lead legitimate signed numbers
+// in metadata, and quoting those would corrupt real values to fix a lesser risk.
+function neutralizeFormula(value: string): string {
+  return /^[=@]/.test(value) ? `'${value}` : value;
+}
+
 // Quote a field when it contains a comma, quote, or newline; internal quotes are
-// doubled per RFC 4180.
+// doubled per RFC 4180. Formula neutralization happens first so the apostrophe
+// lands inside the quotes when both apply.
 function escapeCsvField(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const safe = neutralizeFormula(value);
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function csvRow(fields: (string | number)[]): string {
@@ -60,6 +74,26 @@ export function planExportChunks(totalCount: number, rowsPerSecond: number): Exp
   // stay consistent (chunks * rowsPerChunk >= totalCount) for the caller.
   const actualChunks = Math.ceil(totalCount / rowsPerChunk);
   return { chunks: actualChunks, rowsPerChunk };
+}
+
+// The measured rate is discounted by this factor before planning. The timing
+// comes from a single window that may have enjoyed favorable caching or low
+// contention, so planning at the observed rate would leave chunks with no
+// headroom against the timeout they exist to avoid.
+const THROUGHPUT_SAFETY_FACTOR = 1.5;
+
+// Turn a timed-out export's measured progress into a chunk plan. `fetched` is 0
+// when the budget was blown before a single row came back (e.g. the count and
+// metadata-key lookups alone took too long) — there is no throughput to
+// extrapolate from, so fall back to the finest split the planner allows.
+export function planFromMeasuredThroughput(
+  totalCount: number,
+  fetched: number,
+  elapsedMs: number
+): ExportChunkPlan {
+  if (fetched <= 0 || elapsedMs <= 0) return finestExportChunkPlan(totalCount);
+  const measuredRowsPerSecond = fetched / (elapsedMs / 1000);
+  return planExportChunks(totalCount, measuredRowsPerSecond / THROUGHPUT_SAFETY_FACTOR);
 }
 
 // Fallback for when the export times out before a single row is fetched

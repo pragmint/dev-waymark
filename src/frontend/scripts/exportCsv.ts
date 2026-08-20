@@ -10,8 +10,19 @@
 // history.replaceState() on every auto-apply, without touching this button,
 // so `location.search` is the only source that's guaranteed current.
 
+import {
+  chunkFailureText,
+  chunkPartFilename,
+  singleShotFailureMessage,
+  splitDownloadOutcome,
+  splitOfferState,
+} from '../../domain/exportProgress';
+import type { SingleShotResult } from '../../domain/exportProgress';
+
 const CLIENT_TIMEOUT_MS = 15_000; // above the server's 10s budget + batch/serialization overhead
+const SERVER_TIMEOUT_SECONDS = 10; // mirrors EXPORT_TIMEOUT_MS in entitiesHandler.tsx
 const DOWNLOAD_SPACING_MS = 300; // let each triggered download start before the next
+const ERROR_FLASH_MS = 4_000; // how long a failure stays legible on the button
 
 type TimeoutBody = {
   error: string;
@@ -53,6 +64,18 @@ function setButtonBusy(anchor: HTMLAnchorElement, busy: boolean): void {
   anchor.textContent = busy ? 'Exporting…' : 'Export CSV';
 }
 
+// An anchor has no native failure state and the app has no toast surface, so
+// the button briefly carries the message itself — the same surface already used
+// for the 'Exporting\u2026' busy state.
+function flashButtonError(anchor: HTMLAnchorElement, text: string): void {
+  anchor.textContent = text;
+  anchor.classList.add('export-btn--error');
+  setTimeout(() => {
+    anchor.classList.remove('export-btn--error');
+    anchor.textContent = 'Export CSV';
+  }, ERROR_FLASH_MS);
+}
+
 function getSplitModal() {
   const dialog = document.getElementById('export-split-modal') as HTMLDialogElement | null;
   if (!dialog) return null;
@@ -65,7 +88,7 @@ function getSplitModal() {
   };
 }
 
-async function downloadSingleShot(anchor: HTMLAnchorElement): Promise<'ok' | 'timeout' | 'error'> {
+async function downloadSingleShot(anchor: HTMLAnchorElement): Promise<SingleShotResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   try {
@@ -94,14 +117,15 @@ function showSplitOffer(anchor: HTMLAnchorElement, body: TimeoutBody): void {
   if (!modal || !modal.message || !modal.progress || !modal.cancelBtn || !modal.confirmBtn) return;
   const { dialog, message, progress, cancelBtn, confirmBtn } = modal;
 
-  message.textContent =
-    `Exporting all ${body.totalCount.toLocaleString()} rows took too long ` +
-    `(over 10 seconds). Split it into ${body.chunks} files of about ` +
-    `${body.rowsPerChunk.toLocaleString()} rows each instead?`;
+  const state = splitOfferState(body, SERVER_TIMEOUT_SECONDS);
+  message.textContent = state.message;
   progress.hidden = true;
   progress.textContent = '';
-  confirmBtn.textContent = `Download ${body.chunks} files`;
+  confirmBtn.textContent = state.confirmLabel;
   confirmBtn.disabled = false;
+  // Relabelled explicitly, not just re-shown: the chunk-failure path below
+  // rewrites this button to 'Close', and the modal element is reused.
+  cancelBtn.textContent = state.cancelLabel;
   cancelBtn.disabled = false;
   cancelBtn.hidden = false;
 
@@ -137,6 +161,7 @@ async function runSplitDownload(
   // requested in order (the server can't jump to "chunk 3" without having
   // walked chunks 1 and 2 first).
   let cursor: string | undefined;
+  let downloaded = 0;
   for (let i = 0; i < body.chunks; i++) {
     progress.textContent = `Downloading file ${i + 1} of ${body.chunks}…`;
     try {
@@ -146,10 +171,11 @@ async function runSplitDownload(
       if (!res.ok) throw new Error('chunk fetch failed');
       const blob = await res.blob();
       const base = filenameFromResponse(res, 'entities.csv').replace(/\.csv$/, '');
-      downloadBlob(blob, `${base}-part${i + 1}-of-${body.chunks}.csv`);
+      downloadBlob(blob, chunkPartFilename(base, i, body.chunks));
+      downloaded += 1;
       cursor = res.headers.get('X-Next-Cursor') ?? undefined;
     } catch {
-      progress.textContent = `File ${i + 1} of ${body.chunks} failed to download. Close this and try again.`;
+      progress.textContent = chunkFailureText(i, body.chunks);
       cancelBtn.hidden = false;
       cancelBtn.textContent = 'Close';
       return;
@@ -158,7 +184,15 @@ async function runSplitDownload(
     if (i < body.chunks - 1) await sleep(DOWNLOAD_SPACING_MS);
   }
 
-  progress.textContent = `Done — downloaded ${body.chunks} files.`;
+  // Reported from what actually downloaded: the walk can stop early if
+  // X-Next-Cursor goes missing, and the planned count would then overstate it.
+  const outcome = splitDownloadOutcome(downloaded, body.chunks);
+  progress.textContent = outcome.text;
+  if (!outcome.complete) {
+    cancelBtn.hidden = false;
+    cancelBtn.textContent = 'Close';
+    return;
+  }
   setTimeout(() => dialog.close(), 1200);
 }
 
@@ -171,7 +205,13 @@ function initExportButtons(root: ParentNode = document): void {
       event.preventDefault();
       if (anchor.classList.contains('export-btn--busy')) return;
       setButtonBusy(anchor, true);
-      downloadSingleShot(anchor).finally(() => setButtonBusy(anchor, false));
+      void downloadSingleShot(anchor)
+        .catch((): SingleShotResult => 'error')
+        .then(result => {
+          setButtonBusy(anchor, false);
+          const failure = singleShotFailureMessage(result);
+          if (failure) flashButtonError(anchor, failure);
+        });
     });
   });
 }

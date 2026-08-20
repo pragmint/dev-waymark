@@ -230,6 +230,13 @@ form {
   opacity: 0.6;
 }
 
+// Applied by exportCsv.ts to report a failed export on the button itself: an
+// anchor has no native error state and the app has no toast surface.
+.export-btn--error {
+  border-color: var(--color-danger, #d63939);
+  background: var(--color-danger, #d63939);
+}
+
 .filter-btn-danger {
   border-color: var(--color-danger, #d63939);
   background: var(--color-danger, #d63939);

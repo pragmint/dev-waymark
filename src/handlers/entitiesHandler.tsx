@@ -12,8 +12,7 @@ import {
   csvHeaderRow,
   entitiesToCsv,
   exportFilenameSlug,
-  finestExportChunkPlan,
-  planExportChunks,
+  planFromMeasuredThroughput,
 } from '../domain/entityCsv';
 import {
   buildEntityUrl,
@@ -41,10 +40,14 @@ function parsePositiveInt(raw: string | undefined, fallback: number, max?: numbe
   return max ? Math.min(n, max) : n;
 }
 
-function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) return fallback;
+// An unparseable cursor is treated as "no cursor" rather than as id 0. Falling
+// back to 0 makes the `e.id < ?` keyset predicate match nothing, so a typo'd or
+// truncated afterId would return an empty CSV under a 200 — indistinguishable
+// from a genuinely empty result set.
+function parseOptionalNonNegativeInt(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
   const n = parseInt(raw, 10);
-  return isNaN(n) || n < 0 ? fallback : n;
+  return isNaN(n) || n < 0 ? undefined : n;
 }
 
 function findEntityTypeValue(tree: FilterTree): string | null {
@@ -101,28 +104,16 @@ function csvResponse(c: Context, csv: string, slug: string, nextCursor?: number)
   return c.body(csv);
 }
 
-// `fetched` is 0 when the budget was already blown before any row was
-// fetched (e.g. count()/listMetadataKeys() alone took too long) — there's no
-// throughput to extrapolate a chunk plan from in that case, so fall back to
-// the finest split the planner allows.
+// How the measured progress becomes a chunk plan (the throughput discount and
+// the no-rows-fetched fallback) lives in src/domain/entityCsv.ts — this only
+// shapes the response.
 function exportTimeoutResponse(
   c: Context,
   totalCount: number,
   fetched: number,
   elapsedMs: number
 ): Response {
-  let plan: { chunks: number; rowsPerChunk: number };
-  if (fetched > 0) {
-    const measuredRowsPerSecond = fetched / (elapsedMs / 1000);
-    // Apply a conservative safety factor: assume real-world throughput is lower
-    // than what we measured during the timeout window (which may have favorable
-    // caching, low contention, etc.). This ensures chunks finish well under
-    // their planned time window.
-    const conservativeRowsPerSecond = measuredRowsPerSecond / 1.5;
-    plan = planExportChunks(totalCount, conservativeRowsPerSecond);
-  } else {
-    plan = finestExportChunkPlan(totalCount);
-  }
+  const plan = planFromMeasuredThroughput(totalCount, fetched, elapsedMs);
   c.status(503);
   return c.json({
     error: 'timeout',
@@ -180,8 +171,7 @@ export async function entitiesExportHandler(c: Context) {
   const limitParam = c.req.query('limit');
   if (limitParam !== undefined) {
     const limit = parsePositiveInt(limitParam, EXPORT_BATCH_SIZE);
-    const afterIdParam = c.req.query('afterId');
-    const afterId = afterIdParam !== undefined ? parseNonNegativeInt(afterIdParam, 0) : undefined;
+    const afterId = parseOptionalNonNegativeInt(c.req.query('afterId'));
     const entities = await repo.list(activeTree, { limit, afterId });
     const nextCursor = entities.length === limit ? entities[entities.length - 1].id : undefined;
     return csvResponse(c, entitiesToCsv(entities, metadataKeys), slug, nextCursor);
