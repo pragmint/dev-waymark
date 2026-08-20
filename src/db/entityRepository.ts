@@ -370,14 +370,45 @@ export function createEntityRepository(adapter: SourceDataAdapter) {
     // (e.g. the fields a chart's config actually reads) instead of every key —
     // omit it when the caller needs the full metadata set (e.g. rendering a
     // metadata table).
-    async list(tree: FilterTree, opts: { keys?: string[] } = {}): Promise<EntityWithMetadata[]> {
-      const { where, params } = buildWhereFromTree(tree);
+    //
+    // `opts.afterId` pages by keyset (`e.id < afterId`) rather than OFFSET:
+    // repeated OFFSET pages re-scan and discard everything before the offset
+    // on every call, which is quadratic over a full walk of a large table —
+    // keyset pagination is O(limit) per call regardless of how deep the walk
+    // is. Pass the last row's id from the previous page as `afterId` to
+    // continue (rows are always ordered `id DESC`).
+    async list(
+      tree: FilterTree,
+      opts: { keys?: string[]; limit?: number; afterId?: number } = {}
+    ): Promise<EntityWithMetadata[]> {
+      const base = buildWhereFromTree(tree);
+      const cursorCond = 'e.id < ?';
+      const where =
+        opts.afterId != null
+          ? base.where
+            ? `${base.where} AND ${cursorCond}`
+            : `WHERE ${cursorCond}`
+          : base.where;
+      const params = opts.afterId != null ? [...base.params, opts.afterId] : base.params;
+      const limitSql = opts.limit != null ? ' LIMIT ?' : '';
+      const limitParams = opts.limit != null ? [opts.limit] : [];
       const rows = await adapter.query(
-        `SELECT * FROM entities e ${where} ORDER BY e.id DESC`,
-        params
+        `SELECT * FROM entities e ${where} ORDER BY e.id DESC${limitSql}`,
+        [...params, ...limitParams]
       );
       const entities = rows.map(row => EntitySchema.parse(row));
       return attachMetadata(adapter, entities, opts.keys);
+    },
+
+    // Cheap count-only query for the filtered population — used to size a CSV
+    // export before deciding whether to fetch any rows.
+    async count(tree: FilterTree): Promise<number> {
+      const { where, params } = buildWhereFromTree(tree);
+      const countRows = await adapter.query<{ total: number | string }>(
+        `SELECT COUNT(*) AS total FROM entities e ${where}`,
+        params
+      );
+      return Number(countRows[0].total);
     },
 
     async listEntityTypes(): Promise<string[]> {

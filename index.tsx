@@ -5,7 +5,7 @@ import { createSourceAdapter } from './src/db/source/factory';
 import { initSourceAdapter } from './src/db/source/index';
 import { createAppStateRepo } from './src/db/appState/factory';
 import { initAppStateRepo } from './src/db/appState/index';
-import { entitiesHandler } from './src/handlers/entitiesHandler';
+import { entitiesHandler, entitiesExportHandler } from './src/handlers/entitiesHandler';
 import { entityDetailHandler } from './src/handlers/entityDetailHandler';
 import {
   entityPresetsSaveHandler,
@@ -69,6 +69,7 @@ app.use('/*', serveStatic({ root: './public' }));
 
 app.get('/', c => c.redirect('/entities'));
 app.get('/entities', entitiesHandler);
+app.get('/entities/export', entitiesExportHandler);
 app.post('/entities/presets', entityPresetsSaveHandler);
 app.post('/entities/presets/:id', entityPresetsUpdateHandler);
 app.post('/entities/presets/:id/delete', entityPresetsDeleteHandler);

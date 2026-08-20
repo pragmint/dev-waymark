@@ -208,6 +208,28 @@ form {
   }
 }
 
+// Anchor rendered as a button (e.g. the CSV export download link): the shared
+// .filter-btn rules assume a <button>, so restore button-like inline layout.
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+
+  // Author styles beat the UA [hidden] stylesheet rule on specificity, so
+  // `display: inline-flex` above would otherwise show the element even while
+  // `hidden` is set — restore the hiding behavior explicitly.
+  &[hidden] {
+    display: none;
+  }
+}
+
+// Applied by exportCsv.ts while a download is in flight — anchors have no
+// native :disabled, so pointer-events + opacity stand in for it.
+.export-btn--busy {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 .filter-btn-danger {
   border-color: var(--color-danger, #d63939);
   background: var(--color-danger, #d63939);
@@ -1509,6 +1531,10 @@ form {
   display: flex;
   flex-direction: column;
   gap: 20px;
+
+  p {
+    margin: 0;
+  }
 }
 
 .viz-modal-footer {
