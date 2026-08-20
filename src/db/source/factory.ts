@@ -10,6 +10,7 @@ import { RedshiftSourceAdapter } from './redshift';
 import { seedGoldenData } from './goldenSeed';
 import { seedE2EData } from './e2eSeed';
 import { POSTGRES_SOURCE_SCHEMA_DDL } from './schema';
+import { confirmDestructiveSeed, maskConnectionTarget } from './confirmDestructive';
 
 // Snapshot of the seeded in-memory dataset. Stored as raw sqlite bytes plus a
 // plain-text sidecar holding a content hash of the seed source + schema DDL —
@@ -83,7 +84,10 @@ async function seedInto(adapter: SourceDataAdapter, seed: SourceDbSeed): Promise
   if (seed === 'golden') return seedGoldenData(adapter);
 }
 
-export async function createSourceAdapter(config: Config['sourceDb']): Promise<SourceDataAdapter> {
+export async function createSourceAdapter(
+  config: Config['sourceDb'],
+  testMode = false
+): Promise<SourceDataAdapter> {
   // Fast path: in-memory SQLite + golden seed uses the on-disk snapshot cache
   // so `bun dev` starts in milliseconds instead of re-seeding every boot.
   if (
@@ -103,6 +107,9 @@ export async function createSourceAdapter(config: Config['sourceDb']): Promise<S
       const applySchema = path === ':memory:' || config.seed !== 'none';
       const adapter = new SqliteSourceAdapter(path, applySchema);
       if (config.seed !== 'none') {
+        if (path !== ':memory:' && !testMode) {
+          await confirmDestructiveSeed(`sqlite source database at ${path}`);
+        }
         const t0 = performance.now();
         console.error(`[dev-waymark] Seeding source DB (adapter=sqlite, seed=${config.seed})…`);
         await adapter.execute('DELETE FROM entity_metadata');
@@ -116,6 +123,11 @@ export async function createSourceAdapter(config: Config['sourceDb']): Promise<S
     case 'postgres': {
       const adapter = new PostgresSourceAdapter(config.url);
       if (config.seed !== 'none') {
+        if (!testMode) {
+          await confirmDestructiveSeed(
+            `postgres source database at ${maskConnectionTarget(config.url)}`
+          );
+        }
         const t0 = performance.now();
         console.error(`[dev-waymark] Seeding source DB (adapter=postgres, seed=${config.seed})…`);
         await adapter.execute(POSTGRES_SOURCE_SCHEMA_DDL);

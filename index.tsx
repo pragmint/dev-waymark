@@ -49,7 +49,7 @@ import {
 
 const config = loadConfig();
 
-const sourceAdapter = await createSourceAdapter(config.sourceDb);
+const sourceAdapter = await createSourceAdapter(config.sourceDb, config.testMode);
 await sourceAdapter.validateConnection();
 initSourceAdapter(sourceAdapter);
 
