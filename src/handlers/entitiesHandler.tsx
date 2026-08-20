@@ -7,8 +7,14 @@ import type { PresetWithTree } from '../schemas/preset';
 import { collectLeaves, emptyTree, isLeaf, makeLeaf } from '../schemas/filterTree';
 import type { FilterTree } from '../schemas/filterTree';
 import { EntitiesPage } from '../frontend/Pages/EntitiesPage';
-import { entitiesToCsv, exportFilenameSlug, planExportChunks } from '../domain/entityCsv';
-import type { EntityWithMetadata } from '../schemas/entity';
+import {
+  csvDataRows,
+  csvHeaderRow,
+  entitiesToCsv,
+  exportFilenameSlug,
+  finestExportChunkPlan,
+  planExportChunks,
+} from '../domain/entityCsv';
 import {
   buildEntityUrl,
   encodeTree,
@@ -95,6 +101,37 @@ function csvResponse(c: Context, csv: string, slug: string, nextCursor?: number)
   return c.body(csv);
 }
 
+// `fetched` is 0 when the budget was already blown before any row was
+// fetched (e.g. count()/listMetadataKeys() alone took too long) — there's no
+// throughput to extrapolate a chunk plan from in that case, so fall back to
+// the finest split the planner allows.
+function exportTimeoutResponse(
+  c: Context,
+  totalCount: number,
+  fetched: number,
+  elapsedMs: number
+): Response {
+  let plan: { chunks: number; rowsPerChunk: number };
+  if (fetched > 0) {
+    const measuredRowsPerSecond = fetched / (elapsedMs / 1000);
+    // Apply a conservative safety factor: assume real-world throughput is lower
+    // than what we measured during the timeout window (which may have favorable
+    // caching, low contention, etc.). This ensures chunks finish well under
+    // their planned time window.
+    const conservativeRowsPerSecond = measuredRowsPerSecond / 1.5;
+    plan = planExportChunks(totalCount, conservativeRowsPerSecond);
+  } else {
+    plan = finestExportChunkPlan(totalCount);
+  }
+  c.status(503);
+  return c.json({
+    error: 'timeout',
+    totalCount,
+    rowsPerChunk: plan.rowsPerChunk,
+    chunks: plan.chunks,
+  });
+}
+
 // Export the filtered population as a CSV download. Reuses the same tree
 // parsing and column derivation as the page so the file matches what the
 // table shows — just unbounded, not capped to one page.
@@ -102,17 +139,29 @@ function csvResponse(c: Context, csv: string, slug: string, nextCursor?: number)
 // Two request shapes:
 //  - No `limit` param: a single-shot attempt at the *entire* filtered
 //    population. Rows are pulled in batches (keyset-paginated by id, not
-//    OFFSET — see repo.list) so elapsed time can be checked between DB round
-//    trips; if EXPORT_TIMEOUT_MS is exceeded before all rows are in, the job
-//    is abandoned (no partial CSV is served) and a 503 with the measured
-//    throughput + a suggested chunk plan is returned instead, so the client
-//    can offer to split the download.
+//    OFFSET — see repo.list) and serialized to CSV as each batch arrives, so
+//    elapsed time — fetch AND serialization together — can be checked
+//    between batches instead of only budgeting the fetch and then paying for
+//    a single unbounded serialization pass at the end. The check runs after
+//    every batch unconditionally, including the batch that completes the
+//    population, so a last batch that pushes elapsed past EXPORT_TIMEOUT_MS
+//    still times out rather than slipping through with a full CSV that blows
+//    past the client's own timeout. On timeout the job is abandoned (no
+//    partial CSV is served) and a 503 with the measured throughput + a
+//    suggested chunk plan is returned instead, so the client can offer to
+//    split the download.
 //  - `limit` present: one chunk of a client-driven split download. `afterId`
 //    (the previous chunk's last row id) continues the same keyset walk —
 //    omit it for the first chunk. The response carries the next chunk's
 //    cursor in `X-Next-Cursor` (absent once the walk is exhausted) since a
 //    plain CSV body has nowhere else to put it.
 export async function entitiesExportHandler(c: Context) {
+  // Started before any DB work — including count()/listMetadataKeys() below
+  // — so the 10s budget bounds the *entire* request, not just the fetch
+  // loop. A slow count() over a large filtered population was previously
+  // free: it ran before the clock even started, so a request could blow well
+  // past EXPORT_TIMEOUT_MS without ever tripping the check.
+  const start = performance.now();
   const repo = getEntityRepo();
   const url = new URL(c.req.url);
   const activeTree = parseTreeFromUrl(url);
@@ -139,8 +188,16 @@ export async function entitiesExportHandler(c: Context) {
   }
 
   const totalCount = await repo.count(activeTree);
-  const start = performance.now();
-  const entities: EntityWithMetadata[] = [];
+
+  // count()/listMetadataKeys() alone may have already blown the budget on a
+  // large enough population — bail immediately rather than starting a fetch
+  // loop that's already guaranteed to time out.
+  const elapsedAfterSetup = performance.now() - start;
+  if (totalCount > 0 && elapsedAfterSetup > EXPORT_TIMEOUT_MS) {
+    return exportTimeoutResponse(c, totalCount, 0, elapsedAfterSetup);
+  }
+
+  const csvLines: string[] = [csvHeaderRow(metadataKeys)];
   let cursor: number | undefined;
   let fetched = 0;
   while (fetched < totalCount) {
@@ -149,30 +206,17 @@ export async function entitiesExportHandler(c: Context) {
       afterId: cursor,
     });
     if (batch.length === 0) break;
-    entities.push(...batch);
+    csvLines.push(...csvDataRows(batch, metadataKeys));
     fetched += batch.length;
     cursor = batch[batch.length - 1].id;
 
     const elapsedMs = performance.now() - start;
-    if (elapsedMs > EXPORT_TIMEOUT_MS && fetched < totalCount) {
-      const measuredRowsPerSecond = fetched / (elapsedMs / 1000);
-      // Apply a conservative safety factor: assume real-world throughput is lower
-      // than what we measured during the timeout window (which may have favorable
-      // caching, low contention, etc.). This ensures chunks finish well under
-      // their planned time window.
-      const conservativeRowsPerSecond = measuredRowsPerSecond / 1.5;
-      const { chunks, rowsPerChunk } = planExportChunks(totalCount, conservativeRowsPerSecond);
-      c.status(503);
-      return c.json({
-        error: 'timeout',
-        totalCount,
-        rowsPerChunk,
-        chunks,
-      });
+    if (elapsedMs > EXPORT_TIMEOUT_MS) {
+      return exportTimeoutResponse(c, totalCount, fetched, elapsedMs);
     }
   }
 
-  return csvResponse(c, entitiesToCsv(entities, metadataKeys), slug);
+  return csvResponse(c, csvLines.join('\r\n'), slug);
 }
 
 export async function entitiesHandler(c: Context) {

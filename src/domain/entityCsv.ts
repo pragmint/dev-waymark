@@ -7,18 +7,27 @@ function escapeCsvField(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+function csvRow(fields: (string | number)[]): string {
+  return fields.map(field => escapeCsvField(String(field))).join(',');
+}
+
+export function csvHeaderRow(metadataKeys: string[]): string {
+  return csvRow(['Entity', 'Type', ...metadataKeys]);
+}
+
+// One serialized row per entity, without the header — split out so callers
+// that stream/batch large exports (see entitiesExportHandler) can interleave
+// serialization with fetching instead of paying for it all at once at the end.
+export function csvDataRows(entities: EntityWithMetadata[], metadataKeys: string[]): string[] {
+  return entities.map(e =>
+    csvRow([getEntityTitle(e), e.type, ...metadataKeys.map(k => getMetadataValue(e, k) ?? '')])
+  );
+}
+
 // Build a CSV whose columns mirror the entity table: Entity, Type, then one
 // column per metadata key. Null/absent metadata renders as an empty cell.
 export function entitiesToCsv(entities: EntityWithMetadata[], metadataKeys: string[]): string {
-  const header = ['Entity', 'Type', ...metadataKeys];
-  const rows = entities.map(e => [
-    getEntityTitle(e),
-    e.type,
-    ...metadataKeys.map(k => getMetadataValue(e, k) ?? ''),
-  ]);
-  return [header, ...rows]
-    .map(row => row.map(field => escapeCsvField(String(field))).join(','))
-    .join('\r\n');
+  return [csvHeaderRow(metadataKeys), ...csvDataRows(entities, metadataKeys)].join('\r\n');
 }
 
 export function exportFilenameSlug(entityType: string | null): string {
@@ -51,4 +60,14 @@ export function planExportChunks(totalCount: number, rowsPerSecond: number): Exp
   // stay consistent (chunks * rowsPerChunk >= totalCount) for the caller.
   const actualChunks = Math.ceil(totalCount / rowsPerChunk);
   return { chunks: actualChunks, rowsPerChunk };
+}
+
+// Fallback for when the export times out before a single row is fetched
+// (e.g. the count/metadata-key lookups alone blow the budget) — there's no
+// measured throughput to extrapolate from, so this hands back the finest
+// split the planner allows instead of guessing a number that could still
+// be too coarse.
+export function finestExportChunkPlan(totalCount: number): ExportChunkPlan {
+  const rowsPerChunk = Math.max(MIN_ROWS_PER_CHUNK, Math.ceil(totalCount / MAX_CHUNKS));
+  return { chunks: Math.ceil(totalCount / rowsPerChunk), rowsPerChunk };
 }
