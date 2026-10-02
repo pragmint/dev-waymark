@@ -1171,7 +1171,9 @@ test.describe('field trend smoothing slot', () => {
           const final = point.getProps(['x', 'y'], true);
           return { x: final.x, y: final.y, settled: point.x === final.x && point.y === final.y };
         });
-      await expect.poll(async () => (await lastPoint()).settled).toBe(true);
+      // Poll at a flat interval: the default backoff checks long after
+      // Chart.js's 1s animation finishes.
+      await expect.poll(async () => (await lastPoint()).settled, { intervals: [50] }).toBe(true);
       const { x, y } = await lastPoint();
       const position = { x, y };
       await canvas.click({ position });
@@ -1192,6 +1194,10 @@ test.describe('field trend smoothing slot', () => {
     await page.locator('[data-date-range-custom-start]').dispatchEvent('change');
     await page.locator('[data-date-range-custom-end]').fill('2024-01-20');
     await page.locator('[data-date-range-custom-end]').dispatchEvent('change');
+    // Each step above fires its own refresh. Wait for the last one to land —
+    // the grid stays loading until the newest request finishes — or the test
+    // reads an intermediate link that the final redraw then replaces.
+    await expect(page.locator('[data-viz-grid]')).not.toHaveClass(/is-loading/);
     await expect.poll(lastHref).not.toBe(serverHref);
     await clickLastPoint();
   });
