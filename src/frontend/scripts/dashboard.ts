@@ -1,3 +1,15 @@
+import {
+  DEFAULT_DATE_RANGE,
+  parseDashboardConfig,
+  parseDateRange,
+  parseDateRangeQuery,
+  parsePresetList,
+  parseTemplateList,
+  parseVizDashboardCounts,
+  parseVizIds,
+  type DateRangePeriod,
+  type DateRangeState,
+} from './dashboardInputs';
 import { followLink, linksNamed, replaceLinks } from './links';
 
 // Chart.js is loaded from CDN as a global before this script runs.
@@ -49,18 +61,6 @@ interface ChartConfig {
   options?: ChartOptions;
 }
 
-type DateRangePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
-
-interface DateRangeState {
-  period: DateRangePeriod;
-  offset: number;
-  customStart: string | null;
-  customEnd: string | null;
-  compare: boolean;
-  compareCustomStart: string | null;
-  compareCustomEnd: string | null;
-}
-
 interface DashboardState {
   dashboardId: number | null;
   savedVizIds: number[];
@@ -76,38 +76,28 @@ const state: DashboardState = {
   currentVizIds: [],
   originalName: '',
   vizDashboardCounts: {},
-  dateRange: {
-    period: 'all',
-    offset: 0,
-    customStart: null,
-    customEnd: null,
-    compare: false,
-    compareCustomStart: null,
-    compareCustomEnd: null,
-  },
+  dateRange: DEFAULT_DATE_RANGE,
 };
 
 // ── Hydration ────────────────────────────────────────────────────────────────
 
-function readJsonEmbed<T>(id: string, fallback: T): T {
+// Returns the raw parsed JSON; callers validate it with a dashboardInputs parser.
+function readJsonEmbed(id: string): unknown {
   const el = document.getElementById(id);
-  if (!el?.textContent) return fallback;
+  if (!el?.textContent) return null;
   try {
-    return JSON.parse(el.textContent) as T;
+    return JSON.parse(el.textContent);
   } catch {
-    return fallback;
+    return null;
   }
 }
 
 function hydrate(): void {
-  const config = readJsonEmbed<{ dashboardId: number | null }>('dashboard-config', {
-    dashboardId: null,
-  });
-  state.dashboardId = config.dashboardId;
-  state.savedVizIds = readJsonEmbed<number[]>('dashboard-saved-viz-ids', []);
+  state.dashboardId = parseDashboardConfig(readJsonEmbed('dashboard-config')).dashboardId;
+  state.savedVizIds = parseVizIds(readJsonEmbed('dashboard-saved-viz-ids'));
   state.currentVizIds = state.savedVizIds.slice();
-  state.vizDashboardCounts = readJsonEmbed<Record<number, number>>('viz-dashboard-counts', {});
-  state.dateRange = readJsonEmbed<DateRangeState>('date-range-config', state.dateRange);
+  state.vizDashboardCounts = parseVizDashboardCounts(readJsonEmbed('viz-dashboard-counts'));
+  state.dateRange = parseDateRange(readJsonEmbed('date-range-config'));
   if (state.dateRange.period === 'custom') {
     rememberedCustom = { start: state.dateRange.customStart, end: state.dateRange.customEnd };
     rememberedCompareCustom = {
@@ -719,16 +709,6 @@ async function persistReorder(vizIds: number[], previous: number[]): Promise<voi
 
 // ── Create-viz modal ─────────────────────────────────────────────────────────
 
-interface PresetEntry {
-  id: number;
-  name: string;
-}
-interface TemplateEntry {
-  id: string;
-  name: string;
-  description: string;
-  chartType: string;
-}
 interface AvailableField {
   key: string;
   value_type: 'string' | 'number' | 'date' | 'boolean';
@@ -1172,7 +1152,7 @@ function sectionPlaceholder(text: string): HTMLElement {
 
 function renderDatasetSection(): HTMLElement {
   const section = sectionShell(1, 'Dataset');
-  const presets = readJsonEmbed<PresetEntry[]>('presets-list', []);
+  const presets = parsePresetList(readJsonEmbed('presets-list'));
   if (presets.length === 0) {
     section.appendChild(
       sectionPlaceholder('No datasets (presets) found. Create one on the Entities page first.')
@@ -1219,7 +1199,7 @@ async function onPresetChange(presetId: number): Promise<void> {
 
 function renderTemplateSection(): HTMLElement {
   const section = sectionShell(2, 'Template');
-  const templates = readJsonEmbed<TemplateEntry[]>('templates-list', []);
+  const templates = parseTemplateList(readJsonEmbed('templates-list'));
   const grid = document.createElement('div');
   grid.className = 'viz-modal-template-grid';
   for (const t of templates) {
@@ -2099,31 +2079,6 @@ function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): 
   return `/api/dashboards/${dashboardId}/cards${query}`;
 }
 
-function readRangeFromUrl(): DateRangeState {
-  const params = new URLSearchParams(window.location.search);
-  const rawPeriod = params.get('range');
-  const validPeriods: DateRangePeriod[] = ['all', 'week', 'month', 'quarter', 'year', 'custom'];
-  const period: DateRangePeriod = validPeriods.includes(rawPeriod as DateRangePeriod)
-    ? (rawPeriod as DateRangePeriod)
-    : 'all';
-  const offsetN = parseInt(params.get('offset') ?? '0', 10);
-  const offset = Number.isFinite(offsetN) ? offsetN : 0;
-  const rs = params.get('rs');
-  const re = params.get('re');
-  const ccs = params.get('ccs');
-  const cce = params.get('cce');
-  const isIsoDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-  return {
-    period,
-    offset,
-    customStart: isIsoDate(rs) ? rs : null,
-    customEnd: isIsoDate(re) ? re : null,
-    compare: params.get('cmp') === '1',
-    compareCustomStart: isIsoDate(ccs) ? ccs : null,
-    compareCustomEnd: isIsoDate(cce) ? cce : null,
-  };
-}
-
 function wireDateRange(): void {
   const row = document.querySelector<HTMLElement>('[data-date-range-row]');
   if (!row) return;
@@ -2205,7 +2160,7 @@ function wireDateRange(): void {
   compareEndInput?.addEventListener('change', applyCompareCustom);
 
   window.addEventListener('popstate', () => {
-    void applyRange(readRangeFromUrl(), { pushHistory: false });
+    void applyRange(parseDateRangeQuery(window.location.search), { pushHistory: false });
   });
 }
 
