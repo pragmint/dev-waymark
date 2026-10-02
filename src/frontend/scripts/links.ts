@@ -12,7 +12,7 @@ export function followLink(
 }
 
 export function linksNamed(root: ParentNode, name: string): HTMLAnchorElement[] | null {
-  const box = root.querySelector(`[data-links="${name}"]`);
+  const box = root.querySelector(`[data-links="${CSS.escape(name)}"]`);
   return box ? Array.from(box.querySelectorAll('a')) : null;
 }
 
@@ -22,7 +22,7 @@ export function replaceLinks(
   name: string,
   hrefs: (string | null)[] | null
 ): void {
-  root.querySelector(`[data-links="${name}"]`)?.remove();
+  root.querySelector(`[data-links="${CSS.escape(name)}"]`)?.remove();
   if (!hrefs) return;
   const box = document.createElement('div');
   box.hidden = true;
