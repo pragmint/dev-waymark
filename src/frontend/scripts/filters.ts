@@ -2,6 +2,7 @@
 // shell + JSON embeds; from DOMContentLoaded onward, the entire filter tree
 // view is driven by `state.current` and re-rendered on every change.
 
+import { parseFilterConfig } from './filterInputs';
 import { readJsonEmbed } from './jsonEmbed';
 import { followLink, linksNamed } from './links';
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
@@ -35,16 +36,10 @@ type AvailableFilter = {
   distinctValues?: string[];
 };
 
-type FilterConfig = {
-  selectedPresetId: number | null;
-  selectedEntityType: string | null;
-  isDraft: boolean;
-};
-
 const state = {
   current: emptyTree(),
   available: [] as AvailableFilter[],
-  config: { selectedPresetId: null, selectedEntityType: null, isDraft: false } as FilterConfig,
+  config: parseFilterConfig(null),
   selected: new Set<string>(),
 };
 
@@ -87,10 +82,7 @@ function hydrate() {
   }
   const available = readJsonEmbed('filter-available');
   if (Array.isArray(available)) state.available = available as AvailableFilter[];
-  const config = readJsonEmbed('filter-config');
-  if (config && typeof config === 'object') {
-    state.config = { ...state.config, ...(config as FilterConfig) };
-  }
+  state.config = parseFilterConfig(readJsonEmbed('filter-config'));
 }
 
 function isFilterTree(v: unknown): v is FilterTree {
