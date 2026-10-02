@@ -121,9 +121,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async rollbackLast(): Promise<void> {
     const row = this.db
-      .query<{ name: string }, []>(
-        'SELECT name FROM _app_migrations ORDER BY applied_at DESC LIMIT 1'
-      )
+      .query<
+        { name: string },
+        []
+      >('SELECT name FROM _app_migrations ORDER BY applied_at DESC LIMIT 1')
       .get();
     if (!row) return;
 
@@ -139,18 +140,20 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async savePreset(name: string, tree: FilterTree): Promise<number> {
     const result = this.db
-      .query<{ id: number }, [string, string]>(
-        'INSERT INTO presets (name, filter_tree) VALUES (?, ?) RETURNING id'
-      )
+      .query<
+        { id: number },
+        [string, string]
+      >('INSERT INTO presets (name, filter_tree) VALUES (?, ?) RETURNING id')
       .get(name, JSON.stringify(tree));
     return result!.id;
   }
 
   async getPreset(id: number): Promise<PresetWithTree | null> {
     const row = this.db
-      .query<{ id: number; name: string; filter_tree: string | null }, [number]>(
-        'SELECT id, name, filter_tree FROM presets WHERE id = ?'
-      )
+      .query<
+        { id: number; name: string; filter_tree: string | null },
+        [number]
+      >('SELECT id, name, filter_tree FROM presets WHERE id = ?')
       .get(id);
     if (!row) return null;
 
@@ -204,9 +207,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
   ): Promise<number> {
     const now = new Date().toISOString();
     const result = this.db
-      .query<{ id: number }, [string, string | null, number, string, string, string]>(
-        'INSERT INTO visualizations (name, description, preset_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id'
-      )
+      .query<
+        { id: number },
+        [string, string | null, number, string, string, string]
+      >('INSERT INTO visualizations (name, description, preset_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
       .get(name, description, presetId, JSON.stringify(config), now, now);
     return result!.id;
   }
@@ -222,9 +226,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
       updated_at: string;
     };
     const row = this.db
-      .query<Row, [number]>(
-        'SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations WHERE id = ?'
-      )
+      .query<
+        Row,
+        [number]
+      >('SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations WHERE id = ?')
       .get(id);
     if (!row) return null;
     return VisualizationSchema.parse({
@@ -240,9 +245,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async listVisualizations(): Promise<VisualizationSummary[]> {
     const rows = this.db
-      .query<VisualizationRow, []>(
-        'SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations ORDER BY id'
-      )
+      .query<
+        VisualizationRow,
+        []
+      >('SELECT id, name, description, preset_id, config, created_at, updated_at FROM visualizations ORDER BY id')
       .all();
     return rows.map(rowToVisualizationSummary);
   }
@@ -309,9 +315,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async listWaymarksForVisualization(visualizationId: number): Promise<Waymark[]> {
     const rows = this.db
-      .query<WaymarkRow, [number]>(
-        'SELECT id, visualization_id, start_date, end_date, target_value, applies_to, label, created_at, updated_at FROM waymarks WHERE visualization_id = ? ORDER BY start_date'
-      )
+      .query<
+        WaymarkRow,
+        [number]
+      >('SELECT id, visualization_id, start_date, end_date, target_value, applies_to, label, created_at, updated_at FROM waymarks WHERE visualization_id = ? ORDER BY start_date')
       .all(visualizationId);
     return rows.map(rowToWaymark);
   }
@@ -368,9 +375,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
       .get(id);
     if (!row) return null;
     const vizRows = this.db
-      .query<{ visualization_id: number }, [number]>(
-        'SELECT visualization_id FROM dashboard_visualizations WHERE dashboard_id = ? ORDER BY position'
-      )
+      .query<
+        { visualization_id: number },
+        [number]
+      >('SELECT visualization_id FROM dashboard_visualizations WHERE dashboard_id = ? ORDER BY position')
       .all(id);
     return DashboardWithVizSchema.parse({
       ...DashboardSchema.parse({ id: row.id, name: row.name }),
@@ -412,15 +420,17 @@ export class SqliteAppStateRepository implements AppStateRepository {
   async addVisualizationToDashboard(dashboardId: number, visualizationId: number): Promise<void> {
     const tx = this.db.transaction(() => {
       const existing = this.db
-        .query<{ dashboard_id: number }, [number, number]>(
-          'SELECT dashboard_id FROM dashboard_visualizations WHERE dashboard_id = ? AND visualization_id = ?'
-        )
+        .query<
+          { dashboard_id: number },
+          [number, number]
+        >('SELECT dashboard_id FROM dashboard_visualizations WHERE dashboard_id = ? AND visualization_id = ?')
         .get(dashboardId, visualizationId);
       if (existing) return;
       const row = this.db
-        .query<{ max_pos: number | null }, [number]>(
-          'SELECT MAX(position) AS max_pos FROM dashboard_visualizations WHERE dashboard_id = ?'
-        )
+        .query<
+          { max_pos: number | null },
+          [number]
+        >('SELECT MAX(position) AS max_pos FROM dashboard_visualizations WHERE dashboard_id = ?')
         .get(dashboardId);
       const nextPos = row && row.max_pos !== null ? row.max_pos + 1 : 0;
       this.db
@@ -443,9 +453,10 @@ export class SqliteAppStateRepository implements AppStateRepository {
 
   async getDashboardCountsByViz(): Promise<Record<number, number>> {
     const rows = this.db
-      .query<{ visualization_id: number; n: number }, []>(
-        'SELECT visualization_id, COUNT(*) AS n FROM dashboard_visualizations GROUP BY visualization_id'
-      )
+      .query<
+        { visualization_id: number; n: number },
+        []
+      >('SELECT visualization_id, COUNT(*) AS n FROM dashboard_visualizations GROUP BY visualization_id')
       .all();
     const out: Record<number, number> = {};
     for (const r of rows) out[r.visualization_id] = r.n;

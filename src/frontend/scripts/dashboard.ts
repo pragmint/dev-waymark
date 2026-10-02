@@ -1463,7 +1463,9 @@ function readModalForm(): {
       slots[def.slotKey] = el ? Array.from(el.selectedOptions).map(o => o.value) : [];
     } else {
       const el = form.elements.namedItem(def.formName) as
-        HTMLSelectElement | HTMLInputElement | null;
+        | HTMLSelectElement
+        | HTMLInputElement
+        | null;
       slots[def.slotKey] = el?.value || def.defaultValue || '';
     }
   }
