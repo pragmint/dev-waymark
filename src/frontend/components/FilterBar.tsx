@@ -324,12 +324,7 @@ export const FilterBar: FC<FilterBarProps> = ({
           </div>
         ) : (
           <>
-            <select
-              id="preset-combo-input"
-              class="filter-select"
-              data-preset-select
-              data-current-url={currentUrl}
-            >
+            <select id="preset-combo-input" class="filter-select" data-preset-select>
               <option value="">None</option>
               {presets.map(p => (
                 <option value={String(p.id)} data-preset-id={p.id}>

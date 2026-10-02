@@ -1659,8 +1659,8 @@ function reloadDashboard(): void {
 // ── Date range stepper ───────────────────────────────────────────────────────
 
 // Mirrors dateRangeToQueryParts in src/domain/dateRange.ts — kept as a
-// client-side duplicate since this script is a standalone bundle with no
-// server-side imports.
+// client-side duplicate since this script is a standalone bundle that only
+// imports types from server-side modules.
 function buildRangeQueryParams(range: DateRange): string[] {
   const params: string[] = [];
   if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);

@@ -1181,11 +1181,9 @@ test.describe('field trend smoothing slot', () => {
 
     // Links rendered by the server.
     await clickLastPoint();
-    const serverHref = await (async () => {
-      await page.goto(`/visualizations?dashboard=${dashId}`);
-      await waitForDashboardHydrated(page);
-      return lastHref();
-    })();
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    const serverHref = await lastHref();
 
     // Links rebuilt client-side from the refreshed cards' payload: narrowing
     // the range moves the last bucket, so its link must change.
