@@ -14,6 +14,7 @@ import {
 import type { FilterLeaf, FilterNode } from '../../schemas/filterTree';
 import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
 import { HiddenLinks } from './HiddenLinks';
+import { JsonEmbed } from './JsonEmbed';
 
 export type PresetWithUrl = Preset & { url: string };
 
@@ -222,36 +223,12 @@ export const FilterBar: FC<FilterBarProps> = ({
   return (
     <div class="filter-bar" data-filter-bar>
       {/* JSON embeds — client hydration */}
-      <script
-        type="application/json"
-        id="filter-tree-initial"
-        // The script embed is parsed client-side as JSON during hydration —
-        // keep it as raw JSON. The URL/form encoders use the hex codec.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(visibleTree) }}
-      />
-      <script
-        type="application/json"
-        id="filter-available"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(availableFilters) }}
-      />
-      <script
-        type="application/json"
-        id="filter-selected-preset-tree"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(selectedPresetTree ?? null),
-        }}
-      />
-      <script
-        type="application/json"
-        id="filter-config"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            selectedPresetId,
-            selectedEntityType,
-            isDraft,
-          }),
-        }}
-      />
+      {/* Parsed client-side as JSON during hydration — keep it as JSON, not the
+          hex codec the URL/form encoders use. */}
+      <JsonEmbed id="filter-tree-initial" value={visibleTree} />
+      <JsonEmbed id="filter-available" value={availableFilters} />
+      <JsonEmbed id="filter-selected-preset-tree" value={selectedPresetTree ?? null} />
+      <JsonEmbed id="filter-config" value={{ selectedPresetId, selectedEntityType, isDraft }} />
 
       {/* Row: Type + Preset controls */}
       <div class="filter-meta-row">

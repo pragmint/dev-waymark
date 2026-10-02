@@ -6,6 +6,7 @@ import type { ChartJsConfig } from '../../domain/chartDataBuilder';
 import type { DateRange } from '../../domain/dateRange';
 import { TEMPLATES } from '../../schemas/visualizationTemplate';
 import { HiddenLinks } from '../components/HiddenLinks';
+import { JsonEmbed } from '../components/JsonEmbed';
 import { Layout } from '../components/Layout';
 
 const CHART_JS_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
@@ -96,41 +97,12 @@ export const DashboardPage: FC<Props> = ({
         </>
       )}
 
-      <script
-        id="dashboard-config"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(dashboardConfig) }}
-      />
-      <script
-        id="dashboard-saved-viz-ids"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(savedVizIds) }}
-      />
-      <script
-        id="dashboards-list"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(dashboards) }}
-      />
-      <script
-        id="viz-dashboard-counts"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(vizDashboardCounts) }}
-      />
-      <script
-        id="presets-list"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(presets) }}
-      />
-      <script
-        id="date-range-config"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(dateRange) }}
-      />
-      <script
-        id="templates-list"
-        type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(TEMPLATES) }}
-      />
+      <JsonEmbed id="dashboard-config" value={dashboardConfig} />
+      <JsonEmbed id="dashboard-saved-viz-ids" value={savedVizIds} />
+      <JsonEmbed id="viz-dashboard-counts" value={vizDashboardCounts} />
+      <JsonEmbed id="presets-list" value={presets} />
+      <JsonEmbed id="date-range-config" value={dateRange} />
+      <JsonEmbed id="templates-list" value={TEMPLATES} />
 
       <dialog id="viz-create-modal" class="viz-modal" />
       <dialog id="waymark-modal" class="waymark-dialog" />
