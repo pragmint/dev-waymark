@@ -9,6 +9,7 @@ import {
   parseVizIds,
 } from './dashboardInputs';
 import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
+import { readJsonEmbed } from './jsonEmbed';
 import { followLink, linksNamed, replaceLinks } from './links';
 
 // Chart.js is loaded from CDN as a global before this script runs.
@@ -79,17 +80,6 @@ const state: DashboardState = {
 };
 
 // ── Hydration ────────────────────────────────────────────────────────────────
-
-// Returns the raw parsed JSON; callers validate it with a dashboardInputs parser.
-function readJsonEmbed(id: string): unknown {
-  const el = document.getElementById(id);
-  if (!el?.textContent) return null;
-  try {
-    return JSON.parse(el.textContent);
-  } catch {
-    return null;
-  }
-}
 
 function hydrate(): void {
   state.dashboardId = parseDashboardConfig(readJsonEmbed('dashboard-config')).dashboardId;

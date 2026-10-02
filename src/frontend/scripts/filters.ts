@@ -2,6 +2,7 @@
 // shell + JSON embeds; from DOMContentLoaded onward, the entire filter tree
 // view is driven by `state.current` and re-rendered on every change.
 
+import { readJsonEmbed } from './jsonEmbed';
 import { followLink, linksNamed } from './links';
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 import { cloneTreeWithoutKey } from '../../schemas/filterTree';
@@ -89,16 +90,6 @@ function hydrate() {
   const config = readJsonEmbed('filter-config');
   if (config && typeof config === 'object') {
     state.config = { ...state.config, ...(config as FilterConfig) };
-  }
-}
-
-function readJsonEmbed(id: string): unknown {
-  const el = document.getElementById(id);
-  if (!el) return null;
-  try {
-    return JSON.parse(el.textContent ?? '');
-  } catch {
-    return null;
   }
 }
 

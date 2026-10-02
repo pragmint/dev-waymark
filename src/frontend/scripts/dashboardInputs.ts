@@ -7,6 +7,7 @@
 // bundle has no Zod in it, and these few shapes don't justify adding it. Only
 // types come from src/domain/dateRange.ts, so it stays out of the bundle too.
 import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
+import { asInteger, asPositiveInteger, asRecord } from './jsonEmbed';
 
 const PERIODS: readonly DateRangePeriod[] = ['all', 'week', 'month', 'quarter', 'year', 'custom'];
 
@@ -33,21 +34,6 @@ export interface TemplateEntry {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function asRecord(raw: unknown): Record<string, unknown> {
-  return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : {};
-}
-
-function asInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) ? value : null;
-}
-
-function asPositiveInteger(value: unknown): number | null {
-  const n = asInteger(value);
-  return n != null && n > 0 ? n : null;
-}
 
 function asIsoDate(value: unknown): string | null {
   return typeof value === 'string' && ISO_DATE.test(value) ? value : null;
