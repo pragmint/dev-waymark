@@ -7,9 +7,8 @@ import {
   parseTemplateList,
   parseVizDashboardCounts,
   parseVizIds,
-  type DateRangePeriod,
-  type DateRangeState,
 } from './dashboardInputs';
+import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
 import { followLink, linksNamed, replaceLinks } from './links';
 
 // Chart.js is loaded from CDN as a global before this script runs.
@@ -67,7 +66,7 @@ interface DashboardState {
   currentVizIds: number[];
   originalName: string;
   vizDashboardCounts: Record<number, number>;
-  dateRange: DateRangeState;
+  dateRange: DateRange;
 }
 
 const state: DashboardState = {
@@ -1672,7 +1671,7 @@ function reloadDashboard(): void {
 // Mirrors dateRangeToQueryParts in src/domain/dateRange.ts — kept as a
 // client-side duplicate since this script is a standalone bundle with no
 // server-side imports.
-function buildRangeQueryParams(range: DateRangeState): string[] {
+function buildRangeQueryParams(range: DateRange): string[] {
   const params: string[] = [];
   if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
   if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
@@ -1691,7 +1690,7 @@ function buildRangeQueryParams(range: DateRangeState): string[] {
   return params;
 }
 
-function buildDashboardUrl(range: DateRangeState): string {
+function buildDashboardUrl(range: DateRange): string {
   const params: string[] = [];
   if (state.dashboardId != null) params.push(`dashboard=${state.dashboardId}`);
   params.push(...buildRangeQueryParams(range));
@@ -1702,7 +1701,7 @@ function isStepperPeriod(period: DateRangePeriod): boolean {
   return period === 'week' || period === 'month' || period === 'quarter' || period === 'year';
 }
 
-function syncCompareCheckboxUI(row: HTMLElement, range: DateRangeState): void {
+function syncCompareCheckboxUI(row: HTMLElement, range: DateRange): void {
   const compareLabel = row.querySelector<HTMLElement>('.date-range-compare');
   if (compareLabel) compareLabel.hidden = range.period === 'all';
   const compareCheckbox = row.querySelector<HTMLInputElement>('[data-date-range-compare]');
@@ -1725,7 +1724,7 @@ function syncCompareCheckboxUI(row: HTMLElement, range: DateRangeState): void {
   }
 }
 
-function syncDateRangeRowUI(range: DateRangeState): void {
+function syncDateRangeRowUI(range: DateRange): void {
   const row = document.querySelector<HTMLElement>('[data-date-range-row]');
   if (!row) return;
 
@@ -2030,7 +2029,7 @@ let rememberedCompareCustom: { start: string | null; end: string | null } = {
   end: null,
 };
 
-async function applyRange(range: DateRangeState, opts: { pushHistory: boolean }): Promise<void> {
+async function applyRange(range: DateRange, opts: { pushHistory: boolean }): Promise<void> {
   state.dateRange = range;
   if (range.period === 'custom' && (range.customStart || range.customEnd)) {
     rememberedCustom = { start: range.customStart, end: range.customEnd };
@@ -2075,7 +2074,7 @@ async function fetchAndApplyRangeCards(apiUrl: string, seq: number): Promise<voi
   }
 }
 
-function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): string {
+function buildDashboardCardsApiUrl(dashboardId: number, range: DateRange): string {
   const params = buildRangeQueryParams(range);
   const query = params.length === 0 ? '' : `?${params.join('&')}`;
   return `/api/dashboards/${dashboardId}/cards${query}`;
@@ -2088,7 +2087,7 @@ function wireDateRange(): void {
   const periodSelect = row.querySelector<HTMLSelectElement>('[data-date-range-period]');
   periodSelect?.addEventListener('change', () => {
     const period = periodSelect.value as DateRangePeriod;
-    const next: DateRangeState = {
+    const next: DateRange = {
       period,
       offset: 0,
       customStart: period === 'custom' ? rememberedCustom.start : null,

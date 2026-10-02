@@ -8,8 +8,8 @@ import {
   parseTemplateList,
   parseVizDashboardCounts,
   parseVizIds,
-  type DateRangeState,
 } from './dashboardInputs';
+import type { DateRange } from '../../domain/dateRange';
 
 describe('parseDashboardConfig', () => {
   it('keeps a positive integer id', () => {
@@ -71,7 +71,7 @@ describe('parseVizDashboardCounts', () => {
 });
 
 describe('parseDateRange', () => {
-  const full: DateRangeState = {
+  const full: DateRange = {
     period: 'custom',
     offset: 0,
     customStart: '2024-01-01',

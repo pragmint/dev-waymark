@@ -1,22 +1,16 @@
-// Parsers for every value dashboard.ts reads from outside itself: the server's
-// JSON embeds and the URL query. Each returns only well-typed values, and the
-// rest of the script trusts nothing else. Ids and offsets end up in URLs and
-// form actions, so they must be numbers here, not merely typed as numbers.
+// Parsers for the server's JSON embeds and the URL query that dashboard.ts
+// reads. Each returns only well-typed values, and the rest of the script trusts
+// nothing else. Ids and offsets end up in URLs and form actions, so they must be
+// numbers here, not merely typed as numbers.
+//
+// These are hand-written rather than Zod schemas on purpose: the dashboard
+// bundle has no Zod in it, and these few shapes don't justify adding it. Only
+// types come from src/domain/dateRange.ts, so it stays out of the bundle too.
+import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
 
-const PERIODS = ['all', 'week', 'month', 'quarter', 'year', 'custom'] as const;
-export type DateRangePeriod = (typeof PERIODS)[number];
+const PERIODS: readonly DateRangePeriod[] = ['all', 'week', 'month', 'quarter', 'year', 'custom'];
 
-export interface DateRangeState {
-  period: DateRangePeriod;
-  offset: number;
-  customStart: string | null;
-  customEnd: string | null;
-  compare: boolean;
-  compareCustomStart: string | null;
-  compareCustomEnd: string | null;
-}
-
-export const DEFAULT_DATE_RANGE: DateRangeState = {
+export const DEFAULT_DATE_RANGE: DateRange = {
   period: 'all',
   offset: 0,
   customStart: null,
@@ -83,7 +77,7 @@ export function parseVizDashboardCounts(raw: unknown): Record<number, number> {
   return counts;
 }
 
-export function parseDateRange(raw: unknown): DateRangeState {
+export function parseDateRange(raw: unknown): DateRange {
   const r = asRecord(raw);
   return {
     period: asPeriod(r.period) ?? DEFAULT_DATE_RANGE.period,
@@ -96,7 +90,7 @@ export function parseDateRange(raw: unknown): DateRangeState {
   };
 }
 
-export function parseDateRangeQuery(search: string): DateRangeState {
+export function parseDateRangeQuery(search: string): DateRange {
   const params = new URLSearchParams(search);
   return {
     period: asPeriod(params.get('range')) ?? DEFAULT_DATE_RANGE.period,
