@@ -1,3 +1,5 @@
+import { followLink, linksNamed, replaceLinks } from './links';
+
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
@@ -120,28 +122,6 @@ function hydrate(): void {
 
 // ── Chart rendering ──────────────────────────────────────────────────────────
 
-function readPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
-  const raw = canvas.getAttribute('data-point-urls');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readSmoothingPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
-  const raw = canvas.getAttribute('data-smoothing-point-urls');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
-  } catch {
-    return null;
-  }
-}
-
 function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
   const raw = canvas.getAttribute('data-smoothing-dataset-index');
   if (!raw) return null;
@@ -154,26 +134,25 @@ function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
 // from every bucket in that point's window, not just the point's own bucket.
 function attachPointNavigation(
   config: ChartConfig,
-  pointUrls: (string | null)[],
-  smoothingPointUrls: (string | null)[] | null,
+  pointLinks: HTMLAnchorElement[],
+  smoothingPointLinks: HTMLAnchorElement[] | null,
   smoothingDatasetIndex: number | null
 ): void {
-  const urlFor = (datasetIndex: number, index: number): string | undefined => {
-    if (datasetIndex === 0) return pointUrls[index] ?? undefined;
-    if (smoothingPointUrls && datasetIndex === smoothingDatasetIndex) {
-      return smoothingPointUrls[index] ?? undefined;
+  const linkFor = (datasetIndex: number, index: number): HTMLAnchorElement | undefined => {
+    if (datasetIndex === 0) return pointLinks[index];
+    if (smoothingPointLinks && datasetIndex === smoothingDatasetIndex) {
+      return smoothingPointLinks[index];
     }
     return undefined;
   };
   const isNavigable = (datasetIndex: number): boolean =>
-    datasetIndex === 0 || (smoothingPointUrls != null && datasetIndex === smoothingDatasetIndex);
+    datasetIndex === 0 || (smoothingPointLinks != null && datasetIndex === smoothingDatasetIndex);
 
   const options: ChartOptions = config.options ?? (config.options = {});
   options.onClick = (_event, elements) => {
     const hit = elements.find(e => isNavigable(e.datasetIndex));
     if (!hit) return;
-    const url = urlFor(hit.datasetIndex, hit.index);
-    if (url) window.location.href = url;
+    followLink(linkFor(hit.datasetIndex, hit.index), location.origin);
   };
   options.onHover = (event, elements) => {
     const target = event?.native?.target as HTMLElement | null;
@@ -214,12 +193,13 @@ function renderCardChart(canvas: HTMLCanvasElement): void {
   } catch {
     return;
   }
-  const pointUrls = readPointUrls(canvas);
-  if (pointUrls) {
+  const wrap = canvas.parentElement;
+  const pointLinks = wrap && linksNamed(wrap, 'points');
+  if (wrap && pointLinks) {
     attachPointNavigation(
       config,
-      pointUrls,
-      readSmoothingPointUrls(canvas),
+      pointLinks,
+      linksNamed(wrap, 'smoothing-points'),
       readSmoothingDatasetIndex(canvas)
     );
   }
@@ -380,9 +360,9 @@ function recomputeDirty(): void {
 function wireDashboardSelect(): void {
   const select = document.querySelector<HTMLSelectElement>('[data-dashboard-select]');
   if (!select) return;
+  const links = linksNamed(document, select.id);
   select.addEventListener('change', () => {
-    const url = select.value;
-    if (url) window.location.href = url;
+    followLink(links?.[select.selectedIndex], location.origin);
   });
 }
 
@@ -1871,8 +1851,11 @@ function setCanvasData(
   smoothingDatasetIndex: number | null
 ): void {
   canvas.setAttribute('data-config', JSON.stringify(chartJsConfig));
-  canvas.setAttribute('data-point-urls', JSON.stringify(pointUrls));
-  canvas.setAttribute('data-smoothing-point-urls', JSON.stringify(smoothingPointUrls));
+  const wrap = canvas.parentElement;
+  if (wrap) {
+    replaceLinks(wrap, 'points', pointUrls);
+    replaceLinks(wrap, 'smoothing-points', smoothingPointUrls);
+  }
   canvas.setAttribute('data-smoothing-dataset-index', JSON.stringify(smoothingDatasetIndex));
 }
 

@@ -13,6 +13,7 @@ import {
 } from '../../schemas/filterTree';
 import type { FilterLeaf, FilterNode } from '../../schemas/filterTree';
 import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
+import { HiddenLinks } from './HiddenLinks';
 
 export type PresetWithUrl = Preset & { url: string };
 
@@ -257,14 +258,7 @@ export const FilterBar: FC<FilterBarProps> = ({
         <label class="filter-widget-label" for="entity-type-select">
           Type
         </label>
-        <select
-          id="entity-type-select"
-          class="filter-select"
-          data-entity-type-select
-          data-base-url-template={JSON.stringify(
-            entityTypes.map(t => ({ type: t, url: urlForEntityType(activeTree, t) }))
-          )}
-        >
+        <select id="entity-type-select" class="filter-select" data-entity-type-select>
           {entityTypes.length === 0 && <option value="">(no entity types)</option>}
           {entityTypes.map(t => (
             <option value={t} selected={selectedEntityType === t}>
@@ -272,6 +266,14 @@ export const FilterBar: FC<FilterBarProps> = ({
             </option>
           ))}
         </select>
+        <HiddenLinks
+          name="entity-type-select"
+          hrefs={
+            entityTypes.length === 0
+              ? [null]
+              : entityTypes.map(t => urlForEntityType(activeTree, t))
+          }
+        />
 
         <div class="filter-meta-divider" aria-hidden="true" />
 
@@ -344,19 +346,25 @@ export const FilterBar: FC<FilterBarProps> = ({
             </a>
           </div>
         ) : (
-          <select
-            id="preset-combo-input"
-            class="filter-select"
-            data-preset-select
-            data-current-url={currentUrl}
-          >
-            <option value={bareTypeUrl}>None</option>
-            {presets.map(p => (
-              <option value={p.url} data-preset-id={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              id="preset-combo-input"
+              class="filter-select"
+              data-preset-select
+              data-current-url={currentUrl}
+            >
+              <option value="">None</option>
+              {presets.map(p => (
+                <option value={String(p.id)} data-preset-id={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <HiddenLinks
+              name="preset-combo-input"
+              hrefs={[bareTypeUrl, ...presets.map(p => p.url)]}
+            />
+          </>
         )}
 
         {selectedPreset && (

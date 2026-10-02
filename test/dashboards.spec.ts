@@ -1097,10 +1097,12 @@ test.describe('field trend smoothing slot', () => {
     const smoothingDatasetIndex = await canvas.getAttribute('data-smoothing-dataset-index');
     expect(smoothingDatasetIndex).toBe('1');
 
-    const pointUrls = JSON.parse((await canvas.getAttribute('data-point-urls')) ?? '[]');
-    const smoothingPointUrls = JSON.parse(
-      (await canvas.getAttribute('data-smoothing-point-urls')) ?? '[]'
-    );
+    const hrefs = (name: string) =>
+      card
+        .locator(`[data-links="${name}"] a`)
+        .evaluateAll(links => links.map(link => link.getAttribute('href') ?? ''));
+    const pointUrls = await hrefs('points');
+    const smoothingPointUrls = await hrefs('smoothing-points');
     expect(smoothingPointUrls.length).toBe(pointUrls.length);
 
     // The very first bucket has no history, so its window collapses to just
@@ -1119,6 +1121,81 @@ test.describe('field trend smoothing slot', () => {
       new Date(mainRange.gte!).getTime()
     );
     expect(smoothingRange.lte).toBe(mainRange.lte);
+  });
+
+  test('clicking a chart point follows its link, including after a date-range refresh', async ({
+    page,
+    request,
+  }) => {
+    const presetName = uniqueName('PresetPointClick');
+    await seedPreset(request, presetName);
+    const dashId = await seedDashboard(request, uniqueName('PointClickD'));
+    const vizName = uniqueName('PointClickViz');
+
+    await page.goto(`/visualizations?dashboard=${dashId}`);
+    await waitForDashboardHydrated(page);
+    await page.selectOption('[data-add-viz]', '__new__');
+    await page.selectOption('.viz-modal-body select', { label: presetName });
+    await page.locator('.viz-modal-template-card:has-text("Field trend")').click();
+    await page.fill('#viz-modal-form input[name="name"]', vizName);
+    await page.selectOption('#viz-modal-form select[name="date_field"]', 'jira_created_at');
+    await page.selectOption(
+      '#viz-modal-form select[name="numeric_fields"]',
+      'total_lead_time_seconds'
+    );
+    await page.locator('.viz-modal-footer button:has-text("Save")').click();
+
+    // The entities page redirects to add the entity type, so compare only the
+    // date range the point's link carries, not the whole URL.
+    const card = page.locator(`.dashboard-viz-card:has-text("${vizName}")`);
+    const canvas = card.locator('canvas');
+    const lastHref = () => card.locator('[data-links="points"] a').last().getAttribute('href');
+    const clickLastPoint = async () => {
+      await expect(card).toBeVisible();
+      const href = await lastHref();
+      expect(href).toMatch(/^\/entities\?/);
+      const expected = dateRangeFromEntityUrl(href!, 'jira_created_at');
+      expect(expected.gte).toBeTruthy();
+      // Chart.js hit-tests against the animated position, so wait for the
+      // last point to reach its final one before clicking it.
+      const lastPoint = () =>
+        canvas.evaluate(el => {
+          type XY = { x: number; y: number };
+          type Point = XY & { getProps(props: string[], final: boolean): XY };
+          type ChartGlobal = {
+            getChart(c: Element): { getDatasetMeta(i: number): { data: Point[] } };
+          };
+          const chart = (window as unknown as { Chart: ChartGlobal }).Chart.getChart(el);
+          const points = chart.getDatasetMeta(0).data;
+          const point = points[points.length - 1];
+          const final = point.getProps(['x', 'y'], true);
+          return { x: final.x, y: final.y, settled: point.x === final.x && point.y === final.y };
+        });
+      await expect.poll(async () => (await lastPoint()).settled).toBe(true);
+      const { x, y } = await lastPoint();
+      const position = { x, y };
+      await canvas.click({ position });
+      await page.waitForURL(/\/entities\?/);
+      expect(dateRangeFromEntityUrl(page.url(), 'jira_created_at')).toEqual(expected);
+    };
+
+    // Links rendered by the server.
+    await clickLastPoint();
+    const serverHref = await (async () => {
+      await page.goto(`/visualizations?dashboard=${dashId}`);
+      await waitForDashboardHydrated(page);
+      return lastHref();
+    })();
+
+    // Links rebuilt client-side from the refreshed cards' payload: narrowing
+    // the range moves the last bucket, so its link must change.
+    await page.selectOption('[data-date-range-period]', 'custom');
+    await page.locator('[data-date-range-custom-start]').fill('2024-01-01');
+    await page.locator('[data-date-range-custom-start]').dispatchEvent('change');
+    await page.locator('[data-date-range-custom-end]').fill('2024-01-20');
+    await page.locator('[data-date-range-custom-end]').dispatchEvent('change');
+    await expect.poll(lastHref).not.toBe(serverHref);
+    await clickLastPoint();
   });
 
   test('editing a saved viz to add a smoothing window updates the displayed chart', async ({
