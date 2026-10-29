@@ -802,6 +802,15 @@ const TEMPLATE_SLOT_DEFS: Record<string, SlotFieldDef[]> = {
       defaultValue: 'days',
       description: 'Units the duration (end minus start) is displayed in.',
     },
+    {
+      slotKey: 'aggregation',
+      formName: 'aggregation',
+      label: 'Aggregation',
+      kind: 'aggregation',
+      defaultValue: 'avg',
+      description:
+        'How durations within each time bucket are combined into a single point (e.g. average, median).',
+    },
   ],
   category_breakdown: [
     {

@@ -12,11 +12,26 @@ export type TemplateId = z.infer<typeof TemplateIdSchema>;
 
 // ── Slot schemas — each template defines which fields the user must fill ─────
 
+const SlotAggregationSchema = z.enum([
+  'avg',
+  'sum',
+  'min',
+  'max',
+  'median',
+  'p75',
+  'p85',
+  'p90',
+  'p95',
+  'p99',
+]);
+
 export const DurationTrendSlotsSchema = z.object({
   startDateField: z.string().min(1),
   endDateField: z.string().min(1),
   timeBucket: z.enum(['day', 'week', 'month', 'quarter', 'year']),
   unit: z.enum(['seconds', 'minutes', 'hours', 'days', 'weeks']),
+  // Optional: a config without one averages.
+  aggregation: SlotAggregationSchema.optional(),
 });
 export type DurationTrendSlots = z.infer<typeof DurationTrendSlotsSchema>;
 
@@ -44,7 +59,7 @@ export const FieldTrendSlotsSchema = z.object({
   dateField: z.string().min(1),
   numericFields: z.array(z.string().min(1)).min(1),
   timeBucket: z.enum(['day', 'week', 'month', 'quarter', 'year']),
-  aggregation: z.enum(['avg', 'sum', 'min', 'max', 'median', 'p75', 'p85', 'p90', 'p95', 'p99']),
+  aggregation: SlotAggregationSchema,
   // Optional per-measure display transform — see MeasureTransformSchema in visualization.ts.
   unitDivisor: z.string().optional(),
   unitLabel: z.string().optional(),
@@ -56,7 +71,7 @@ export type FieldTrendSlots = z.infer<typeof FieldTrendSlotsSchema>;
 export const CategoryComparisonSlotsSchema = z.object({
   categoryField: z.string().min(1),
   numericField: z.string().min(1),
-  aggregation: z.enum(['avg', 'sum', 'min', 'max', 'median', 'p75', 'p85', 'p90', 'p95', 'p99']),
+  aggregation: SlotAggregationSchema,
   unitDivisor: z.string().optional(),
   unitLabel: z.string().optional(),
 });

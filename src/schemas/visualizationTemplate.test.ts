@@ -74,6 +74,22 @@ describe('TemplateConfigSchema — duration_trend', () => {
     expect(result.success).toBe(false);
   });
 
+  it('keeps an aggregation when given one', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'duration_trend',
+      slots: { ...validSlots, aggregation: 'median' },
+    });
+    expect(result.success && result.data.slots).toMatchObject({ aggregation: 'median' });
+  });
+
+  it('rejects an invalid aggregation', () => {
+    const result = TemplateConfigSchema.safeParse({
+      templateId: 'duration_trend',
+      slots: { ...validSlots, aggregation: 'mode' },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects another template's slot shape", () => {
     const result = TemplateConfigSchema.safeParse({
       templateId: 'duration_trend',

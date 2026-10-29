@@ -65,7 +65,7 @@ function resolveDurationTrend(slots: DurationTrendSlots): VisualizationConfig {
       type: 'date',
       timeBucket: slots.timeBucket,
     },
-    aggregation: { function: 'avg' },
+    aggregation: { function: slots.aggregation ?? 'avg' },
     derivedMetric: {
       name: 'Duration',
       type: 'duration',

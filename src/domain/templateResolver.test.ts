@@ -27,6 +27,21 @@ describe('resolveTemplate', () => {
     expect(config.derivedMetric?.type === 'duration' && config.derivedMetric.unit).toBe('days');
   });
 
+  test('duration_trend uses the aggregation slot when set', () => {
+    const config = resolveTemplate({
+      templateId: 'duration_trend',
+      slots: {
+        startDateField: 'started_at',
+        endDateField: 'completed_at',
+        timeBucket: 'week',
+        unit: 'days',
+        aggregation: 'median',
+      },
+    });
+
+    expect(config.aggregation.function).toBe('median');
+  });
+
   test('category_breakdown produces pie chart', () => {
     const config = resolveTemplate({
       templateId: 'category_breakdown',
