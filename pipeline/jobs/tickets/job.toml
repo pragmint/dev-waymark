@@ -1,0 +1,2 @@
+description = "One row per Jira issue: the latest raw version of each, with the fields Waymark shows."
+inputs = ["raw.jira_issues"]

@@ -22,6 +22,7 @@
     "install-hooks": "bun scripts/install-hooks.ts"
   },
   "dependencies": {
+    "@duckdb/node-api": "2.0.0-r.1",
     "hono": "^4.0.0",
     "pg": "^8.21.0",
     "zod": "^4.0.0"

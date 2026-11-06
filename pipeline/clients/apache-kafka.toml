@@ -1,0 +1,24 @@
+# Candidate proof dataset: public, and its PR titles carry ticket keys.
+client = "apache-kafka"
+
+[github]
+repos = ["apache/kafka"]
+
+[jira]
+# "server" is Jira Server/Data Center (REST v2); "cloud" is *.atlassian.net (REST v3).
+flavor = "server"
+base_url = "https://issues.apache.org/jira"
+# Order by a stable field so offset paging can't skip or repeat issues mid-run.
+jql = "project = KAFKA ORDER BY key ASC"
+
+[mapping]
+# Uppercase, because PR text is uppercased before matching.
+ticket_key_pattern = "KAFKA-[0-9]+"
+
+# Maps a Jira status to a status group. Unlisted statuses use Jira's own category.
+[mapping.statuses]
+
+[[mapping.jira_fields]]
+key = "votes"
+path = "$.votes.votes"
+value_type = "number"

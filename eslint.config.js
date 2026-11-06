@@ -109,6 +109,7 @@ export default [
       'public',
       'eslint-rules',
       'mirror',
+      'pipeline/.venv',
       'src/db/source/goldenSeed.ts',
       ...getOtherWorktreeIgnores(),
     ],

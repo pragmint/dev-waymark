@@ -84,12 +84,14 @@ function rangeSql(
   // Only include the numeric-cast branch when the bound parses as a finite
   // number — otherwise `CAST('2024-01-05' AS REAL)` errors in Postgres
   // (SQLite silently coerces to 0/2024, but that's meaningless anyway).
+  // The cast sits in a CASE because AND does not guarantee evaluation order:
+  // DuckDB casts non-number values first and errors without it.
   const numeric = Number(value);
   if (Number.isFinite(numeric) && value.trim() !== '') {
     return {
       sql:
         `EXISTS (SELECT 1 FROM entity_metadata WHERE entity_id = e.id AND key = ? AND ` +
-        `((value_type = 'number' AND CAST(value AS REAL) ${cmp} ?) OR (value_type != 'number' AND value ${cmp} ?)))`,
+        `((CASE WHEN value_type = 'number' THEN CAST(value AS REAL) END ${cmp} ?) OR (value_type != 'number' AND value ${cmp} ?)))`,
       params: [leaf.key, numeric, value],
     };
   }

@@ -52,7 +52,7 @@ Unless otherwise configured, the server runs at `http://localhost:4040`
 
 ### Source database
 
-By default Dev Waymark never creates or migrates the source database schema. The expected schema is documented in `src/db/source/schema.ts`, and a configured source (SQLite file, remote Postgres, Redshift) must have the `entities` and `entity_metadata` tables in place before the app starts.
+By default Dev Waymark never creates or migrates the source database schema. The expected schema is documented in `src/db/source/schema.ts`, and a configured source (SQLite file, remote Postgres, Redshift, or a Parquet folder read by DuckDB) must have the `entities` and `entity_metadata` data in place before the app starts.
 
 Set `DEV_WAYMARK_SOURCE_DB_SEED` to opt into automatic schema + seed management for a source Dev Waymark owns:
 
@@ -157,17 +157,17 @@ Server-side rendered web app built with **Hono** + **Bun**, JSX templating, no c
 
 Dev Waymark separates **source data** from **application state**:
 
-| Concern                           | Owner             | Adapters                   | Default                  |
-| --------------------------------- | ----------------- | -------------------------- | ------------------------ |
-| Source data (entities + metadata) | External / client | SQLite, Postgres, Redshift | in-memory SQLite         |
-| App state (presets, views, etc.)  | Dev Waymark       | SQLite, Postgres           | `dev-waymark-app.sqlite` |
+| Concern                           | Owner             | Adapters                           | Default                  |
+| --------------------------------- | ----------------- | ---------------------------------- | ------------------------ |
+| Source data (entities + metadata) | External / client | SQLite, Postgres, Redshift, DuckDB | in-memory SQLite         |
+| App state (presets, views, etc.)  | Dev Waymark       | SQLite, Postgres                   | `dev-waymark-app.sqlite` |
 
 The two databases are configured independently and can live on different servers. Dev Waymark leaves the source schema alone by default; setting `DEV_WAYMARK_SOURCE_DB_SEED` to `golden` or `e2e` is the only way to opt in to schema management + reseed for a source.
 
 ### Data flow
 
 ```
-Source DB (SQLite / Postgres / Redshift)
+Source DB (SQLite / Postgres / Redshift / DuckDB)
     ↓  SourceDataAdapter
 entityRepository (EAV queries, filters)
     ↓
@@ -180,7 +180,7 @@ Application state writes flow through `AppStateRepository`, never through the so
 
 - **`index.tsx`** — Entry point. Loads config, initialises adapters, wires routes.
 - **`src/config.ts`** — Centralised environment config. Single place to read all env vars.
-- **`src/db/source/`** — `SourceDataAdapter` interface + SQLite / Postgres / Redshift implementations.
+- **`src/db/source/`** — `SourceDataAdapter` interface + SQLite / Postgres / Redshift / DuckDB implementations.
 - **`src/db/source/schema.ts`** — Documented source schema DDL, in both SQLite and Postgres flavours. Applied automatically when `DEV_WAYMARK_SOURCE_DB_SEED` is set to `golden` or `e2e`.
 - **`src/db/sqliteUtils.ts`** — `runSql()` helper for executing multi-statement DDL blocks.
 - **`src/db/appState/`** — `AppStateRepository` interface + SQLite / Postgres implementations.

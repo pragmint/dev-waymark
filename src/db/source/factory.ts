@@ -7,6 +7,7 @@ import type { SourceDataAdapter } from './adapter';
 import { SqliteSourceAdapter } from './sqlite';
 import { PostgresSourceAdapter } from './postgres';
 import { RedshiftSourceAdapter } from './redshift';
+import { DuckdbSourceAdapter } from './duckdb';
 import { seedGoldenData } from './goldenSeed';
 import { seedE2EData } from './e2eSeed';
 import { POSTGRES_SOURCE_SCHEMA_DDL } from './schema';
@@ -145,6 +146,14 @@ export async function createSourceAdapter(
         );
       }
       return new RedshiftSourceAdapter(config.url);
+    }
+    case 'duckdb': {
+      if (config.seed !== 'none') {
+        throw new Error(
+          `DuckDB source does not support seeding (DEV_WAYMARK_SOURCE_DB_SEED='${config.seed}')`
+        );
+      }
+      return DuckdbSourceAdapter.create(config.url);
     }
     default: {
       const _exhaustive: never = config.adapter;

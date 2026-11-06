@@ -2,7 +2,7 @@
 
 {
   # Runtime tools available inside `devenv shell`.
-  packages = [ pkgs.bun ];
+  packages = [ pkgs.bun pkgs.uv ];
 
   # One Postgres instance backs both `bun dev` and `bun test:e2e`. Isolation
   # between the two is by database name, not port — the app's ephemeral seed

@@ -77,3 +77,9 @@ Thumbs.db
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Python pipeline
+pipeline/.venv/
+__pycache__/
+.pytest_cache/
+pipeline/.data/
