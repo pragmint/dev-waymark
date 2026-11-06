@@ -7,6 +7,7 @@ import { createAppStateRepo } from './src/db/appState/factory';
 import { initAppStateRepo } from './src/db/appState/index';
 import { entitiesHandler, entitiesExportHandler } from './src/handlers/entitiesHandler';
 import { entityDetailHandler } from './src/handlers/entityDetailHandler';
+import { lineageRawHandler, lineageRowHandler } from './src/handlers/lineageHandler';
 import {
   entityPresetsSaveHandler,
   entityPresetsUpdateHandler,
@@ -74,6 +75,8 @@ app.post('/entities/presets', entityPresetsSaveHandler);
 app.post('/entities/presets/:id', entityPresetsUpdateHandler);
 app.post('/entities/presets/:id/delete', entityPresetsDeleteHandler);
 app.get('/entities/:id', entityDetailHandler);
+app.get('/lineage/:table/:rowId', lineageRowHandler);
+app.get('/lineage/:table/:rowId/raw', lineageRawHandler);
 
 app.get('/visualizations', dashboardsPageHandler);
 app.post('/visualizations/dashboards', dashboardSaveHandler);

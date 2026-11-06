@@ -4,13 +4,23 @@ import { Layout } from '../components/Layout';
 import { MetadataTable } from '../components/MetadataTable';
 import { getEntityTitle } from '../../domain/entityQueries';
 
-export const EntityDetailPage: FC<{ entity: EntityWithMetadata }> = ({ entity }) => (
+export const EntityDetailPage: FC<{ entity: EntityWithMetadata; lineageHref?: string }> = ({
+  entity,
+  lineageHref,
+}) => (
   <Layout title={getEntityTitle(entity)}>
     <div class="page-header">
       <a href="/entities" class="back-link">
         ← Entities
       </a>
       <h1>{getEntityTitle(entity)}</h1>
+      {lineageHref ? (
+        <div class="page-header-actions">
+          <a class="lineage-action" href={lineageHref}>
+            Trace lineage
+          </a>
+        </div>
+      ) : null}
     </div>
 
     <section class="entity-detail">

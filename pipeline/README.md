@@ -52,3 +52,8 @@ DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb \
 DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket/runs/<run_id>/tables \
 bun dev
 ```
+
+Then open `/lineage/<table>/<_row_id>` to see a row and the rows it was built from, and follow the
+links down to raw records. Add `/raw` to the path to list every raw record behind the row. Each
+entity's page links to its own lineage. Raw rows show only if the run's `raw/` folder sits next
+to `tables/`.

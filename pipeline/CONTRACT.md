@@ -60,3 +60,34 @@ A row's order in the output follows the query's `ORDER BY`.
 The runner refuses to write a table that breaks the contract: a missing or mistyped column, a
 null or repeated `_row_id`, a row with no `_sources`, or a source entry that names an undeclared
 input or a row that does not exist. A failed job skips every job downstream of it.
+
+## Run layout
+
+Each run writes one folder. Readers find tables by path, so the layout is part of the contract:
+
+```
+<bucket>/runs/<run_id>/
+  raw/<table>/*.parquet     # what dlt wrote; read as raw.<table>
+  tables/<name>.parquet     # one file per job, named after the job
+```
+
+- **`raw/`**: every Parquet file under `raw/<table>/` together makes up `raw.<table>`, read
+  with `union_by_name`, because dlt can add columns between loads. Folders starting with `_dlt`
+  hold dlt's own bookkeeping and are not tables.
+- **Names**: table and job names use only letters, digits and `_`, and don't start with a
+  digit. Readers skip any other name.
+- **`raw/` sits next to `tables/`**: Waymark is pointed at `tables/` and looks for raw data in
+  `../raw`. Without it, lineage stops at the last derived table and shows only counts for the raw
+  rows.
+
+## What Waymark reads
+
+- `tables/` must contain `entities` and `entity_metadata`, the tables Waymark browses.
+- In `entities`, `id` equals `_row_id`, so every entity is also its own lineage row.
+- Waymark compares the date columns of `entities` and `entity_metadata` as text, so they hold
+  `iso_utc` text. Other timestamps are shown in UTC.
+- `_sources.row_id` is text. For a derived table, Waymark converts it back to `BIGINT` to match
+  `_row_id`.
+
+Phase 3 of [PLAN.md](PLAN.md) replaces this layout with per-snapshot files and `latest.json`.
+Waymark's DuckDB adapter (`src/db/source/duckdb.ts`) has to change with it.

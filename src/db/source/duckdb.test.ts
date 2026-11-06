@@ -6,7 +6,13 @@ import { join } from 'node:path';
 import { createEntityRepository } from '../entityRepository';
 import { emptyTree, makeGroup, makeLeaf, makeNot } from '../../schemas/filterTree';
 import type { FilterTree } from '../../schemas/filterTree';
-import { DuckdbSourceAdapter, parseParquetLocation } from './duckdb';
+import {
+  DuckdbSourceAdapter,
+  parseParquetLocation,
+  rawLocationFor,
+  tableNamesFromPaths,
+} from './duckdb';
+import type { SourceDataAdapter } from './adapter';
 import { seedE2EData } from './e2eSeed';
 import { SqliteSourceAdapter } from './sqlite';
 
@@ -143,5 +149,37 @@ describe('parseParquetLocation', () => {
 
   it('leaves bucket URLs alone', () => {
     expect(parseParquetLocation('s3://bucket/run')).toBe('s3://bucket/run');
+  });
+});
+
+describe('table discovery', () => {
+  it('names flat and nested Parquet tables, skipping dlt bookkeeping', () => {
+    expect(tableNamesFromPaths(['/r/tables/b.parquet', '/r/tables/a.parquet'], false)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(
+      tableNamesFromPaths(
+        ['/r/raw/jira/1.parquet', '/r/raw/jira/2.parquet', '/r/raw/_dlt_loads/1.parquet'],
+        true
+      )
+    ).toEqual(['jira']);
+  });
+
+  it('skips names that would need quoting', () => {
+    expect(
+      tableNamesFromPaths(['/r/tables/bad"name.parquet', '/r/tables/ok.parquet'], false)
+    ).toEqual(['ok']);
+  });
+
+  it('finds the raw folder beside tables/', () => {
+    expect(rawLocationFor('/bucket/runs/r1/tables')).toBe('/bucket/runs/r1/raw');
+  });
+});
+
+describe('sources without lineage', () => {
+  it('leave listLineageTables undefined', () => {
+    const sqlite: SourceDataAdapter = new SqliteSourceAdapter(':memory:', true);
+    expect(sqlite.listLineageTables).toBeUndefined();
   });
 });

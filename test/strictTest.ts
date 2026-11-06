@@ -1,7 +1,11 @@
 import { test as base, expect } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Pool } from 'pg';
+import { writeLineageFixture } from '../src/db/source/lineageFixture';
 import { loadE2EEnv } from './e2eEnv';
 
 // Worker-scoped server: each Playwright worker owns its own bun index.tsx
@@ -58,8 +62,12 @@ export function urlForWorker(url: string, workerIndex: number): string {
   return url;
 }
 
-function envForWorker(workerIndex: number, port: number): NodeJS.ProcessEnv {
-  const merged: Record<string, string> = { ...SQLITE_DEFAULTS, ...loadE2EEnv() };
+function envForWorker(
+  workerIndex: number,
+  port: number,
+  overrides: Record<string, string>
+): NodeJS.ProcessEnv {
+  const merged: Record<string, string> = { ...SQLITE_DEFAULTS, ...loadE2EEnv(), ...overrides };
   merged.DEV_WAYMARK_SOURCE_DB_URL = urlForWorker(merged.DEV_WAYMARK_SOURCE_DB_URL, workerIndex);
   merged.DEV_WAYMARK_APP_DB_URL = urlForWorker(merged.DEV_WAYMARK_APP_DB_URL, workerIndex);
   return { ...process.env, ...merged, PORT: String(port) };
@@ -128,12 +136,15 @@ function bufferStream(
   });
 }
 
-async function spawnWorkerServer(workerIndex: number): Promise<{
+async function spawnWorkerServer(
+  workerIndex: number,
+  envOverrides: Record<string, string> = {}
+): Promise<{
   baseURL: string;
   stop: () => Promise<void>;
 }> {
   const port = BASE_PORT + workerIndex;
-  const env = envForWorker(workerIndex, port);
+  const env = envForWorker(workerIndex, port, envOverrides);
   // A worker restarted after a failure gets a fresh index that globalSetup
   // never provisioned — create its databases before booting the server.
   await ensureWorkerDatabases(env);
@@ -183,21 +194,46 @@ async function spawnWorkerServer(workerIndex: number): Promise<{
   return { baseURL: `http://localhost:${port}`, stop };
 }
 
-type WorkerFixtures = { workerBaseURL: string };
+// A source other than the default seed, chosen per spec with `test.use({ sourceFixture })`.
+// 'lineage' serves a small pipeline run (src/db/source/lineageFixture.ts) through DuckDB.
+export type SourceFixture = 'lineage' | null;
+
+type WorkerFixtures = { workerBaseURL: string; sourceFixture: SourceFixture };
+
+async function prepareSource(
+  fixture: SourceFixture
+): Promise<{ env: Record<string, string>; cleanup: () => void }> {
+  if (fixture !== 'lineage') return { env: {}, cleanup: () => {} };
+  const root = mkdtempSync(join(tmpdir(), 'waymark-e2e-lineage-'));
+  const tables = await writeLineageFixture(root);
+  return {
+    env: {
+      DEV_WAYMARK_SOURCE_DB_ADAPTER: 'duckdb',
+      DEV_WAYMARK_SOURCE_DB_URL: tables,
+      DEV_WAYMARK_SOURCE_DB_SEED: 'none',
+    },
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
 
 // Wrapper around Playwright's `test` that:
 //   - boots a per-worker webServer (fixes cross-worker DB contamination)
 //   - fails the test on any uncaught page-level error (default fixture
 //     silently swallows these)
 export const test = base.extend<Record<string, never>, WorkerFixtures>({
+  sourceFixture: [null, { scope: 'worker', option: true }],
   workerBaseURL: [
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use, workerInfo) => {
-      const server = await spawnWorkerServer(workerInfo.workerIndex);
+    async ({ sourceFixture }, use, workerInfo) => {
+      const source = await prepareSource(sourceFixture);
+      const server = await spawnWorkerServer(workerInfo.workerIndex, source.env).catch(err => {
+        source.cleanup();
+        throw err;
+      });
       try {
         await use(server.baseURL);
       } finally {
         await server.stop();
+        source.cleanup();
       }
     },
     { scope: 'worker' },

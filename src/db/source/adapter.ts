@@ -48,4 +48,11 @@ export interface SourceDataAdapter {
 
   /** Release any held connections/resources. */
   close(): Promise<void>;
+
+  /**
+   * Tables that follow the pipeline's row-lineage contract (pipeline/CONTRACT.md),
+   * raw ones named `raw.<table>`. Only adapters reading a pipeline run have them;
+   * the rest leave this undefined and Waymark hides lineage.
+   */
+  listLineageTables?(): string[];
 }
