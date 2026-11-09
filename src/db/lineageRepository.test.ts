@@ -36,6 +36,18 @@ describe('lineage over a pipeline run', () => {
     ]);
   });
 
+  it('leaves the contract columns out of the views entity queries read', async () => {
+    const columns = async (view: string) =>
+      (await adapter.query<{ column_name: string }>(`DESCRIBE ${view}`)).map(r => r.column_name);
+    for (const table of ['entities', 'entity_metadata']) {
+      expect(await columns(table)).not.toContain('_sources');
+      expect(await columns(table)).not.toContain('_row_id');
+      expect(await columns(`lineage.${table}`)).toEqual(
+        expect.arrayContaining(['_row_id', '_sources'])
+      );
+    }
+  });
+
   it('gets a derived row with its sources', async () => {
     const row = await repo.getRow('lead_time_by_issue_type', LINEAGE_FIXTURE.leadTimeId);
     expect(row?.rowId).toBe(LINEAGE_FIXTURE.leadTimeId);
@@ -67,7 +79,7 @@ describe('lineage over a pipeline run', () => {
   it('shows a source table the run lacks as unavailable', async () => {
     const parents = await repo.getParents([{ table: 'raw.missing', row_id: 'x' }], 10);
     expect(parents).toEqual([
-      { table: 'raw.missing', isRaw: true, available: false, total: 1, rows: [] },
+      { table: 'raw.missing', isRaw: true, available: false, total: 1, rows: [], highlight: [] },
     ]);
   });
 
@@ -89,5 +101,52 @@ describe('lineage over a pipeline run', () => {
       'raw.github_pulls': [LINEAGE_FIXTURE.pullDltId],
       'raw.jira_issues': [...LINEAGE_FIXTURE.jiraDltIds].sort(),
     });
+  });
+});
+
+describe('column lineage over a pipeline run', () => {
+  let root: string;
+  let adapter: DuckdbSourceAdapter;
+  let repo: LineageRepository;
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'waymark-columns-'));
+    adapter = await DuckdbSourceAdapter.create(await writeLineageFixture(root));
+    repo = createLineageRepository(adapter, adapter.listLineageTables(), adapter.listColumnMaps());
+  });
+
+  afterAll(async () => {
+    await adapter.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reads each table’s column map from its Parquet metadata', () => {
+    expect(repo.columnMaps().lead_time_by_issue_type?.avg_lead_time_hours).toEqual([
+      'changes.number',
+    ]);
+    expect(Object.keys(repo.columnMaps())).not.toContain('raw.jira_issues');
+  });
+
+  it('drops a malformed column map', () => {
+    const lenient = createLineageRepository(adapter, adapter.listLineageTables(), {
+      tickets: '{"x": 1}',
+    });
+    expect(lenient.columnMaps()).toEqual({});
+  });
+
+  it('extracts highlighted JSON paths from raw parents', async () => {
+    const [group] = await repo.getParents(
+      [{ table: 'raw.jira_issues', row_id: LINEAGE_FIXTURE.jiraDltIds[0] }],
+      10,
+      { 'raw.jira_issues': ['fields:$.issuetype.name'] }
+    );
+    expect(group?.highlight).toEqual(['fields:$.issuetype.name']);
+    expect(group?.rows[0]?.values['fields:$.issuetype.name']).toBe('Task');
+  });
+
+  it('rejects an extract that is not a JSON path', async () => {
+    await expect(
+      repo.getRows('raw.jira_issues', ['x'], { extracts: ["fields:$.a'; DROP"] })
+    ).rejects.toThrow('Invalid JSON path');
   });
 });

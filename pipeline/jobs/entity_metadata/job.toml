@@ -1,2 +1,45 @@
 description = "The metadata Waymark filters and charts on: one row per entity, key and non-null value."
 inputs = ["tickets", "changes", "ticket_change_links"]
+
+[columns]
+id = ["tickets._row_id", "changes._row_id"]
+entity_id = ["tickets._row_id", "changes._row_id"]
+key = []
+value_type = []
+created_at = ["tickets.created_at", "changes.created_at"]
+updated_at = ["tickets.updated_at", "tickets.created_at", "changes.updated_at", "changes.created_at"]
+
+# Which column a value comes from depends on its key. Keys not listed are the client's custom
+# Jira fields.
+[columns.value]
+by = "key"
+else = ["tickets.custom_fields"]
+
+[columns.value.when]
+summary = ["tickets.summary"]
+project = ["tickets.project"]
+issue_type = ["tickets.issue_type"]
+status = ["tickets.status"]
+status_group = ["tickets.status_group"]
+priority = ["tickets.priority"]
+resolution = ["tickets.resolution"]
+assignee = ["tickets.assignee"]
+reporter = ["tickets.reporter"]
+resolved_at = ["tickets.resolved_at"]
+# Rollups across links also read which links exist.
+change_count = ["changes._row_id", "ticket_change_links._row_id"]
+first_change_at = ["changes.created_at", "ticket_change_links._row_id"]
+last_merged_at = ["changes.merged_at", "ticket_change_links._row_id"]
+title = ["changes.title"]
+repo = ["changes.repo"]
+number = ["changes.number"]
+branch = ["changes.branch"]
+state = ["changes.state"]
+is_draft = ["changes.is_draft"]
+author = ["changes.author"]
+closed_at = ["changes.closed_at"]
+merged_at = ["changes.merged_at"]
+ticket_keys = ["ticket_change_links.ticket_key"]
+# Tickets and changes both have these keys.
+url = ["tickets.url", "changes.url"]
+updated_at = ["tickets.updated_at", "changes.updated_at"]

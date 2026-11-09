@@ -1,2 +1,8 @@
 description = "Which tickets each pull request mentions in its title, branch or body."
 inputs = ["tickets", "changes"]
+
+[columns]
+change_id = ["changes._row_id"]
+ticket_id = ["tickets._row_id"]
+# A key mentioned in the change's text that matches a ticket.
+ticket_key = ["tickets.ticket_key", "changes.title", "changes.branch", "changes.body"]

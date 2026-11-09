@@ -25,9 +25,32 @@ export const ParentGroupSchema = z.object({
   available: z.boolean(),
   total: z.number(),
   rows: z.array(LineageRowSchema),
+  // Columns to show first: the ones a selected field is computed from.
+  highlight: z.array(z.string()),
 });
 export type ParentGroup = z.infer<typeof ParentGroupSchema>;
 
 // Row ids reached at one hop, keyed by table.
 export const HopSchema = z.record(z.string(), z.array(z.string()));
 export type Hop = z.infer<typeof HopSchema>;
+
+// A job's column map (pipeline/CONTRACT.md, "Column lineage"): each output column lists the
+// input columns it is computed from, as `<table>.<column>` or `<table>.<column>:<json path>`.
+// A column whose source depends on another column is keyed `by` that column.
+export const KeyedColumnSpecSchema = z.object({
+  by: z.string(),
+  when: z.record(z.string(), z.array(z.string())).default({}),
+  else: z.array(z.string()).default([]),
+});
+export const ColumnSpecSchema = z.union([z.array(z.string()), KeyedColumnSpecSchema]);
+export type ColumnSpec = z.infer<typeof ColumnSpecSchema>;
+
+export const ColumnMapSchema = z.record(z.string(), ColumnSpecSchema);
+export type ColumnMap = z.infer<typeof ColumnMapSchema>;
+
+export const ColumnRefSchema = z.object({
+  table: z.string(),
+  column: z.string(),
+  path: z.string().optional(),
+});
+export type ColumnRef = z.infer<typeof ColumnRefSchema>;

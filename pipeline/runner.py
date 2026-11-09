@@ -7,6 +7,7 @@ downstream of it.
 """
 
 import argparse
+import json
 import re
 import sys
 import tempfile
@@ -29,6 +30,13 @@ VALUE_TYPES = {"string", "number", "date", "boolean"}
 RAW_PREFIX = "raw."
 RAW_ROW_ID = "_dlt_id"
 SOURCES_TYPE = 'STRUCT("table" VARCHAR, row_id VARCHAR)[]'
+CONTRACT_COLUMNS = ("_row_id", "_sources")
+# `<input>.<column>`, with `:<json path>` for a value inside a JSON text column.
+REF_PATTERN = re.compile(
+    r"^((?:raw\.)?[a-z][a-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?::(\$(?:\.[A-Za-z0-9_]+)+))?$"
+)
+COLUMNS_METADATA_KEY = "waymark_columns"
+JSON_TYPES = {"VARCHAR", "JSON"}
 
 
 class ContractError(Exception):
@@ -41,6 +49,8 @@ class Job:
     inputs: tuple[str, ...]
     sql: str
     description: str | None = None
+    # Output column -> the input columns it is computed from (CONTRACT.md, "Column lineage").
+    columns: Mapping[str, Any] | None = None
 
 
 def duckdb_path(url: str) -> str:
@@ -55,6 +65,44 @@ def is_raw(table: str) -> bool:
     return table.startswith(RAW_PREFIX)
 
 
+def parse_ref(ref: str) -> tuple[str, str, str | None]:
+    """Split a column reference into (table, column, json path or None)."""
+    match = REF_PATTERN.match(ref)
+    if not match:
+        raise ValueError(f"Invalid column reference: {ref!r}")
+    table, column, path = match.groups()
+    return table, column, path
+
+
+def spec_refs(spec: Any) -> list[str]:
+    """Every reference in a column spec: a list, or a table keyed `by` another column."""
+    if isinstance(spec, list):
+        return spec
+    return [ref for refs in spec.get("when", {}).values() for ref in refs] + spec.get("else", [])
+
+
+def validate_columns(name: str, columns: Any, inputs: tuple[str, ...]) -> None:
+    if not isinstance(columns, dict) or not columns:
+        raise ValueError(f"{name}: job.toml needs a [columns] table")
+    for column, spec in columns.items():
+        if column in CONTRACT_COLUMNS:
+            raise ValueError(f"{name}: {column} is part of the contract, not a [columns] entry")
+        if isinstance(spec, dict):
+            unknown_keys = set(spec) - {"by", "when", "else"}
+            if not isinstance(spec.get("by"), str) or unknown_keys:
+                raise ValueError(f"{name}: columns.{column} needs `by` and only `when`/`else`")
+            refs_lists = [*spec.get("when", {}).values(), spec.get("else", [])]
+        else:
+            refs_lists = [spec]
+        for refs in refs_lists:
+            if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
+                raise ValueError(f"{name}: columns.{column} must list references as strings")
+        for ref in spec_refs(spec):
+            table, _, _ = parse_ref(ref)
+            if table not in inputs:
+                raise ValueError(f"{name}: columns.{column} reads {table}, which is not an input")
+
+
 def load_job(directory: Path) -> Job:
     name = directory.name
     if not NAME_PATTERN.match(name):
@@ -66,8 +114,10 @@ def load_job(directory: Path) -> Job:
     for table in inputs:
         if not NAME_PATTERN.match(table.removeprefix(RAW_PREFIX)):
             raise ValueError(f"{name}: invalid input {table!r}")
+    columns = spec.get("columns")
+    validate_columns(name, columns, inputs)
     sql = (directory / "query.sql").read_text().strip().removesuffix(";")
-    return Job(name, inputs, sql, spec.get("description"))
+    return Job(name, inputs, sql, spec.get("description"), columns)
 
 
 def load_jobs(directories: list[Path]) -> list[Job]:
@@ -147,15 +197,19 @@ def connect(client: Mapping[str, Any], spill_dir: str | None = None) -> duckdb.D
     return con
 
 
+def input_source(table: str, run_root: Path) -> str:
+    """The `read_parquet(...)` expression for one of a run's tables, raw or derived."""
+    if is_raw(table):
+        files = run_root / "raw" / table.removeprefix(RAW_PREFIX) / "*.parquet"
+        return f"read_parquet({sql_string(str(files))}, union_by_name = true)"
+    return f"read_parquet({sql_string(str(run_root / 'tables' / f'{table}.parquet'))})"
+
+
 def register_inputs(con: duckdb.DuckDBPyConnection, job: Job, run_root: Path) -> None:
     for table in job.inputs:
         if is_raw(table):
             con.execute("CREATE SCHEMA IF NOT EXISTS raw")
-            files = run_root / "raw" / table.removeprefix(RAW_PREFIX) / "*.parquet"
-            source = f"read_parquet({sql_string(str(files))}, union_by_name = true)"
-        else:
-            source = f"read_parquet({sql_string(str(run_root / 'tables' / f'{table}.parquet'))})"
-        con.execute(f"CREATE VIEW {table} AS SELECT * FROM {source}")
+        con.execute(f"CREATE VIEW {table} AS SELECT * FROM {input_source(table, run_root)}")
 
 
 def contract_errors(con: duckdb.DuckDBPyConnection, inputs: tuple[str, ...]) -> list[str]:
@@ -204,6 +258,33 @@ def contract_errors(con: duckdb.DuckDBPyConnection, inputs: tuple[str, ...]) -> 
     return errors
 
 
+def column_errors(con: duckdb.DuckDBPyConnection, job: Job) -> list[str]:
+    """What is wrong with the job's [columns] map, given its `result` table and inputs."""
+    if job.columns is None:
+        return ["the job declares no [columns]"]
+    output = {n for n, *_ in con.sql("DESCRIBE result").fetchall()} - set(CONTRACT_COLUMNS)
+    declared = set(job.columns)
+    errors = []
+    if output - declared:
+        errors.append(f"[columns] does not declare {sorted(output - declared)}")
+    if declared - output:
+        errors.append(f"[columns] declares columns the job does not output: {sorted(declared - output)}")
+    input_types: dict[str, dict[str, str]] = {}
+    for column, spec in sorted(job.columns.items()):
+        if isinstance(spec, dict) and spec["by"] not in output:
+            errors.append(f"columns.{column} is keyed by {spec['by']}, which the job does not output")
+        for ref in spec_refs(spec):
+            table, ref_column, path = parse_ref(ref)
+            if table not in input_types:
+                input_types[table] = {n: t for n, t, *_ in con.sql(f"DESCRIBE {table}").fetchall()}
+            type_ = input_types[table].get(ref_column)
+            if type_ is None:
+                errors.append(f"columns.{column}: {table} has no column {ref_column}")
+            elif path and type_ not in JSON_TYPES:
+                errors.append(f"columns.{column}: {ref} has a JSON path on a {type_} column")
+    return errors
+
+
 def run_job(job: Job, client: Mapping[str, Any], run_root: Path) -> int:
     """Build one job's table and return its row count. Raises if it breaks the contract."""
     out = run_root / "tables" / f"{job.name}.parquet"
@@ -213,11 +294,16 @@ def run_job(job: Job, client: Mapping[str, Any], run_root: Path) -> int:
     ):
         register_inputs(con, job, run_root)
         con.execute(f"CREATE TEMP TABLE result AS {job.sql}")
-        errors = contract_errors(con, job.inputs)
+        errors = contract_errors(con, job.inputs) + column_errors(con, job)
         if errors:
             raise ContractError("; ".join(errors))
         partial = out.with_suffix(".parquet.partial")
-        con.execute(f"COPY result TO {sql_string(str(partial))} (FORMAT parquet, COMPRESSION zstd)")
+        # The column map travels in the file's own metadata, so readers need no manifest.
+        columns = sql_string(json.dumps(job.columns, sort_keys=True))
+        con.execute(f"""
+            COPY result TO {sql_string(str(partial))} (FORMAT parquet, COMPRESSION zstd,
+              KV_METADATA {{{COLUMNS_METADATA_KEY}: {columns}}})
+        """)
         (rows,) = con.sql("SELECT count(*) FROM result").fetchone()
     partial.replace(out)
     return rows

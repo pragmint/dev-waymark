@@ -41,6 +41,33 @@ uv run python trace.py \
   --table lead_time_by_issue_type --row-id <_row_id>
 ```
 
+Add `--field <column>` to trace one value instead of the whole row. It follows only the sources
+that column reads, using each job's column map, and ends with the raw fields the value comes from:
+
+```
+avg_lead_time_hours = 1520.1
+  computed from: changes.created_at, changes.merged_at
+hop 0: lead_time_by_issue_type       1 rows  (_row_id 8767488532554951, ...)
+hop 1: changes                     596 rows  (_row_id 100161251620229, ...)
+hop 2: raw.github_pulls            596 rows  (_dlt_id +Bhct76HSdz/fA, ...)
+raw field: raw.github_pulls.created_at  e.g. 2021-02-04 20:57:09+00:00, ...
+raw field: raw.github_pulls.merged_at  e.g. 2021-03-18 14:27:14+00:00, ...
+```
+
+Check that each table's lineage holds, by re-running jobs on small inputs:
+
+```sh
+uv run python verify.py \
+  --client clients/apache-kafka.toml \
+  --bucket-url file:///tmp/waymark-bucket --run-id <run_id>
+```
+
+For a sample of rows (`--rows-per-branch`, default 2, per value of any `by` column), it re-runs
+the job on only the rows in the row's `_sources` and expects the same row back. Then it changes
+each input column of those rows in turn and checks that every output column that changes declares
+that input in `[columns]`. Add `--job <name>` to check one job. It exits non-zero on an error;
+warnings mark references no change affected, which can be correct for `coalesce` or a filter.
+
 Only local paths work for now. S3 and Azure need DuckDB's storage extensions and credentials.
 
 ## View it in Waymark

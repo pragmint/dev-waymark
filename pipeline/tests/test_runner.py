@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pyarrow as pa
@@ -6,17 +7,21 @@ import pyarrow.parquet as pq
 import pytest
 
 from runner import (
+    COLUMNS_METADATA_KEY,
     JOBS_DIR,
     ContractError,
     Job,
     build_order,
+    column_errors,
     connect,
     contract_errors,
     load_jobs,
+    parse_ref,
     run_job,
     run_jobs,
+    validate_columns,
 )
-from trace import trace
+from trace import column_maps, raw_values, refs_for, row_values, trace, trace_field
 
 CLIENT = {
     "client": "test",
@@ -115,7 +120,9 @@ def test_a_client_job_replaces_a_shared_job_with_the_same_name(tmp_path: Path):
     for root, sql in [("shared", "select 'shared'"), ("client", "select 'client'")]:
         directory = tmp_path / root / "tickets"
         directory.mkdir(parents=True)
-        (directory / "job.toml").write_text('inputs = ["raw.jira_issues"]')
+        (directory / "job.toml").write_text(
+            'inputs = ["raw.jira_issues"]\n[columns]\nx = ["raw.jira_issues.key"]'
+        )
         (directory / "query.sql").write_text(sql)
     jobs = load_jobs([tmp_path / "shared", tmp_path / "client"])
     assert [(j.name, j.sql) for j in jobs] == [("tickets", "select 'client'")]
@@ -217,7 +224,7 @@ def test_a_rollup_is_sourced_from_the_rows_it_rolls_up(built):
           WHERE entities.name = 'KAFKA-1' AND key = 'change_count'
         )
     """).fetchone()
-    assert sources == ["changes", "tickets"]
+    assert sources == ["changes", "ticket_change_links", "tickets"]
 
 
 def test_trace_follows_a_metadata_value_back_to_raw(built, run_root: Path):
@@ -226,5 +233,106 @@ def test_trace_follows_a_metadata_value_back_to_raw(built, run_root: Path):
         WHERE entities.name = 'KAFKA-1' AND m.key = 'change_count'
     """).fetchone()
     hops = trace(run_root / "tables", "entity_metadata", str(row_id))
-    assert set(hops[1]) == {"tickets", "changes"}
+    assert set(hops[1]) == {"tickets", "changes", "ticket_change_links"}
     assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+
+
+def test_parse_ref_splits_table_column_and_json_path():
+    assert parse_ref("changes.merged_at") == ("changes", "merged_at", None)
+    assert parse_ref("raw.jira_issues.fields:$.priority.name") == (
+        "raw.jira_issues",
+        "fields",
+        "$.priority.name",
+    )
+    with pytest.raises(ValueError, match="Invalid column reference"):
+        parse_ref("fields:$.priority")
+
+
+@pytest.mark.parametrize(
+    ("columns", "problem"),
+    [
+        (None, "needs a [columns] table"),
+        ({"_row_id": []}, "part of the contract"),
+        ({"x": ["other.y"]}, "not an input"),
+        ({"x": {"when": {"a": ["up.y"]}}}, "needs `by`"),
+        ({"x": "up.y"}, "must list references"),
+    ],
+)
+def test_validate_columns_rejects_a_malformed_map(columns, problem):
+    with pytest.raises(ValueError, match=re.escape(problem)):
+        validate_columns("job", columns, ("up",))
+
+
+@pytest.mark.parametrize(
+    ("columns", "problem"),
+    [
+        ({}, "does not declare ['n']"),
+        ({"n": ["up.y"], "extra": []}, "does not output: ['extra']"),
+        ({"n": ["up.missing"]}, "up has no column missing"),
+        ({"n": ["up.y:$.a"]}, "JSON path on a INTEGER column"),
+        ({"n": {"by": "missing", "when": {}}}, "keyed by missing"),
+    ],
+)
+def test_column_errors_catch_a_map_that_does_not_match_the_tables(columns, problem):
+    con = connect(CLIENT)
+    con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y")
+    con.execute("CREATE TEMP TABLE result AS SELECT 7::bigint AS _row_id, 1 AS n")
+    errors = column_errors(con, Job("j", ("up",), "", columns=columns))
+    assert any(problem in error for error in errors), errors
+
+
+def test_every_table_carries_its_column_map(built, run_root: Path):
+    for job in load_jobs([JOBS_DIR]):
+        metadata = pq.read_metadata(run_root / "tables" / f"{job.name}.parquet").metadata
+        assert json.loads(metadata[COLUMNS_METADATA_KEY.encode()]) == job.columns
+
+
+def metadata_row_id(built, entity_name: str, key: str) -> str:
+    (row_id,) = built.sql(f"""
+        SELECT m._row_id FROM entity_metadata AS m JOIN entities ON entities.id = m.entity_id
+        WHERE entities.name = '{entity_name}' AND m.key = '{key}'
+    """).fetchone()
+    return str(row_id)
+
+
+def test_refs_for_picks_the_branch_of_a_keyed_column():
+    spec = {"by": "key", "when": {"a": ["t.a"]}, "else": ["t.other"]}
+    assert refs_for(spec, "a") == ["t.a"]
+    assert refs_for(spec, "zzz") == ["t.other"]
+    assert refs_for(spec) == ["t.a", "t.other"]
+    assert refs_for(["t.x"], "ignored") == ["t.x"]
+
+
+def test_trace_field_follows_only_the_tables_a_field_reads(built, run_root: Path):
+    # change_count is sourced from the ticket, its changes and their links, but counts only the
+    # linked changes. The links lead back to the ticket only through the key that matched.
+    tables = run_root / "tables"
+    row_id = metadata_row_id(built, "KAFKA-1", "change_count")
+    values = row_values(tables, "entity_metadata", row_id)
+    field = trace_field(column_maps(tables), "entity_metadata", "value", values)
+    assert field is not None
+    assert field.direct == ["changes._row_id", "ticket_change_links._row_id"]
+    hops = trace(tables, "entity_metadata", row_id, field.follow)
+    assert set(hops[1]) == {"changes", "ticket_change_links"}
+    assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+
+
+def test_trace_field_reaches_a_json_path_in_raw(built, run_root: Path):
+    tables = run_root / "tables"
+    row_id = metadata_row_id(built, "KAFKA-1", "status")
+    values = row_values(tables, "entity_metadata", row_id)
+    field = trace_field(column_maps(tables), "entity_metadata", "value", values)
+    assert field is not None
+    assert field.columns == {
+        "tickets": {"status"},
+        "raw.jira_issues": {"fields:$.status.name"},
+    }
+    hops = trace(tables, "entity_metadata", row_id, field.follow)
+    raw_ids = hops[-1]["raw.jira_issues"]
+    assert raw_values(run_root, "raw.jira_issues", "fields:$.status.name", raw_ids) == [
+        values["value"]
+    ]
+
+
+def test_trace_field_returns_none_for_an_undeclared_field(built, run_root: Path):
+    assert trace_field(column_maps(run_root / "tables"), "tickets", "nope", {}) is None

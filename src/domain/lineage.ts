@@ -8,6 +8,11 @@ import type { Hop, LineageRow, SourceRef } from '../schemas/lineage';
 export const RAW_PREFIX = 'raw.';
 export const RAW_ID_COLUMN = '_dlt_id';
 export const DERIVED_ID_COLUMN = '_row_id';
+export const SOURCES_COLUMN = '_sources';
+
+// A derived table's plain view leaves out the contract columns, so entity
+// queries never read them; this schema holds the full view for lineage.
+export const LINEAGE_SCHEMA = 'lineage';
 
 // Long text (Jira's raw `fields` JSON runs to megabytes) is cut to this many
 // characters in listings; a single row's own page shows it in full.
@@ -99,12 +104,19 @@ export const MAX_HOPS = 32;
  * Follow `_sources` hop by hop from `start` until only raw rows remain, and
  * return every raw row reached. A derived table may read raw directly, so raw
  * rows can turn up at any hop. Each row is expanded once even when several
- * paths reach it, and `maxHops` stops a malformed cycle.
+ * paths reach it, and `maxHops` stops a malformed cycle. `follow` limits which source tables
+ * are followed from each table, which is how a single field is traced.
  */
+export type ExpandOptions = {
+  /** Whether to follow sources from one table to another; field lineage narrows this. */
+  follow?: (from: string, to: string) => boolean;
+  maxHops?: number;
+};
+
 export async function expandToRaw(
   start: Hop,
   fetchSources: FetchSources,
-  maxHops = MAX_HOPS
+  { follow = () => true, maxHops = MAX_HOPS }: ExpandOptions = {}
 ): Promise<Expansion> {
   const hops: Hop[] = [start];
   const leaves: Hop = {};
@@ -119,7 +131,9 @@ export async function expandToRaw(
         mergeInto(leaves, { [query.table]: query.ids });
         continue;
       }
-      mergeInto(next, groupSourcesByTable(await fetchSources(query.table, query.ids)));
+      const sources = await fetchSources(query.table, query.ids);
+      const followed = sources.filter(source => follow(query.table, source.table));
+      mergeInto(next, groupSourcesByTable(followed));
     }
     frontier = withoutSeen(next, seen);
     if (Object.keys(frontier).length === 0) return { hops, leaves };
@@ -171,4 +185,13 @@ export function entityLineagePath(entityId: number): string {
 /** The Waymark entity page for a lineage row, when the row is an entity. */
 export function entityHrefFor(table: string, rowId: string): string | undefined {
   return table === ENTITIES_TABLE ? `/entities/${rowId}` : undefined;
+}
+
+/** A lineage page's URL with query parameters; empty or missing values are left out. */
+export function withQuery(path: string, params: Record<string, string | undefined>): string {
+  const query = Object.entries(params)
+    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+  return query ? `${path}?${query}` : path;
 }

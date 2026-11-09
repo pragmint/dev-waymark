@@ -1,6 +1,8 @@
 import type { FC } from 'hono/jsx';
 import type { Hop, ParentGroup } from '../../schemas/lineage';
-import { hopSize, lineagePath } from '../../domain/lineage';
+import { hopSize, isRawTable, lineagePath, withQuery } from '../../domain/lineage';
+import type { FieldTrace } from '../../domain/columnLineage';
+import { LineageFieldNote } from '../components/LineageFieldNote';
 import { Layout } from '../components/Layout';
 import { LineageParentGroup } from '../components/LineageParentGroup';
 
@@ -9,15 +11,34 @@ export const LineageRawPage: FC<{
   rowId: string;
   hops: Hop[];
   leaves: ParentGroup[];
-}> = ({ table, rowId, hops, leaves }) => (
+  field?: string;
+  trace?: FieldTrace | null;
+}> = ({ table, rowId, hops, leaves, field, trace = null }) => (
   <Layout title={`Raw records behind ${table} ${rowId}`}>
     <div class="page-header">
-      <a href={lineagePath(table, rowId)} class="back-link">
+      <a href={withQuery(lineagePath(table, rowId), { field })} class="back-link">
         ← {table} {rowId}
       </a>
       <h1>Raw records</h1>
       <span class="count">{leaves.reduce((sum, group) => sum + group.total, 0)} in all</span>
     </div>
+
+    {field ? (
+      <LineageFieldNote
+        field={field}
+        heading={trace ? 'raw fields it comes from' : 'no column lineage'}
+        columns={Object.entries(trace?.columns ?? {})
+          .filter(([columnTable]) => isRawTable(columnTable))
+          .flatMap(([columnTable, labels]) => labels.map(label => `${columnTable}.${label}`))}
+        empty={
+          trace
+            ? 'It reads no raw field.'
+            : "This table's column map doesn't declare this field, so every raw record is shown."
+        }
+      >
+        <a href={lineagePath(table, rowId, '/raw')}>Show raw records for every field</a>
+      </LineageFieldNote>
+    ) : null}
 
     <section class="lineage-hops">
       <h2>Path</h2>
@@ -43,7 +64,7 @@ export const LineageRawPage: FC<{
       {leaves.map(group => (
         <LineageParentGroup
           group={group}
-          moreHref={`${lineagePath(table, rowId, '/raw')}?limit=all`}
+          moreHref={withQuery(lineagePath(table, rowId, '/raw'), { field, limit: 'all' })}
         />
       ))}
     </section>

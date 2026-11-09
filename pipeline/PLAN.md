@@ -32,8 +32,14 @@ From the call with Dave Moore (stakeholder):
    - `_row_id BIGINT`: a stable 53-bit md5 hash of business keys, never load order;
    - `_sources LIST<STRUCT("table" VARCHAR, row_id VARCHAR)>`: the input rows one hop up.
 
-   Raw tables are the root, named `raw.<table>`, and a raw row's ID is its `_dlt_id`. Field-level
-   lineage is out of scope for now.
+   Raw tables are the root, named `raw.<table>`, and a raw row's ID is its `_dlt_id`.
+
+   **Field-level lineage** (added 2026-11-06): each job declares a column map in `job.toml`,
+   giving the input columns (and JSON paths) behind each output column. The runner verifies the
+   map and stores it in the Parquet metadata. Combined with `_sources`, the map traces one value
+   to the exact raw fields behind it, with no per-row storage. Columns whose source depends on
+   another column, such as `entity_metadata.value` by `key`, are keyed `by` that column.
+   Per-value sources were rejected as too costly per row.
 
 2. **Jobs are folders** with `job.toml` (description, inputs) and `query.sql`. Shared jobs are in
    `pipeline/jobs/`; client jobs are in `pipeline/clients/<client>/jobs/` and override shared jobs
@@ -113,6 +119,66 @@ From the call with Dave Moore (stakeholder):
   - paging past 5000 rows per table;
   - a CSV of the leaf set.
 - **Not committed yet.**
+
+### Phase 2b: field-level lineage (done)
+
+- **Contract:** `[columns]` in every `job.toml`, written into the Parquet key-value metadata.
+  Details are in [CONTRACT.md](CONTRACT.md#column-lineage).
+- **Runner:** checks that the map covers every output column, and that each referenced input,
+  column, JSON path and `by` column exists. All six jobs have maps.
+- **SQL jobs declare their map rather than having it derived.** sqlglot can't trace
+  `json_extract_string(fields, [paths])[n]` back to a JSON path, so it would miss the paths
+  `tickets` needs most. It could still serve later as a cross-check.
+- **Waymark:**
+  - `src/domain/columnLineage.ts` computes a field's closure over the maps, plus a `follow`
+    filter for `expandToRaw`;
+  - field names on a row page link to `?field=`, which shows only the sources that field reads,
+    with those columns highlighted;
+  - expand-to-raw takes `?field=` too and extracts JSON paths as columns.
+- **On the Kafka run:**
+  - "Task" `avg_lead_time_hours` reaches 596 PRs, using only `created_at` and `merged_at`, with
+    the 387 tickets dropped;
+  - an `entity_metadata` value keyed `author` reaches `raw.github_pulls.user:$.login`.
+- **`trace.py --field <column>`** runs the same walk as Waymark's `traceField`, reusing the
+  runner's reference parser. It prints the hops and a few sample values of each raw field.
+- **Tests:** 50 pytest, 599 bun and 111 E2E pass.
+- **Not yet done:**
+  - an optional sqlglot cross-check of declared maps;
+  - a chart click that opens field lineage directly.
+
+### Phase 2c: lineage verification (done, 2026-11-09)
+
+- **`verify.py`** tests the contract by re-running a job on small inputs. It samples a few rows
+  per value of each `by` column, picked by a hash of `_row_id`.
+  - **Replay:** run the job on only the rows in a row's `_sources`. It must reproduce the row. If
+    it doesn't, it swaps in each input table in full to name the one with unlisted rows.
+  - **Perturb:** change each input column of those rows three ways (shift, replace, swap null) and
+    re-run. An output that changes must declare the input. For a JSON column, it changes every
+    leaf except the declared paths, then narrows to the undeclared path. A declared reference no
+    change affects is a warning, unless the row disappeared, which counts as a use.
+  - It reads only the run's files and the job, so it works for any job language once Phase 5
+    exists. It's the natural gate for `promote` in Phase 4.
+- **On the Kafka run, 10 rows per branch, about 2 min:** every job passes. It found three gaps,
+  now fixed:
+  - **`_sources` missed the links.** Rollups in `entity_metadata` (`change_count`,
+    `first_change_at`, `last_merged_at`, `ticket_keys`) and every `lead_time_by_issue_type` row
+    read `ticket_change_links` rows they didn't list. They now list them and declare
+    `ticket_change_links._row_id`, so the "Task" lead time traces in three hops (via the 602
+    links) to the same 387 issues and 596 PRs.
+  - **`lead_time_by_issue_type.tickets`** didn't declare `changes.merged_at`, which its `having`
+    filter reads.
+  - **`entity_metadata` `ticket_keys`** declared `tickets.ticket_key` but reads
+    `ticket_change_links.ticket_key`.
+  - **Warnings that remain, all correct supersets:** `changes.repo` from `html_url` (fallback only);
+    `tickets.status_group` from `$.status.name` (Kafka maps no statuses);
+    `ticket_change_links.ticket_key` from title, branch and body (a key is in one of them);
+    `entity_metadata.updated_at` from `created_at` (fallback only). Per-row `_fields` would make
+    these exact.
+- **Limits:** a test, not a proof; a change a query absorbs (non-max value in `max()`) hides a
+  dependency. Jobs that read the whole table (ranks, percentiles) fail replay by design.
+- **Tests:** 8 in `tests/test_verify.py`; 58 pytest pass.
+- **Not yet done:** running it from the runner or `promote`; speed (`entity_metadata` is
+  most of the time, about 0.4 s a row).
 
 ### Phase 3: incremental (1–2 days)
 

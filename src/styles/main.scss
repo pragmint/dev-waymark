@@ -990,6 +990,63 @@ form {
   font-size: 12px;
 }
 
+.lineage-field-link {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.entity-fields .lineage-field--active {
+  background: var(--color-badge-bg);
+  font-weight: 600;
+}
+
+.lineage-field {
+  margin: -16px 0 28px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  font-size: 13px;
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+}
+
+.lineage-field-heading {
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+
+.lineage-field-refs {
+  margin: 0 0 10px;
+  padding-left: 18px;
+
+  li {
+    overflow-wrap: anywhere;
+  }
+}
+
+.lineage-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.lineage-table th.lineage-col--field {
+  color: var(--color-primary);
+}
+
+.lineage-table td.lineage-col--field {
+  background: var(--color-surface);
+  font-weight: 500;
+}
+
 // ── Entity detail ─────────────────────────────────────────────────────────────
 
 .entity-detail {

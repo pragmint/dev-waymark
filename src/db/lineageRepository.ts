@@ -1,8 +1,10 @@
 import type { SourceDataAdapter } from './source/adapter';
-import { LineageRowSchema, SourceRefsSchema } from '../schemas/lineage';
-import type { LineageRow, ParentGroup, SourceRef } from '../schemas/lineage';
+import { ColumnMapSchema, LineageRowSchema, SourceRefsSchema } from '../schemas/lineage';
+import type { ColumnMap, LineageRow, ParentGroup, SourceRef } from '../schemas/lineage';
+import { JSON_PATH_PATTERN } from '../domain/columnLineage';
 import {
   DERIVED_ID_COLUMN,
+  LINEAGE_SCHEMA,
   PREVIEW_CHARS,
   RAW_PREFIX,
   groupSourcesByTable,
@@ -11,7 +13,12 @@ import {
   planHop,
 } from '../domain/lineage';
 
-export type RowOptions = { limit?: number; preview?: boolean };
+export type RowOptions = {
+  limit?: number;
+  preview?: boolean;
+  /** `column:$.path` labels: values pulled out of JSON text, added as columns of that name. */
+  extracts?: string[];
+};
 
 export type LineageRepository = {
   tables(): string[];
@@ -22,19 +29,29 @@ export type LineageRepository = {
   getRows(table: string, rowIds: string[], options?: RowOptions): Promise<LineageRow[]>;
   /** The distinct `_sources` of some rows of a derived table: the expand-to-raw fetcher. */
   getSources(table: string, rowIds: string[]): Promise<SourceRef[]>;
-  /** A row's sources fetched as rows, one group per source table. */
-  getParents(sources: SourceRef[], limit: number): Promise<ParentGroup[]>;
+  /**
+   * A row's sources fetched as rows, one group per source table. `highlight` names, per table,
+   * the columns to show first; `column:$.path` labels are extracted from JSON text.
+   */
+  getParents(
+    sources: SourceRef[],
+    limit: number,
+    highlight?: Record<string, string[]>
+  ): Promise<ParentGroup[]>;
+  /** Each table's column map, for the tables whose files carry a valid one. */
+  columnMaps(): Record<string, ColumnMap>;
 };
 
 function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
-// Raw tables live in the `raw` schema; derived tables in the default one.
+// Raw tables live in the `raw` schema; derived tables, with their contract
+// columns, in the lineage schema.
 function tableRef(table: string): string {
   return isRawTable(table)
     ? `raw.${quoteIdent(table.slice(RAW_PREFIX.length))}`
-    : quoteIdent(table);
+    : `${LINEAGE_SCHEMA}.${quoteIdent(table)}`;
 }
 
 // Ids travel as one JSON-encoded parameter, so a hop of thousands of rows is
@@ -57,6 +74,29 @@ function previewColumns(columns: Array<{ name: string; type: string }>): string 
     .join(', ');
 }
 
+function extractColumns(extracts: string[]): string {
+  return extracts
+    .map(label => {
+      const [column = '', path = ''] = label.split(':');
+      if (!JSON_PATH_PATTERN.test(path)) throw new Error(`Invalid JSON path in ${label}`);
+      return `, json_extract_string(${quoteIdent(column)}, '${path}') AS ${quoteIdent(label)}`;
+    })
+    .join('');
+}
+
+// Maps that fail validation are dropped: lineage then falls back to whole rows for that table.
+function parseColumnMaps(raw: Record<string, string>): Record<string, ColumnMap> {
+  const maps: Record<string, ColumnMap> = {};
+  for (const [table, json] of Object.entries(raw)) {
+    try {
+      maps[table] = ColumnMapSchema.parse(JSON.parse(json));
+    } catch (err) {
+      console.error(`[dev-waymark] Ignoring the column map of ${table}:`, err);
+    }
+  }
+  return maps;
+}
+
 function parseRow(raw: { row_id: string; row: string }): LineageRow {
   const values = JSON.parse(raw.row) as Record<string, unknown>;
   // A 53-bit _row_id survives JSON, but keep the exact text the id came from.
@@ -66,9 +106,11 @@ function parseRow(raw: { row_id: string; row: string }): LineageRow {
 
 export function createLineageRepository(
   adapter: SourceDataAdapter,
-  lineageTables: string[]
+  lineageTables: string[],
+  rawColumnMaps: Record<string, string> = {}
 ): LineageRepository {
   const known = new Set(lineageTables);
+  const maps = parseColumnMaps(rawColumnMaps);
   const columnCache = new Map<string, Promise<Array<{ name: string; type: string }>>>();
 
   function assertTable(table: string): void {
@@ -88,7 +130,8 @@ export function createLineageRepository(
 
   async function selectRows(table: string, where: string, params: string[], options: RowOptions) {
     const id = `CAST(${idColumnFor(table)} AS VARCHAR)`;
-    const select = options.preview ? previewColumns(await columnsOf(table)) : '*';
+    const columns = options.preview ? previewColumns(await columnsOf(table)) : '*';
+    const select = columns + extractColumns(options.extracts ?? []);
     const limit = options.limit === undefined ? '' : `LIMIT ${Math.max(0, options.limit)}`;
     const rows = await adapter.query<{ row_id: string; row: string }>(
       `SELECT ${id} AS row_id, CAST(to_json(t) AS VARCHAR) AS row
@@ -103,6 +146,8 @@ export function createLineageRepository(
     tables: () => [...lineageTables],
 
     hasTable: table => known.has(table),
+
+    columnMaps: () => maps,
 
     async getRow(table, rowId) {
       assertTable(table);
@@ -129,19 +174,24 @@ export function createLineageRepository(
       return SourceRefsSchema.parse(rows);
     },
 
-    async getParents(sources, limit) {
+    async getParents(sources, limit, highlight = {}) {
       // A source table this run doesn't have (raw data not copied alongside
       // the tables, say) still shows, with its count but no rows.
       return Promise.all(
-        planHop(groupSourcesByTable(sources)).map(async ({ table, ids }) => ({
-          table,
-          isRaw: isRawTable(table),
-          available: known.has(table),
-          total: ids.length,
-          rows: known.has(table)
-            ? await repo.getRows(table, ids.slice(0, limit), { preview: true })
-            : [],
-        }))
+        planHop(groupSourcesByTable(sources)).map(async ({ table, ids }) => {
+          const columns = highlight[table] ?? [];
+          const extracts = columns.filter(label => label.includes(':'));
+          return {
+            table,
+            isRaw: isRawTable(table),
+            available: known.has(table),
+            total: ids.length,
+            highlight: columns,
+            rows: known.has(table)
+              ? await repo.getRows(table, ids.slice(0, limit), { preview: true, extracts })
+              : [],
+          };
+        })
       );
     },
   };

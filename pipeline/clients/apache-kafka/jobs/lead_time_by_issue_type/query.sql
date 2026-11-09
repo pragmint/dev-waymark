@@ -3,7 +3,10 @@ with ticket_lead_times as (
     tickets._row_id as ticket_id,
     tickets.issue_type,
     date_diff('minute', min(changes.created_at), max(changes.merged_at)) / 60.0 as hours,
-    list(source_ref('changes', changes._row_id)) as change_refs
+    list_concat(
+      list(source_ref('changes', changes._row_id)),
+      list(source_ref('ticket_change_links', links._row_id))
+    ) as change_refs
   from tickets
   inner join ticket_change_links as links on links.ticket_id = tickets._row_id
   inner join changes on changes._row_id = links.change_id

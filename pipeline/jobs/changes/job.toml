@@ -1,2 +1,18 @@
 description = "One row per GitHub pull request: the latest raw version of each."
 inputs = ["raw.github_pulls"]
+
+[columns]
+source_id = ["raw.github_pulls.id"]
+repo = ["raw.github_pulls.base:$.repo", "raw.github_pulls.html_url"]
+number = ["raw.github_pulls.number"]
+title = ["raw.github_pulls.title"]
+body = ["raw.github_pulls.body"]
+branch = ["raw.github_pulls.head:$.ref"]
+state = ["raw.github_pulls.state"]
+is_draft = ["raw.github_pulls.draft"]
+author = ["raw.github_pulls.user:$.login"]
+url = ["raw.github_pulls.html_url"]
+created_at = ["raw.github_pulls.created_at"]
+updated_at = ["raw.github_pulls.updated_at"]
+closed_at = ["raw.github_pulls.closed_at"]
+merged_at = ["raw.github_pulls.merged_at"]

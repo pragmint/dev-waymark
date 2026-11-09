@@ -1,6 +1,9 @@
 import type { FC } from 'hono/jsx';
 import type { LineageRow, ParentGroup } from '../../schemas/lineage';
-import { lineagePath } from '../../domain/lineage';
+import { lineagePath, withQuery } from '../../domain/lineage';
+import { refLabel } from '../../domain/columnLineage';
+import type { FieldTrace } from '../../domain/columnLineage';
+import { LineageFieldNote } from '../components/LineageFieldNote';
 import { Layout } from '../components/Layout';
 import { LineageParentGroup } from '../components/LineageParentGroup';
 
@@ -20,14 +23,29 @@ function expandJsonText(values: Record<string, unknown>): Record<string, unknown
   return expanded;
 }
 
-const RowFields: FC<{ row: LineageRow }> = ({ row }) => (
+const CONTRACT_COLUMNS = new Set(['_row_id', '_sources']);
+
+// With a column map, each field name links to that field's lineage.
+const RowFields: FC<{ row: LineageRow; fieldHref?: (field: string) => string; field?: string }> = ({
+  row,
+  fieldHref,
+  field,
+}) => (
   <dl class="entity-fields lineage-fields">
     {Object.entries(row.values)
       .filter(([key]) => key !== '_sources')
       .map(([key, value]) => (
         <>
-          <dt>{key}</dt>
-          <dd>
+          <dt class={key === field ? 'lineage-field--active' : undefined}>
+            {fieldHref && !CONTRACT_COLUMNS.has(key) ? (
+              <a class="lineage-field-link" href={fieldHref(key)}>
+                {key}
+              </a>
+            ) : (
+              key
+            )}
+          </dt>
+          <dd class={key === field ? 'lineage-field--active' : undefined}>
             {value === null || value === undefined ? (
               '—'
             ) : typeof value === 'object' ? (
@@ -41,13 +59,52 @@ const RowFields: FC<{ row: LineageRow }> = ({ row }) => (
   </dl>
 );
 
+const FieldNote: FC<{ table: string; rowId: string; field: string; trace: FieldTrace | null }> = ({
+  table,
+  rowId,
+  field,
+  trace,
+}) => {
+  const self = lineagePath(table, rowId);
+  if (!trace) {
+    return (
+      <LineageFieldNote
+        field={field}
+        heading="no column lineage"
+        columns={[]}
+        empty="This table's column map doesn't declare this field, so every source is shown."
+      >
+        <a href={self}>Show all fields</a>
+      </LineageFieldNote>
+    );
+  }
+  return (
+    <LineageFieldNote
+      field={field}
+      heading="computed from"
+      columns={trace.direct.map(ref => `${ref.table}.${refLabel(ref)}`)}
+      empty="A constant: it reads no input column."
+    >
+      {trace.direct.length > 0 ? (
+        <a class="lineage-action" href={withQuery(lineagePath(table, rowId, '/raw'), { field })}>
+          Expand this field to raw
+        </a>
+      ) : null}
+      <a href={self}>Show all fields</a>
+    </LineageFieldNote>
+  );
+};
+
 export const LineageRowPage: FC<{
   table: string;
   row: LineageRow;
   isRaw: boolean;
   parents: ParentGroup[];
   entityHref?: string;
-}> = ({ table, row, isRaw, parents, entityHref }) => (
+  hasColumnMap?: boolean;
+  field?: string;
+  trace?: FieldTrace | null;
+}> = ({ table, row, isRaw, parents, entityHref, hasColumnMap, field, trace = null }) => (
   <Layout title={`${table} ${row.rowId}`}>
     <div class="page-header">
       <a href="/entities" class="back-link">
@@ -81,15 +138,24 @@ export const LineageRowPage: FC<{
     ) : (
       <>
         <section class="entity-detail">
-          <RowFields row={row} />
+          <RowFields
+            row={row}
+            field={field}
+            fieldHref={
+              hasColumnMap
+                ? key => withQuery(lineagePath(table, row.rowId), { field: key })
+                : undefined
+            }
+          />
         </section>
+        {field ? <FieldNote table={table} rowId={row.rowId} field={field} trace={trace} /> : null}
         <section class="lineage-parents">
-          <h2>Built from</h2>
+          <h2>{field && trace ? `${field} is built from` : 'Built from'}</h2>
           {parents.length === 0 ? <p class="empty">This row lists no sources.</p> : null}
           {parents.map(group => (
             <LineageParentGroup
               group={group}
-              moreHref={`${lineagePath(table, row.rowId)}?limit=all`}
+              moreHref={withQuery(lineagePath(table, row.rowId), { field, limit: 'all' })}
             />
           ))}
         </section>

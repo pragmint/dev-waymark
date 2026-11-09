@@ -25,5 +25,5 @@ export function getEntityRepo(): EntityRepository {
 export function getLineageRepo(): LineageRepository | null {
   const adapter = getSourceAdapter();
   const tables = adapter.listLineageTables?.();
-  return tables ? createLineageRepository(adapter, tables) : null;
+  return tables ? createLineageRepository(adapter, tables, adapter.listColumnMaps?.() ?? {}) : null;
 }

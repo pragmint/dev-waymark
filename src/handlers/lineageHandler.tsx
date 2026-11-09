@@ -10,6 +10,8 @@ import {
   parseRowLimit,
   sourcesOf,
 } from '../domain/lineage';
+import { directColumns, followFor, traceField } from '../domain/columnLineage';
+import type { FieldTrace } from '../domain/columnLineage';
 import { LineageNotFoundPage } from '../frontend/Pages/LineageNotFoundPage';
 import { LineageRawPage } from '../frontend/Pages/LineageRawPage';
 import { LineageRowPage } from '../frontend/Pages/LineageRowPage';
@@ -45,7 +47,15 @@ export async function lineageRowHandler(c: Context) {
   const row = await repo.getRow(table, rowId);
   if (!row) return notFound(c, `${table} has no row ${rowId}.`);
 
-  const parents = await repo.getParents(sourcesOf(table, row), parseRowLimit(c.req.query('limit')));
+  // With ?field=, show only the sources that field reads, and the columns it reads first.
+  const field = c.req.query('field') || undefined;
+  const trace = field ? traceField(repo.columnMaps(), table, field, row.values) : null;
+  const follow = trace ? followFor(trace) : () => true;
+  const parents = await repo.getParents(
+    sourcesOf(table, row).filter(source => follow(table, source.table)),
+    parseRowLimit(c.req.query('limit')),
+    trace ? directColumns(trace) : {}
+  );
 
   return c.html(
     <LineageRowPage
@@ -54,6 +64,9 @@ export async function lineageRowHandler(c: Context) {
       isRaw={isRawTable(table)}
       parents={parents}
       entityHref={entityHrefFor(table, rowId)}
+      hasColumnMap={table in repo.columnMaps()}
+      field={field}
+      trace={trace}
     />
   );
 }
@@ -64,13 +77,30 @@ export async function lineageRawHandler(c: Context) {
   if (!resolved.ok) return notFound(c, resolved.message);
   const { repo, table, rowId } = resolved;
 
-  if (!(await repo.getRow(table, rowId))) return notFound(c, `${table} has no row ${rowId}.`);
+  const row = await repo.getRow(table, rowId);
+  if (!row) return notFound(c, `${table} has no row ${rowId}.`);
 
-  const { hops, leaves } = await expandToRaw({ [table]: [rowId] }, repo.getSources);
+  const field = c.req.query('field') || undefined;
+  const trace: FieldTrace | null = field
+    ? traceField(repo.columnMaps(), table, field, row.values)
+    : null;
+  const { hops, leaves } = await expandToRaw({ [table]: [rowId] }, repo.getSources, {
+    follow: trace ? followFor(trace) : undefined,
+  });
   const groups = await repo.getParents(
     hopToSourceRefs(leaves),
-    parseRowLimit(c.req.query('limit'))
+    parseRowLimit(c.req.query('limit')),
+    trace?.columns ?? {}
   );
 
-  return c.html(<LineageRawPage table={table} rowId={rowId} hops={hops} leaves={groups} />);
+  return c.html(
+    <LineageRawPage
+      table={table}
+      rowId={rowId}
+      hops={hops}
+      leaves={groups}
+      field={field}
+      trace={trace}
+    />
+  );
 }

@@ -16,6 +16,7 @@ import {
   isValidRowId,
   planHop,
   sourcesOf,
+  withQuery,
 } from './lineage';
 import type { FetchSources } from './lineage';
 
@@ -166,7 +167,7 @@ describe('expandToRaw', () => {
     const fetch: FetchSources = async table => [
       { table: table === 'a' ? 'b' : 'a', row_id: String(++n) },
     ];
-    await expect(expandToRaw({ a: ['0'] }, fetch, 5)).rejects.toThrow('within 5 hops');
+    await expect(expandToRaw({ a: ['0'] }, fetch, { maxHops: 5 })).rejects.toThrow('within 5 hops');
   });
 
   it('ends without leaves when a derived row has no sources', async () => {
@@ -231,5 +232,14 @@ describe('entity links', () => {
     expect(entityLineagePath(101)).toBe('/lineage/entities/101');
     expect(entityHrefFor('entities', '101')).toBe('/entities/101');
     expect(entityHrefFor('tickets', '101')).toBeUndefined();
+  });
+});
+
+describe('withQuery', () => {
+  it('encodes values and leaves out empty ones', () => {
+    expect(withQuery('/lineage/t/1', { field: 'a b', limit: undefined })).toBe(
+      '/lineage/t/1?field=a%20b'
+    );
+    expect(withQuery('/lineage/t/1', {})).toBe('/lineage/t/1');
   });
 });

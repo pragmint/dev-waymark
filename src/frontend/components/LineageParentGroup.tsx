@@ -19,7 +19,7 @@ export const LineageParentGroup: FC<{ group: ParentGroup; moreHref: string }> = 
       <p class="empty">This run has no {group.table} table to show these rows from.</p>
     ) : (
       <>
-        <LineageRowsTable table={group.table} rows={group.rows} />
+        <LineageRowsTable table={group.table} rows={group.rows} highlight={group.highlight} />
         {group.rows.length < group.total ? (
           <p class="lineage-more">
             Showing {group.rows.length} of {group.total.toLocaleString()}.{' '}

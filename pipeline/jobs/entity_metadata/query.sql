@@ -1,12 +1,16 @@
 -- Each value's _sources is the entity's own row, plus the rows on the other side of the links
--- for values rolled up across them (a ticket's change count, a change's ticket keys).
+-- for values rolled up across them (a ticket's change count, a change's ticket keys), and the
+-- links that joined them.
 with ticket_rollups as (
   select
     links.ticket_id,
     count(*) as change_count,
     min(changes.created_at) as first_change_at,
     max(changes.merged_at) as last_merged_at,
-    list(source_ref('changes', changes._row_id)) as change_refs
+    list_concat(
+      list(source_ref('changes', changes._row_id)),
+      list(source_ref('ticket_change_links', links._row_id))
+    ) as change_refs
   from ticket_change_links as links
   inner join changes on changes._row_id = links.change_id
   group by links.ticket_id
@@ -16,7 +20,10 @@ change_tickets as (
   select
     change_id,
     string_agg(ticket_key, ',' order by ticket_key) as ticket_keys,
-    list(source_ref('tickets', ticket_id)) as ticket_refs
+    list_concat(
+      list(source_ref('tickets', ticket_id)),
+      list(source_ref('ticket_change_links', _row_id))
+    ) as ticket_refs
   from ticket_change_links
   group by change_id
 ),

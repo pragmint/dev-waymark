@@ -22,8 +22,9 @@ function cellClass(value: unknown): string {
     : 'lineage-cell';
 }
 
-function visibleColumns(rows: LineageRow[]): string[] {
-  const columns: string[] = [];
+// Highlighted columns (the ones a selected field reads) come first.
+function visibleColumns(rows: LineageRow[], highlight: string[]): string[] {
+  const columns: string[] = [...highlight];
   for (const row of rows) {
     for (const key of Object.keys(row.values)) {
       if (!HIDDEN_COLUMNS.has(key) && !columns.includes(key)) columns.push(key);
@@ -32,8 +33,13 @@ function visibleColumns(rows: LineageRow[]): string[] {
   return columns.slice(0, MAX_COLUMNS);
 }
 
-export const LineageRowsTable: FC<{ table: string; rows: LineageRow[] }> = ({ table, rows }) => {
-  const columns = visibleColumns(rows);
+export const LineageRowsTable: FC<{ table: string; rows: LineageRow[]; highlight?: string[] }> = ({
+  table,
+  rows,
+  highlight = [],
+}) => {
+  const columns = visibleColumns(rows, highlight);
+  const marked = (column: string) => (highlight.includes(column) ? ' lineage-col--field' : '');
   return (
     <div class="lineage-table-scroll">
       <table class="entity-table lineage-table" data-lineage-table={table}>
@@ -41,7 +47,7 @@ export const LineageRowsTable: FC<{ table: string; rows: LineageRow[] }> = ({ ta
           <tr>
             <th>{idColumnFor(table)}</th>
             {columns.map(column => (
-              <th>{column}</th>
+              <th class={marked(column).trim() || undefined}>{column}</th>
             ))}
           </tr>
         </thead>
@@ -54,7 +60,9 @@ export const LineageRowsTable: FC<{ table: string; rows: LineageRow[] }> = ({ ta
                 </a>
               </td>
               {columns.map(column => (
-                <td class={cellClass(row.values[column])}>{displayValue(row.values[column])}</td>
+                <td class={cellClass(row.values[column]) + marked(column)}>
+                  {displayValue(row.values[column])}
+                </td>
               ))}
             </tr>
           ))}

@@ -1,6 +1,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection, DuckDBValue } from '@duckdb/node-api';
 import type { InListFragment, SourceDataAdapter, SqlParam } from './adapter';
+import { DERIVED_ID_COLUMN, LINEAGE_SCHEMA, SOURCES_COLUMN } from '../../domain/lineage';
 
 /** Parse a duckdb source URL to the folder DuckDB reads Parquet from. */
 export function parseParquetLocation(url: string): string {
@@ -49,14 +50,40 @@ async function globPaths(connection: DuckDBConnection, pattern: string): Promise
   return reader.getRowObjectsJS().map(row => String(row.file));
 }
 
-async function registerTables(connection: DuckDBConnection, location: string): Promise<string[]> {
+// The key runner.py writes each job's column map under, in the Parquet file's own metadata.
+const COLUMNS_METADATA_KEY = 'waymark_columns';
+
+type Registered = { tables: string[]; columnMaps: Record<string, string> };
+
+async function readColumnMap(connection: DuckDBConnection, path: string): Promise<string | null> {
+  const reader = await connection.runAndReadAll(
+    `SELECT decode(value) AS value FROM parquet_kv_metadata('${path}')
+     WHERE decode(key) = '${COLUMNS_METADATA_KEY}'`
+  );
+  const value = reader.getRowObjectsJS()[0]?.value;
+  return typeof value === 'string' ? value : null;
+}
+
+async function registerTables(connection: DuckDBConnection, location: string): Promise<Registered> {
   const tables = tableNamesFromPaths(await globPaths(connection, `${location}/*.parquet`), false);
   for (const table of REQUIRED_TABLES) {
     if (!tables.includes(table)) throw new Error(`Missing ${location}/${table}.parquet`);
   }
+  const columnMaps: Record<string, string> = {};
+  await connection.run(`CREATE SCHEMA ${LINEAGE_SCHEMA}`);
   for (const table of tables) {
     const path = escapeSqlString(`${location}/${table}.parquet`);
-    await connection.run(`CREATE VIEW "${table}" AS SELECT * FROM read_parquet('${path}')`);
+    const source = `read_parquet('${path}')`;
+    const described = await connection.runAndReadAll(`DESCRIBE SELECT * FROM ${source}`);
+    const contract = described
+      .getRowObjectsJS()
+      .map(row => String(row.column_name))
+      .filter(name => name === DERIVED_ID_COLUMN || name === SOURCES_COLUMN);
+    const exclude = contract.length > 0 ? ` EXCLUDE (${contract.join(', ')})` : '';
+    await connection.run(`CREATE VIEW "${table}" AS SELECT *${exclude} FROM ${source}`);
+    await connection.run(`CREATE VIEW ${LINEAGE_SCHEMA}."${table}" AS SELECT * FROM ${source}`);
+    const columnMap = await readColumnMap(connection, path);
+    if (columnMap !== null) columnMaps[table] = columnMap;
   }
 
   const rawLocation = rawLocationFor(location);
@@ -71,7 +98,7 @@ async function registerTables(connection: DuckDBConnection, location: string): P
       `CREATE VIEW raw."${table}" AS SELECT * FROM read_parquet('${files}', union_by_name = true)`
     );
   }
-  return [...tables, ...rawTables.map(table => `raw.${table}`)];
+  return { tables: [...tables, ...rawTables.map(table => `raw.${table}`)], columnMaps };
 }
 
 /**
@@ -84,30 +111,35 @@ async function registerTables(connection: DuckDBConnection, location: string): P
 export class DuckdbSourceAdapter implements SourceDataAdapter {
   private constructor(
     private instance: DuckDBInstance,
-    private tables: string[]
+    private registered: Registered
   ) {}
 
   static async create(url: string): Promise<DuckdbSourceAdapter> {
     const location = parseParquetLocation(url);
     const instance = await DuckDBInstance.create(':memory:');
     const connection = await instance.connect();
-    let tables: string[];
+    let registered: Registered;
     try {
       // Pipeline dates are UTC; show timestamps the same way whatever the host zone.
       await connection.run("SET GLOBAL TimeZone = 'UTC'");
-      tables = await registerTables(connection, location);
+      registered = await registerTables(connection, location);
     } catch (err) {
       connection.closeSync();
       instance.closeSync();
       throw err;
     }
     connection.closeSync();
-    return new DuckdbSourceAdapter(instance, tables);
+    return new DuckdbSourceAdapter(instance, registered);
   }
 
   /** Every table registered, raw ones as `raw.<name>`. */
   listLineageTables(): string[] {
-    return [...this.tables];
+    return [...this.registered.tables];
+  }
+
+  /** Each table's column map as the pipeline wrote it (JSON text), for tables that have one. */
+  listColumnMaps(): Record<string, string> {
+    return { ...this.registered.columnMaps };
   }
 
   // One connection per call: a DuckDB connection runs one statement at a time,

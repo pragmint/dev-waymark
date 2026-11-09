@@ -55,4 +55,10 @@ export interface SourceDataAdapter {
    * the rest leave this undefined and Waymark hides lineage.
    */
   listLineageTables?(): string[];
+
+  /**
+   * Each lineage table's column map (pipeline/CONTRACT.md, "Column lineage") as JSON text,
+   * for the tables that carry one.
+   */
+  listColumnMaps?(): Record<string, string>;
 }

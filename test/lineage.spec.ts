@@ -46,3 +46,26 @@ test('returns 404 for an unknown table or row', async ({ page }) => {
   expect((await page.goto('/lineage/tickets/404'))?.status()).toBe(404);
   expect((await page.goto('/lineage/tickets/not-a-number'))?.status()).toBe(404);
 });
+
+test('narrows an aggregate to the sources one field reads, down to raw', async ({ page }) => {
+  await page.goto(`/lineage/lead_time_by_issue_type/${LINEAGE_FIXTURE.leadTimeId}`);
+  await page.getByRole('link', { name: 'issue_type', exact: true }).click();
+
+  // issue_type reads tickets only, so the changes group drops out.
+  await expect(page.locator('[data-lineage-field="issue_type"]')).toContainText(
+    'tickets.issue_type'
+  );
+  await expect(page.locator('[data-lineage-group="tickets"]')).toBeVisible();
+  await expect(page.locator('[data-lineage-group="changes"]')).toHaveCount(0);
+
+  await page.getByRole('link', { name: 'Expand this field to raw' }).click();
+  await expect(page.locator('[data-lineage-field="issue_type"]')).toContainText(
+    'raw.jira_issues.fields:$.issuetype.name'
+  );
+  await expect(page.locator('[data-lineage-group="raw.github_pulls"]')).toHaveCount(0);
+
+  // The JSON path is pulled out of the raw record as its own column.
+  const jira = page.locator('[data-lineage-group="raw.jira_issues"]');
+  await expect(jira.locator('th.lineage-col--field')).toHaveText('fields:$.issuetype.name');
+  await expect(jira.locator('td.lineage-col--field').first()).toHaveText('Task');
+});
