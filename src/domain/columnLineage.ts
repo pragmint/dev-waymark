@@ -1,9 +1,10 @@
-import type { ColumnMap, ColumnRef, ColumnSpec } from '../schemas/lineage';
-import { DERIVED_ID_COLUMN, RAW_ID_COLUMN, isRawTable } from './lineage';
+import { ColumnMapSchema } from '../schemas/lineage';
+import type { ColumnMap, ColumnRef } from '../schemas/lineage';
+import { DERIVED_ID_COLUMN, FIELDS_COLUMN, RAW_ID_COLUMN, isRawTable } from './lineage';
 
-// Field-level lineage = each job's column map (which input columns feed each output column)
-// combined with each row's `_sources` (which input rows). Following only the source tables a
-// field's columns read narrows the row walk to the rows that actually feed that field.
+// Field-level lineage = which input columns feed each output column (a row's `_fields`, or its
+// table's column map) combined with each row's `_sources` (which input rows). Following only the
+// source tables a field's columns read narrows the row walk to the rows that actually feed it.
 
 const REF_PATTERN =
   /^((?:raw\.)?[a-z][a-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?::(\$(?:\.[A-Za-z0-9_]+)+))?$/;
@@ -21,14 +22,10 @@ export function refLabel(ref: ColumnRef): string {
   return ref.path ? `${ref.column}:${ref.path}` : ref.column;
 }
 
-/**
- * The references a column reads. For a column keyed `by` another, `byValue` picks the branch
- * (falling back to `else`); without it, every branch counts, since different rows differ.
- */
-export function refsFor(spec: ColumnSpec, byValue?: string): string[] {
-  if (Array.isArray(spec)) return spec;
-  if (byValue !== undefined) return spec.when[byValue] ?? spec.else;
-  return [...Object.values(spec.when).flat(), ...spec.else];
+/** A row's own `_fields`, or an empty map when it has none or they don't parse. */
+function ownFields(values: Record<string, unknown>): ColumnMap {
+  const parsed = ColumnMapSchema.safeParse(values[FIELDS_COLUMN]);
+  return parsed.success ? parsed.data : {};
 }
 
 function isRowIdentity(ref: ColumnRef): boolean {
@@ -57,8 +54,9 @@ function parseRefs(refs: string[]): ColumnRef[] {
 }
 
 /**
- * Trace one field of one row through the column maps. Returns null when the table has no
- * column map or doesn't declare the field.
+ * Trace one field of one row. The row's own `_fields` gives the first hop exactly; past it, each
+ * table's column map is the union over its rows, so it can list more than one row read. Returns
+ * null when neither the row nor its table maps the field.
  */
 export function traceField(
   maps: Record<string, ColumnMap>,
@@ -66,10 +64,9 @@ export function traceField(
   field: string,
   values: Record<string, unknown>
 ): FieldTrace | null {
-  const spec = maps[table]?.[field];
-  if (!spec) return null;
-  const byValue = Array.isArray(spec) ? undefined : String(values[spec.by] ?? '');
-  const direct = parseRefs(refsFor(spec, byValue));
+  const refs = ownFields(values)[field] ?? maps[table]?.[field];
+  if (!refs) return null;
+  const direct = parseRefs(refs);
 
   const trace: FieldTrace = { field, direct, columns: {}, follows: {} };
   addUnique(trace.follows, table, [...new Set(direct.map(ref => ref.table))]);
@@ -85,12 +82,12 @@ export function traceField(
     addUnique(trace.columns, ref.table, [refLabel(ref)]);
     if (isRawTable(ref.table)) continue;
 
-    const refSpec = maps[ref.table]?.[ref.column];
-    if (isRowIdentity(ref) || !refSpec) {
+    const nextRefs = maps[ref.table]?.[ref.column];
+    if (isRowIdentity(ref) || !nextRefs) {
       wholeRows.add(ref.table);
       continue;
     }
-    const next = parseRefs(refsFor(refSpec));
+    const next = parseRefs(nextRefs);
     addUnique(trace.follows, ref.table, [...new Set(next.map(r => r.table))]);
     queue.push(...next);
   }

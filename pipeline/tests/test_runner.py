@@ -1,5 +1,5 @@
 import json
-import re
+from datetime import datetime
 from pathlib import Path
 
 import pyarrow as pa
@@ -12,16 +12,19 @@ from runner import (
     ContractError,
     Job,
     build_order,
-    column_errors,
     connect,
     contract_errors,
+    field_errors,
+    load_job,
     load_jobs,
     parse_ref,
     run_job,
     run_jobs,
-    validate_columns,
 )
-from trace import column_maps, raw_values, refs_for, row_values, trace, trace_field
+import snapshot as snapshots
+from snapshot import Snapshot
+from trace import column_maps, raw_values, row_values, trace, trace_field
+from verify import verify_job
 
 CLIENT = {
     "client": "test",
@@ -74,26 +77,29 @@ PULLS = [
 ]
 
 
-def write_raw(run_root: Path, table: str, rows: list[dict]) -> None:
-    directory = run_root / "raw" / table
-    directory.mkdir(parents=True)
-    pq.write_table(pa.Table.from_pylist(rows), directory / "load.parquet")
+RUN = "r1"
+
+
+def write_raw(root: Path, table: str, rows: list[dict], run_id: str = RUN) -> None:
+    directory = root / "raw" / table
+    directory.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pylist(rows), directory / f"{run_id}.1.0.parquet")
 
 
 @pytest.fixture
-def run_root(tmp_path: Path) -> Path:
+def snap(tmp_path: Path) -> Snapshot:
     write_raw(tmp_path, "jira_issues", ISSUES)
     write_raw(tmp_path, "github_pulls", PULLS)
-    return tmp_path
+    return snapshots.start(str(tmp_path), RUN, "s1", {})
 
 
 @pytest.fixture
-def built(run_root: Path):
-    statuses = run_jobs(load_jobs([JOBS_DIR]), CLIENT, run_root)
+def built(snap: Snapshot):
+    statuses = run_jobs(load_jobs([JOBS_DIR]), CLIENT, snap)
     assert set(statuses.values()) == {"built"}
     con = connect(CLIENT)
     for name in statuses:
-        con.execute(f"CREATE VIEW {name} AS SELECT * FROM '{run_root}/tables/{name}.parquet'")
+        con.execute(f"CREATE VIEW {name} AS SELECT * FROM {snap.source(name)}")
     return con
 
 
@@ -120,9 +126,7 @@ def test_a_client_job_replaces_a_shared_job_with_the_same_name(tmp_path: Path):
     for root, sql in [("shared", "select 'shared'"), ("client", "select 'client'")]:
         directory = tmp_path / root / "tickets"
         directory.mkdir(parents=True)
-        (directory / "job.toml").write_text(
-            'inputs = ["raw.jira_issues"]\n[columns]\nx = ["raw.jira_issues.key"]'
-        )
+        (directory / "job.toml").write_text('inputs = ["raw.jira_issues"]')
         (directory / "query.sql").write_text(sql)
     jobs = load_jobs([tmp_path / "shared", tmp_path / "client"])
     assert [(j.name, j.sql) for j in jobs] == [("tickets", "select 'client'")]
@@ -159,19 +163,19 @@ def test_contract_errors_pass_a_valid_table():
     assert contract_errors(con, ("up",)) == []
 
 
-def test_run_job_refuses_to_write_a_table_that_breaks_the_contract(run_root: Path):
-    (run_root / "tables").mkdir()
+def test_run_job_refuses_to_write_a_table_that_breaks_the_contract(snap: Snapshot):
     bad = job("bad", ["raw.jira_issues"], "select 1::bigint as _row_id")
     with pytest.raises(ContractError):
-        run_job(bad, CLIENT, run_root)
-    assert not (run_root / "tables" / "bad.parquet").exists()
+        run_job(bad, CLIENT, snap)
+    assert not Path(snap.url(snap.output_key("bad"))).exists()
+    assert "bad" not in snap.tables
 
 
-def test_a_failed_job_skips_everything_downstream(run_root: Path):
+def test_a_failed_job_skips_everything_downstream(snap: Snapshot):
     jobs = [job("broken", ["raw.jira_issues"], "select nope"), job("after", ["broken"])]
-    statuses = run_jobs(jobs, CLIENT, run_root)
+    statuses = run_jobs(jobs, CLIENT, snap)
     assert statuses == {"broken": "failed", "after": "skipped"}
-    assert list((run_root / "tables").iterdir()) == []
+    assert not Path(snap.url("tables")).exists()
 
 
 def test_tickets_keep_the_latest_version_and_point_at_its_raw_row(built):
@@ -227,12 +231,12 @@ def test_a_rollup_is_sourced_from_the_rows_it_rolls_up(built):
     assert sources == ["changes", "ticket_change_links", "tickets"]
 
 
-def test_trace_follows_a_metadata_value_back_to_raw(built, run_root: Path):
+def test_trace_follows_a_metadata_value_back_to_raw(built, snap: Snapshot):
     (row_id,) = built.sql("""
         SELECT m._row_id FROM entity_metadata AS m JOIN entities ON entities.id = m.entity_id
         WHERE entities.name = 'KAFKA-1' AND m.key = 'change_count'
     """).fetchone()
-    hops = trace(run_root / "tables", "entity_metadata", str(row_id))
+    hops = trace(snap, "entity_metadata", str(row_id))
     assert set(hops[1]) == {"tickets", "changes", "ticket_change_links"}
     assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
@@ -248,43 +252,78 @@ def test_parse_ref_splits_table_column_and_json_path():
         parse_ref("fields:$.priority")
 
 
-@pytest.mark.parametrize(
-    ("columns", "problem"),
-    [
-        (None, "needs a [columns] table"),
-        ({"_row_id": []}, "part of the contract"),
-        ({"x": ["other.y"]}, "not an input"),
-        ({"x": {"when": {"a": ["up.y"]}}}, "needs `by`"),
-        ({"x": "up.y"}, "must list references"),
-    ],
-)
-def test_validate_columns_rejects_a_malformed_map(columns, problem):
-    with pytest.raises(ValueError, match=re.escape(problem)):
-        validate_columns("job", columns, ("up",))
+def test_load_job_rejects_a_column_map_in_job_toml(tmp_path: Path):
+    (tmp_path / "job.toml").write_text('inputs = ["up"]\n[columns]\nx = ["up.y"]')
+    (tmp_path / "query.sql").write_text("select 1")
+    with pytest.raises(ValueError, match="returns _fields instead"):
+        load_job(tmp_path)
 
 
 @pytest.mark.parametrize(
-    ("columns", "problem"),
+    ("fields", "problem"),
     [
-        ({}, "does not declare ['n']"),
-        ({"n": ["up.y"], "extra": []}, "does not output: ['extra']"),
-        ({"n": ["up.missing"]}, "up has no column missing"),
-        ({"n": ["up.y:$.a"]}, "JSON path on a INTEGER column"),
-        ({"n": {"by": "missing", "when": {}}}, "keyed by missing"),
+        ("{'n': ['up.y']}::map(varchar, varchar)", "_fields must be MAP(VARCHAR, VARCHAR[])"),
+        ("map {'n': ['up.y'], 'extra': []}", "keys are not the output columns ['n']"),
+        ("null::map(varchar, varchar[])", "keys are not the output columns"),
+        ("map {'n': [null]::varchar[]}", "_fields[n] holds a null reference"),
+        ("map {'n': ['nope']}", "Invalid column reference"),
+        ("map {'n': ['other.y']}", "_fields[n] reads other, which is not an input"),
+        ("map {'n': ['up.missing']}", "up has no column missing"),
+        ("map {'n': ['up.y:$.a']}", "JSON path on a INTEGER column"),
     ],
 )
-def test_column_errors_catch_a_map_that_does_not_match_the_tables(columns, problem):
+def test_field_errors_catch_fields_that_do_not_match_the_tables(fields, problem):
     con = connect(CLIENT)
     con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y")
-    con.execute("CREATE TEMP TABLE result AS SELECT 7::bigint AS _row_id, 1 AS n")
-    errors = column_errors(con, Job("j", ("up",), "", columns=columns))
+    con.execute(f"CREATE TEMP TABLE result AS SELECT 7::bigint AS _row_id, {fields} AS _fields, 1 AS n")
+    errors = field_errors(con, ("up",))
     assert any(problem in error for error in errors), errors
 
 
-def test_every_table_carries_its_column_map(built, run_root: Path):
+def test_field_errors_pass_fields_that_differ_by_row():
+    con = connect(CLIENT)
+    con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y, 3 AS z")
+    con.execute("""
+        CREATE TEMP TABLE result AS
+        SELECT i::bigint AS _row_id, if(i = 0, map {'n': ['up.y']}, map {'n': []}) AS _fields, 1 AS n
+        FROM range(2) AS r(i)
+    """)
+    assert field_errors(con, ("up",)) == []
+
+
+def test_every_table_carries_the_union_of_its_rows_fields(built, snap: Snapshot):
     for job in load_jobs([JOBS_DIR]):
-        metadata = pq.read_metadata(run_root / "tables" / f"{job.name}.parquet").metadata
-        assert json.loads(metadata[COLUMNS_METADATA_KEY.encode()]) == job.columns
+        metadata = pq.read_metadata(snap.files(job.name)[0]).metadata
+        stored = json.loads(metadata[COLUMNS_METADATA_KEY.encode()])
+        rows = built.sql(f"SELECT DISTINCT _fields FROM {job.name}").fetchall()
+        union: dict[str, set[str]] = {}
+        for (fields,) in rows:
+            for column, refs in fields.items():
+                union.setdefault(column, set()).update(refs)
+        assert stored == {column: sorted(refs) for column, refs in union.items()}
+
+
+def test_a_value_with_a_fallback_names_only_the_column_it_came_from(built):
+    # KAFKA-2's status is mapped by the client; the others fall back to Jira's category.
+    rows = dict(built.sql(
+        "SELECT ticket_key, _fields['status_group'] FROM tickets ORDER BY ticket_key"
+    ).fetchall())  # fmt: skip
+    assert rows == {
+        "KAFKA-1": ["raw.jira_issues.fields:$.status.statusCategory.name"],
+        "KAFKA-2": ["raw.jira_issues.fields:$.status.name"],
+        "KAFKA-3": ["raw.jira_issues.fields:$.status.statusCategory.name"],
+    }
+
+
+def test_a_link_names_the_texts_its_key_was_found_in(built):
+    rows = dict(built.sql(
+        "SELECT ticket_key, _fields['ticket_key'] FROM ticket_change_links ORDER BY ticket_key"
+    ).fetchall())  # fmt: skip
+    assert rows == {
+        "KAFKA-1": ["tickets.ticket_key", "changes.title"],
+        "KAFKA-2": ["tickets.ticket_key", "changes.branch"],
+        "KAFKA-3": ["tickets.ticket_key", "changes.title"],
+    }
 
 
 def metadata_row_id(built, entity_name: str, key: str) -> str:
@@ -295,18 +334,10 @@ def metadata_row_id(built, entity_name: str, key: str) -> str:
     return str(row_id)
 
 
-def test_refs_for_picks_the_branch_of_a_keyed_column():
-    spec = {"by": "key", "when": {"a": ["t.a"]}, "else": ["t.other"]}
-    assert refs_for(spec, "a") == ["t.a"]
-    assert refs_for(spec, "zzz") == ["t.other"]
-    assert refs_for(spec) == ["t.a", "t.other"]
-    assert refs_for(["t.x"], "ignored") == ["t.x"]
-
-
-def test_trace_field_follows_only_the_tables_a_field_reads(built, run_root: Path):
+def test_trace_field_follows_only_the_tables_a_field_reads(built, snap: Snapshot):
     # change_count is sourced from the ticket, its changes and their links, but counts only the
     # linked changes. The links lead back to the ticket only through the key that matched.
-    tables = run_root / "tables"
+    tables = snap
     row_id = metadata_row_id(built, "KAFKA-1", "change_count")
     values = row_values(tables, "entity_metadata", row_id)
     field = trace_field(column_maps(tables), "entity_metadata", "value", values)
@@ -317,8 +348,8 @@ def test_trace_field_follows_only_the_tables_a_field_reads(built, run_root: Path
     assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
-def test_trace_field_reaches_a_json_path_in_raw(built, run_root: Path):
-    tables = run_root / "tables"
+def test_trace_field_reaches_a_json_path_in_raw(built, snap: Snapshot):
+    tables = snap
     row_id = metadata_row_id(built, "KAFKA-1", "status")
     values = row_values(tables, "entity_metadata", row_id)
     field = trace_field(column_maps(tables), "entity_metadata", "value", values)
@@ -329,10 +360,28 @@ def test_trace_field_reaches_a_json_path_in_raw(built, run_root: Path):
     }
     hops = trace(tables, "entity_metadata", row_id, field.follow)
     raw_ids = hops[-1]["raw.jira_issues"]
-    assert raw_values(run_root, "raw.jira_issues", "fields:$.status.name", raw_ids) == [
+    assert raw_values(snap, "raw.jira_issues", "fields:$.status.name", raw_ids) == [
         values["value"]
     ]
 
 
-def test_trace_field_returns_none_for_an_undeclared_field(built, run_root: Path):
-    assert trace_field(column_maps(run_root / "tables"), "tickets", "nope", {}) is None
+def test_trace_field_returns_none_for_an_undeclared_field(built, snap: Snapshot):
+    assert trace_field(column_maps(snap), "tickets", "nope", {}) is None
+
+
+def test_every_shared_job_passes_verification(tmp_path: Path):
+    # The shared jobs' hand-written _fields, checked by re-running each job. verify.py perturbs
+    # values in place, so the pulls' timestamps are typed, as dlt writes them.
+    def typed(pull: dict) -> dict:
+        stamps = ("created_at", "updated_at", "closed_at", "merged_at")
+        return {**pull, **{k: pull[k] and datetime.fromisoformat(pull[k]) for k in stamps}}
+
+    root = tmp_path / "typed"
+    write_raw(root, "jira_issues", ISSUES)
+    write_raw(root, "github_pulls", [typed(p) for p in PULLS])
+    snap = snapshots.start(str(root), RUN, "s1", {})
+    jobs = build_order(load_jobs([JOBS_DIR]))
+    assert set(run_jobs(jobs, CLIENT, snap).values()) == {"built"}
+    for job in jobs:
+        _, found = verify_job(job, CLIENT, snap, per_branch=1)
+        assert [f for f in found if f.level == "error"] == [], job.name

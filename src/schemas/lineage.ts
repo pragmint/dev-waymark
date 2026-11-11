@@ -34,18 +34,11 @@ export type ParentGroup = z.infer<typeof ParentGroupSchema>;
 export const HopSchema = z.record(z.string(), z.array(z.string()));
 export type Hop = z.infer<typeof HopSchema>;
 
-// A job's column map (pipeline/CONTRACT.md, "Column lineage"): each output column lists the
-// input columns it is computed from, as `<table>.<column>` or `<table>.<column>:<json path>`.
-// A column whose source depends on another column is keyed `by` that column.
-export const KeyedColumnSpecSchema = z.object({
-  by: z.string(),
-  when: z.record(z.string(), z.array(z.string())).default({}),
-  else: z.array(z.string()).default([]),
-});
-export const ColumnSpecSchema = z.union([z.array(z.string()), KeyedColumnSpecSchema]);
-export type ColumnSpec = z.infer<typeof ColumnSpecSchema>;
-
-export const ColumnMapSchema = z.record(z.string(), ColumnSpecSchema);
+// Column lineage (pipeline/CONTRACT.md, "Column lineage"): each output column lists the input
+// columns it is computed from, as `<table>.<column>` or `<table>.<column>:<json path>`. A row's
+// `_fields` says this for that row alone; a table's column map, read from its Parquet metadata,
+// is the union over all of its rows.
+export const ColumnMapSchema = z.record(z.string(), z.array(z.string()));
 export type ColumnMap = z.infer<typeof ColumnMapSchema>;
 
 export const ColumnRefSchema = z.object({

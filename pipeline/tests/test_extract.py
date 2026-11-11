@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from extract import github_config, jira_auth, jira_config, new_run_id, run_url, slim_pull
+from extract import github_config, jira_auth, jira_config, new_run_id, slim_pull
 
 SERVER = {"flavor": "server", "base_url": "https://jira.example.org/jira/", "jql": "project = A"}
 CLOUD = {"flavor": "cloud", "base_url": "https://acme.atlassian.net", "jql": "project = A"}
@@ -11,16 +11,6 @@ CLOUD = {"flavor": "cloud", "base_url": "https://acme.atlassian.net", "jql": "pr
 def test_new_run_id_uses_utc():
     now = datetime(2026, 11, 2, 10, 30, 5, tzinfo=timezone(timedelta(hours=-5)))
     assert new_run_id(now) == "20261102T153005Z"
-
-
-def test_run_url_appends_run_folder():
-    assert run_url("s3://bucket/waymark/", "r1") == "s3://bucket/waymark/runs/r1"
-
-
-@pytest.mark.parametrize("run_id", ["../other", "a/b", ""])
-def test_run_url_rejects_ids_that_escape_the_folder(run_id):
-    with pytest.raises(ValueError):
-        run_url("s3://bucket", run_id)
 
 
 def test_slim_pull_keeps_branch_and_repo_names_only():

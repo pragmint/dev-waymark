@@ -6,10 +6,11 @@ about the tables, not the language that builds them, but the runner only runs SQ
 
 ## Required columns
 
-| Column     | Type                                            | Meaning                                    |
-| ---------- | ----------------------------------------------- | ------------------------------------------ |
-| `_row_id`  | `BIGINT`                                        | Identifies the row. Unique and never null. |
-| `_sources` | `LIST<STRUCT("table" VARCHAR, row_id VARCHAR)>` | The input rows this row was built from.    |
+| Column     | Type                                            | Meaning                                     |
+| ---------- | ----------------------------------------------- | ------------------------------------------- |
+| `_row_id`  | `BIGINT`                                        | Identifies the row. Unique and never null.  |
+| `_sources` | `LIST<STRUCT("table" VARCHAR, row_id VARCHAR)>` | The input rows this row was built from.     |
+| `_fields`  | `MAP(VARCHAR, VARCHAR[])`                       | The input columns each value is built from. |
 
 - **`_row_id` comes from business keys**, never from load order, so the same ticket or the same
   "P1 / Platform" aggregate keeps its ID from one run to the next. Use `stable_id(kind, key)`: an
@@ -29,8 +30,9 @@ about the tables, not the language that builds them, but the runner only runs SQ
 - **`_sources.row_id` is text** because it holds both derived `_row_id` values (`BIGINT`) and raw
   `_dlt_id` values (text) in one column.
 
-`_sources` says which rows a row came from. Which columns of those rows feed each field is
-declared once per job, in its column map (see [Column lineage](#column-lineage)).
+`_sources` says which rows a row came from; `_fields` says which columns of those rows feed each
+of its values (see [Column lineage](#column-lineage)). Neither holds both, so a row stores its
+row ids once and its column names once.
 
 ## Jobs
 
@@ -38,17 +40,13 @@ A job is a folder named after the table it writes:
 
 ```
 jobs/tickets/
-  job.toml    # description, inputs and column map
-  query.sql   # one SELECT
+  job.toml    # description and inputs
+  query.sql   # one SELECT, returning _row_id, _sources and _fields
 ```
 
 ```toml
 description = "One row per Jira issue: the latest raw version of each."
 inputs = ["raw.jira_issues"]
-
-[columns]
-ticket_key = ["raw.jira_issues.key"]
-priority = ["raw.jira_issues.fields:$.priority.name"]
 ```
 
 A job sees only its declared inputs: `raw.<table>` for raw data and the bare name for another
@@ -70,46 +68,50 @@ A row's order in the output follows the query's `ORDER BY`.
 
 ## Column lineage
 
-Every job declares, under `[columns]` in `job.toml`, the input columns each output column is
-computed from. Together with each row's `_sources`, this traces any single value to the exact
-fields of the exact raw records behind it, with nothing stored per row.
+`_fields` says, for each row, which input columns each of its values is computed from. With
+`_sources` saying which input rows, this traces any single value to the exact fields of the exact
+raw records behind it. Each job writes its own, in the query:
+
+```sql
+map {
+  'ticket_key': ['raw.jira_issues.key'],
+  'priority': ['raw.jira_issues.fields:$.priority.name']
+} as _fields
+```
 
 - **References** are `<input>.<column>`, where `<input>` is one of the job's declared inputs. For
   a value inside JSON text, add a JSON path: `raw.jira_issues.fields:$.priority.name`.
-- **Every output column** except `_row_id` and `_sources` has an entry. `[]` marks a constant,
-  such as a fixed label, that reads no input column.
+- **Every row maps every output column** except the three contract columns. `[]` marks a
+  constant, such as a fixed label, that reads no input column.
 - **`_row_id` as a reference** means the row's identity rather than one of its values, as in a
-  count of tickets: `tickets = ["tickets._row_id"]`. Tracing follows all of that row's sources.
-  For a raw input, `_dlt_id` plays the same role: `issues = ["raw.jira_issues._dlt_id"]`.
-- **A column whose source depends on another column** is keyed `by` that column. `when` maps
-  each value of the key to its references, and `else` covers any other value:
+  count of tickets: `'tickets': ['tickets._row_id']`. Tracing follows all of that row's sources.
+  For a raw input, `_dlt_id` plays the same role: `'issues': ['raw.jira_issues._dlt_id']`.
+- **A value that can come from more than one place names the one it came from in that row.**
+  `coalesce(a, b)` gets `case when a is not null then [...a] else [...b] end`, and a row of
+  `entity_metadata` names the column its key reads:
 
-  ```toml
-  [columns.value]
-  by = "key"
-  else = ["tickets.custom_fields"]
-
-  [columns.value.when]
-  priority = ["tickets.priority"]
-  author = ["changes.author"]
+  ```sql
+  case key
+    when 'priority' then map {..., 'value': ['tickets.priority']}
+    when 'author' then map {..., 'value': ['changes.author']}
+    else map {..., 'value': ['tickets.custom_fields']}
+  end as _fields
   ```
 
-  For one row, the row's own key value picks the branch. For a table as a whole, every branch
-  counts. TOML keys are always text, so the key value is compared as text, and a null key
-  value matches as the empty string.
+  Every branch produces the same map type, `MAP(VARCHAR, VARCHAR[])`; an empty list types itself
+  from its neighbours.
 
-The runner writes the map into the output file's Parquet key-value metadata, under
-`waymark_columns` as JSON, so it travels with the table and needs no manifest. A job written in
-another language, once the runner supports one, will declare the same `[columns]` table.
+The runner also writes each table's **column map**, the union of every row's `_fields`, into the
+output file's Parquet key-value metadata under `waymark_columns` as JSON. It lets a reader trace a
+column across the whole table without scanning it, and needs no manifest.
 
-Tracing a field narrows the row walk: from each table it follows only the source tables that
-the field's columns read. A map must be a superset of what a row really used. For example,
-`coalesce(a, b)` lists both `a` and `b`, even for a row whose value came from `a`.
+Tracing one value starts from that row's `_fields`, which is exact. Past the first hop it uses
+each source table's column map, which can name more than one particular source row read: it
+follows only the source tables that the field's columns read, then all their rows.
 
-**The runner cannot check that a map is complete.** It checks that every reference exists, not
-that the query reads nothing else. A map that leaves out a column the query reads still passes,
-and tracing that field quietly misses the inputs behind it. Keep the map in step with
-`query.sql` by hand.
+**The runner can't tell that `_fields` is complete.** It checks that every reference exists, not
+that the query reads nothing else. That is what `verify.py` is for, and the runner runs it after
+building (see [Verification](#verification)).
 
 ## Checks
 
@@ -119,42 +121,66 @@ The runner refuses to write a table that breaks the contract:
 - a null or repeated `_row_id`;
 - a row with no `_sources`;
 - a source entry that names an undeclared input or a row that does not exist;
-- a column map that leaves out an output column, declares a column the job doesn't output, or
-  references a table that isn't an input, a column that the input doesn't have, a JSON path on
-  a column that isn't text, or a `by` column the job doesn't output.
+- a missing or mistyped `_fields` column;
+- a row whose `_fields` doesn't map exactly the output columns;
+- a reference that is null or malformed, or names a table that isn't an input, a column that the
+  input doesn't have, or a JSON path on a column that isn't text.
 
 A failed job skips every job downstream of it.
 
-## Run layout
+## Verification
 
-Each run writes one folder. Readers find tables by path, so the layout is part of the contract:
+After building, the runner runs `verify.py` over every table it wrote, and the run fails if it
+finds an error. For a few rows per distinct `_fields`, it re-runs the job on only the rows in
+the row's `_sources` and expects the same row back, then changes each input column of those rows
+in turn: every output column that changes must name that input in the row's `_fields`. It is a
+test, not a proof: a change the query absorbs, such as a value that isn't the largest in a
+`max()`, hides that dependency. `--no-verify` skips it.
+
+## Snapshot layout
+
+A client's files live under one bucket URL (`file://`, `s3://` or `az://`). Readers find tables
+through a manifest, never by listing folders, so the layout is part of the contract:
 
 ```
-<bucket>/runs/<run_id>/
-  raw/<table>/*.parquet     # what dlt wrote; read as raw.<table>
-  tables/<name>.parquet     # one file per job, named after the job
+<bucket>/
+  raw/<table>/<run_id>.<load_id>.<file_id>.parquet   # what dlt wrote; append-only
+  tables/<name>/<snapshot_id>.parquet                 # one file per job per snapshot
+  snapshots/<snapshot_id>.json                        # the manifest
+  latest.json                                         # {"snapshot", "manifest"}: the published one
 ```
 
-- **`raw/`**: every Parquet file under `raw/<table>/` together makes up `raw.<table>`, read
-  with `union_by_name`, because dlt can add columns between loads. Folders starting with `_dlt`
-  hold dlt's own bookkeeping and are not tables.
+- **A snapshot is the unit of identity.** Its manifest lists every table's exact files, raw
+  (`raw.<table>`) and derived, plus each built table's row count, inputs and `job` (a hash of the
+  job's files), the status of each job and whether verification passed. A table version is
+  `(name, snapshot_id)`. A job, `verify.py`, `trace.py` and Waymark all read a snapshot's tables
+  from its manifest, so raw or tables written later can't change what a snapshot reads.
+- **Nothing is rewritten.** Raw files are named after their run and dlt appends them; a table is
+  written once per snapshot; a snapshot id is never reused. Only `latest.json` changes, and only
+  after every job built and verified. That's also what object stores require, since they can't
+  rename: no reader ever trusts a file that may still be half written.
+- **`raw.<table>`** is the union of the manifest's files for it, read with `union_by_name`,
+  because dlt can add columns between loads. Folders starting with `_dlt` hold dlt's own
+  bookkeeping and are not tables.
 - **Names**: table and job names use only letters, digits and `_`, and don't start with a
-  digit. Readers skip any other name.
-- **`raw/` sits next to `tables/`**: Waymark is pointed at `tables/` and looks for raw data in
-  `../raw`. Without it, lineage stops at the last derived table and shows only counts for the raw
-  rows.
+  digit. Run and snapshot ids use letters, digits, `_` and `-`. Manifest file keys are relative
+  to the bucket and never contain `..`.
+- **Retention**: old snapshots can be expired by age (an object-store lifecycle rule on `raw/`
+  and `tables/`), as long as nothing still published reads an expired file. Today every snapshot
+  reads only its own run's raw, so the rule just has to outlive the run interval.
 
 ## What Waymark reads
 
-- `tables/` must contain `entities` and `entity_metadata`, the tables Waymark browses.
+- A snapshot must contain `entities` and `entity_metadata`, the tables Waymark browses.
 - In `entities`, `id` equals `_row_id`, so every entity is also its own lineage row.
-- Entity queries read a view of each table without `_row_id` and `_sources`, so they never
-  read the lineage columns. Lineage reads the full table from the `lineage` schema.
+- Entity queries read a view of each table without `_row_id`, `_sources` and `_fields`, so
+  they never read the lineage columns. Lineage reads the full table from the `lineage` schema.
 - Waymark compares the date columns of `entities` and `entity_metadata` as text, so they hold
   `iso_utc` text. Other timestamps are shown in UTC.
 - For a derived table, Waymark converts `_sources.row_id` back to `BIGINT` to match `_row_id`.
-- Waymark reads each table's column map from its Parquet metadata. A table without a valid map
-  still shows row lineage, but its fields can't be traced one at a time.
+- Waymark traces a field from the row's own `_fields`, then each table's column map from its
+  Parquet metadata. A table without a valid map still shows row lineage, and a field traced
+  through it follows all of its sources.
 
 Phase 3 of [PLAN.md](PLAN.md) replaces this layout with per-snapshot files and `latest.json`.
 Waymark's DuckDB adapter (`src/db/source/duckdb.ts`) has to change with it.

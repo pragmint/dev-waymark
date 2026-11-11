@@ -1,7 +1,7 @@
 # Row-lineage pipeline plan
 
 Working plan for replacing the dbt + derived-tables prototype with a language-agnostic, row-level
-lineage pipeline. Status as of 2026-11-06.
+lineage pipeline. Status as of 2026-11-09.
 
 - **Worktree:** `/Users/pratt/Developer/dev-waymark-lineage`
 - **Branch:** `row-lineage-pipeline` (from `main`)
@@ -34,14 +34,15 @@ From the call with Dave Moore (stakeholder):
 
    Raw tables are the root, named `raw.<table>`, and a raw row's ID is its `_dlt_id`.
 
-   **Field-level lineage** (added 2026-11-06): each job declares a column map in `job.toml`,
-   giving the input columns (and JSON paths) behind each output column. The runner verifies the
-   map and stores it in the Parquet metadata. Combined with `_sources`, the map traces one value
-   to the exact raw fields behind it, with no per-row storage. Columns whose source depends on
-   another column, such as `entity_metadata.value` by `key`, are keyed `by` that column.
-   Per-value sources were rejected as too costly per row.
+   **Field-level lineage** (added 2026-11-06, moved into the rows 2026-11-09): every row has
+   `_fields MAP(VARCHAR, VARCHAR[])`, giving the input columns (and JSON paths) behind each of its
+   values. It holds column names only, never row ids, so it stays small. The runner checks it and
+   stores the union over the table's rows in the Parquet metadata as the table's column map.
+   Combined with `_sources`, it traces one value to the exact raw fields behind it. Per-value
+   row sources were rejected as too costly per row.
 
-2. **Jobs are folders** with `job.toml` (description, inputs) and `query.sql`. Shared jobs are in
+2. **Jobs are folders** with `job.toml` (description, inputs) and `query.sql`, which returns
+   the three contract columns. Shared jobs are in
    `pipeline/jobs/`; client jobs are in `pipeline/clients/<client>/jobs/` and override shared jobs
    by name. Container jobs come later; see Phase 5.
 3. **Incremental v1 means "compute in full, write the diff".** Each job recomputes its output.
@@ -49,8 +50,8 @@ From the call with Dave Moore (stakeholder):
    writes the changes. True input-incremental is an optional later optimization.
 4. **Raw is append-only.** A raw row never changes once written, so lineage to the exact version
    of a record stays valid.
-5. **Storage:** start with one Parquet file per table per snapshot, so Waymark's DuckDB adapter
-   barely changes. Consider DuckLake once full rewrites get slow.
+5. **Storage:** one Parquet file per table per snapshot, found through the snapshot's manifest
+   (Phase 2e). Consider DuckLake once full rewrites get slow.
 6. **Central orchestrator.** It builds the job graph from declared inputs, rejects cycles, and
    runs only what's downstream of a change. Jobs don't decide for themselves. Dagster was
    considered, but jobs registered in a bucket at runtime fit it awkwardly, so lean toward a small
@@ -180,12 +181,87 @@ From the call with Dave Moore (stakeholder):
 - **Not yet done:** running it from the runner or `promote`; speed (`entity_metadata` is
   most of the time, about 0.4 s a row).
 
+### Phase 2d: `_fields` in the rows (done, 2026-11-09)
+
+- **The `[columns]` table in `job.toml` is gone.** Each query returns `_fields` beside
+  `_sources`, so the map sits next to the expressions it describes and works for any job
+  language. `load_job` rejects a leftover `[columns]`.
+- **`by`/`when`/`else` is gone.** A row names the branch it took, with `CASE`. This made the four
+  Phase 2c warnings exact: `changes.repo` names `base:$.repo` or `html_url`, `tickets.status_group`
+  names `$.status.name` only when the client mapped the status, a link's `ticket_key` names the
+  texts the key was found in, and `entity_metadata.updated_at` names `created_at` only when it
+  fell back to it.
+- **Runner:** checks `_fields` on `SELECT DISTINCT _fields`: every row maps exactly the output
+  columns, and every reference parses and exists. It writes the union as `waymark_columns`, a
+  plain `{column: [refs]}`.
+- **Verification is required.** `runner.py` runs `verify.py` over every table it built and fails
+  the run on an error; `--no-verify` skips it. `verify.py` samples per distinct `_fields` rather
+  than per `by` value. `test_every_shared_job_passes_verification` runs it on every shared job, so
+  a wrong `_fields` fails `pytest` too (about 13 s).
+- **Waymark:** a row's own `_fields` gives the first hop; past it, the table maps. The plain views
+  leave out `_fields` along with `_row_id` and `_sources`.
+- **Tests:** 60 pytest, 601 bun and 4 lineage E2E pass.
+- **Not yet done:**
+  - re-running the Kafka extract and build. No run was on disk, so storage cost and verify time
+    on real data are unmeasured;
+  - exact deeper hops: reading each source row's `_fields` rather than the union. Phase 2c's
+    custom-field values still name all of `tickets.custom_fields`, since a reference can't name
+    one key of a map.
+
+### Phase 2e: snapshots and S3 (done, 2026-11-09)
+
+From the 11/9 call with Dave: data can change between a build and its verification, so verify
+must read the same snapshot; Waymark should read only the latest one; S3 retention should handle
+old versions.
+
+- **Layout** (`snapshot.py`, [CONTRACT.md](CONTRACT.md#snapshot-layout)):
+  - `raw/<table>/<run_id>.<load>.<file>.parquet`: dlt now appends, with the run id in each file
+    name (`extra_placeholders`), so raw is append-only, as decision 4 requires;
+  - `tables/<name>/<snapshot_id>.parquet`, written once;
+  - `snapshots/<id>.json`: every table's exact files (raw included), rows, inputs, job version
+    hash, status and verify result;
+  - `latest.json`: moved last, only when everything built and verified.
+- **Identity:** a table version is `(name, snapshot_id)`. The runner, `verify.py`, `trace.py`
+  and Waymark all resolve tables through a manifest to explicit file lists, never globs, so a
+  later extract can't change what a snapshot reads. Tested both ways: a unit test lands a new run
+  between build and load, and the Waymark fixture has decoy files from an older run and snapshot.
+- **Waymark:** `DEV_WAYMARK_SOURCE_DB_URL` is the bucket root; the adapter reads `latest.json`,
+  then the manifest (Zod, `src/schemas/pipelineSnapshot.ts`). A manifest URL pins a snapshot; a
+  plain folder still works. It resolves once at startup.
+- **S3 and Azure: configuration only, no custom adapter.** Checked against SeaweedFS (S3) and
+  Azurite, from Python DuckDB 1.5.6 and `@duckdb/node-api` (DuckDB 2.0.0): `COPY ... TO` with
+  `KV_METADATA`, `read_parquet` lists, `glob`, `parquet_kv_metadata` and `read_text` all work, on
+  Azure too (writes included). Extensions autoload. Three catches:
+  - DuckDB's `credential_chain` ignores `AWS_ENDPOINT_URL` (it went to real AWS), so the endpoint
+    for MinIO or R2 is passed explicitly; `secret_statements` / `secretStatements` turn the
+    standard env vars into one `CREATE SECRET`. dlt and fsspec read `AWS_ENDPOINT_URL` as is.
+  - Object stores can't rename, so the runner's `.partial` then `replace()` had to go. Write-once
+    keys plus the pointer replace it.
+  - Extensions download on first use; an offline image must `INSTALL` them at build time.
+- **Kafka, end to end:**
+  - built from the existing raw (copied into the new layout as run `20261102T000000Z`) in 35 s
+    locally and 38 s on SeaweedFS, verification included (it was about 2 min in Phase 2c);
+  - every job verified; one remaining warning: a link's `ticket_key` lists title, branch and
+    body, and a key found in two of them survives perturbing either alone (a correct superset);
+  - storage: 97 MB raw, 29 MB of tables per snapshot (`entity_metadata` is 20 MB of it);
+  - `trace.py` and Waymark on `s3://` give the same "Task" lead-time trace as before (602 links,
+    596 PRs, 387 issues); the row page takes 88 ms and expand-to-raw 182 ms;
+  - a live `extract.py --max-pages 1` to S3 appended beside the old run; a `--no-publish`
+    snapshot of it read only its 100 issues and left `latest.json` alone.
+- **Tests:** 69 pytest (11 in `tests/test_snapshot.py`), 609 bun and 4 lineage E2E pass.
+- **Not yet done:**
+  - provisioning: Dave is setting up an AWS account to test on real S3;
+  - Waymark picking up a new `latest.json` without a restart;
+  - dlt's own Azure credentials (it doesn't take a connection string);
+  - a retention rule. Fine by age today, since each snapshot reads only its own run's raw.
+    Phase 3 changes that: an incremental snapshot reads older raw, so expiry must outlive the
+    `--full` interval or follow the manifests.
+
 ### Phase 3: incremental (1–2 days)
 
 - **Extract:**
-  - one stable dataset path per client instead of `runs/<run_id>`;
-  - drop the throwaway `pipelines_dir` so dlt can restore cursor state from the bucket;
-  - `write_disposition="append"`.
+  - ~~one stable dataset path per client~~ and ~~`write_disposition="append"`~~: done in 2e;
+  - drop the throwaway `pipelines_dir` so dlt can restore cursor state from the bucket.
 - **Cursors:**
   - Jira: add `updated >= "<cursor>"` to the JQL. JQL has minute precision, so allow overlap; the
     dedupe absorbs it.
@@ -193,10 +269,8 @@ From the call with Dave Moore (stakeholder):
     cursor.
 - **`--full`:** marks a full load. "Current" means the IDs in the last full load plus anything
   changed since, which is how deletes are detected. Run it weekly.
-- **Layout:**
-  - `tables/<t>/<snapshot>.parquet` with `<snapshot>.changes.parquet`;
-  - `snapshots/<id>.json`, recording each table's file, job version and status;
-  - `latest.json`, moved last.
+- **Layout:** the 2e layout, plus `<snapshot>.changes.parquet` beside each table file. A
+  snapshot's raw entry lists the last full run's files plus every run since.
 - **Runner:** writes the diff by `_row_id` plus a row hash.
 
 ### Phase 4: registry and orchestrator (1 day)

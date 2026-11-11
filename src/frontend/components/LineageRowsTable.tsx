@@ -3,7 +3,7 @@ import type { LineageRow } from '../../schemas/lineage';
 import { PREVIEW_CHARS, idColumnFor, lineagePath } from '../../domain/lineage';
 
 // Columns a listing leaves out: lineage plumbing, shown as links instead.
-const HIDDEN_COLUMNS = new Set(['_sources', '_row_id', '_dlt_id', '_dlt_load_id']);
+const HIDDEN_COLUMNS = new Set(['_sources', '_fields', '_row_id', '_dlt_id', '_dlt_load_id']);
 const MAX_COLUMNS = 8;
 
 /** A cell's text: JSON for nested values, cut at the preview length the query fetched. */

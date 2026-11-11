@@ -1,27 +1,2 @@
 description = "One row per Jira issue: the latest raw version of each, with the fields Waymark shows."
 inputs = ["raw.jira_issues"]
-
-# Each output column and the input columns it is computed from (CONTRACT.md, "Column lineage").
-[columns]
-source_id = ["raw.jira_issues.id"]
-ticket_key = ["raw.jira_issues.key"]
-summary = ["raw.jira_issues.fields:$.summary"]
-project = ["raw.jira_issues.fields:$.project.key"]
-issue_type = ["raw.jira_issues.fields:$.issuetype.name"]
-status = ["raw.jira_issues.fields:$.status.name"]
-status_category = ["raw.jira_issues.fields:$.status.statusCategory.name"]
-priority = ["raw.jira_issues.fields:$.priority.name"]
-resolution = ["raw.jira_issues.fields:$.resolution.name"]
-assignee = ["raw.jira_issues.fields:$.assignee.displayName"]
-reporter = ["raw.jira_issues.fields:$.reporter.displayName"]
-created_at = ["raw.jira_issues.fields:$.created"]
-updated_at = ["raw.jira_issues.fields:$.updated"]
-resolved_at = ["raw.jira_issues.fields:$.resolutiondate"]
-# The paths come from the client's [[mapping.jira_fields]].
-custom_fields = ["raw.jira_issues.fields"]
-# Mapped through the client's [mapping.statuses], else Jira's own category.
-status_group = [
-  "raw.jira_issues.fields:$.status.name",
-  "raw.jira_issues.fields:$.status.statusCategory.name",
-]
-url = ["raw.jira_issues.key"]

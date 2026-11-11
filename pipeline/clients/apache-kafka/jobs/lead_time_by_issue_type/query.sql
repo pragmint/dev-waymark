@@ -17,6 +17,15 @@ with ticket_lead_times as (
 select
   stable_id('lead_time_by_issue_type', coalesce(issue_type, '')) as _row_id,
   list_concat(list(source_ref('tickets', ticket_id)), flatten(list(change_refs))) as _sources,
+  map {
+    'issue_type': ['tickets.issue_type'],
+    -- Which changes count toward a ticket depends on its links; a ticket counts once one merged.
+    'tickets': ['tickets._row_id', 'ticket_change_links._row_id', 'changes.merged_at'],
+    'avg_lead_time_hours':
+      ['changes.created_at', 'changes.merged_at', 'ticket_change_links._row_id'],
+    'median_lead_time_hours':
+      ['changes.created_at', 'changes.merged_at', 'ticket_change_links._row_id']
+  } as _fields,
   issue_type,
   count(*) as tickets,
   round(avg(hours), 1) as avg_lead_time_hours,

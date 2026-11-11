@@ -1,12 +1,12 @@
 """Check that a run's tables keep the lineage they declare, by re-running each job on small inputs.
 
-For a sample of each table's rows, a few per value of any column another column is keyed `by`:
+For a sample of each table's rows, a few per distinct `_fields`:
 
 - **replay**: re-run the job on only the input rows in the row's `_sources`. It must reproduce the
   row. If it doesn't, the row depends on input rows it doesn't list, and the check names the input
   table that, given in full, does reproduce it.
 - **perturb**: change one input column of those rows at a time, three ways, and re-run. An output
-  column that changes must declare that input column in the job's [columns] map. For a JSON column
+  column that changes must name that input column in the row's `_fields`. For a JSON column
   everything except the declared paths changes, and any undeclared path that matters is narrowed
   down. A declared reference that no change affects is a warning: thresholds and `CASE` buckets
   can hide a real dependency, so it may be listed correctly.
@@ -17,6 +17,7 @@ a `max()`, hides that dependency.
 
 import argparse
 import json
+import os
 import math
 import sys
 import tempfile
@@ -33,7 +34,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from extract import run_url
+import snapshot as snapshots
 from runner import (
     CLIENTS_DIR,
     CONTRACT_COLUMNS,
@@ -42,18 +43,17 @@ from runner import (
     Job,
     build_order,
     connect,
-    duckdb_path,
-    input_source,
     is_raw,
     load_jobs,
     parse_ref,
     sql_string,
 )
-from trace import ROW_IDENTITY, refs_for
+from snapshot import Snapshot
+from trace import ROW_IDENTITY
 
 KINDS = ("shift", "replace", "null")
 # Identity columns join rows to their sources; changing them tests the join, not the lineage.
-UNPERTURBED = {"_row_id", "_sources", RAW_ROW_ID}
+UNPERTURBED = {*CONTRACT_COLUMNS, RAW_ROW_ID}
 # The most JSON subtrees one narrowing tries before reporting what it has.
 NARROW_LIMIT = 400
 # What a null JSON leaf becomes. Shaped like a date, so it changes a field read as text and one
@@ -234,9 +234,9 @@ def row_differences(actual: Row | None, expected: Row) -> list[str]:
 class Replay:
     """One job's query, run against inputs swapped in one table at a time."""
 
-    def __init__(self, job: Job, client: Mapping[str, Any], spill_dir: str):
+    def __init__(self, job: Job, client: Mapping[str, Any], spill_dir: str, snapshot: Snapshot):
         self.job = job
-        self.con = connect(client, spill_dir)
+        self.con = connect(client, spill_dir, snapshot)
         self.con.execute("SET TimeZone = 'UTC'")
         if any(is_raw(t) for t in job.inputs):
             self.con.execute("CREATE SCHEMA raw")
@@ -277,10 +277,10 @@ def id_column(table: str) -> str:
     return RAW_ROW_ID if is_raw(table) else "_row_id"
 
 
-def load_sources(run_root: Path, table: str, row_ids: set[str]) -> pa.Table:
-    with duckdb.connect() as con:
+def load_sources(snapshot: Snapshot, table: str, row_ids: set[str]) -> pa.Table:
+    with snapshot.connect() as con:
         return con.execute(
-            f"SELECT * FROM {input_source(table, run_root)} "
+            f"SELECT * FROM {snapshot.source(table)} "
             f"WHERE cast({id_column(table)} AS VARCHAR) IN (SELECT unnest(?))",
             [sorted(row_ids)],
         ).to_arrow_table()
@@ -295,20 +295,16 @@ def only_rows(table: pa.Table, id_name: str, row_ids: set[str]) -> pa.Table:
 
 
 class RowCheck:
-    def __init__(self, replay: Replay, run_root: Path, stored: Row, inputs: dict[str, pa.Table]):
+    def __init__(self, replay: Replay, snapshot: Snapshot, stored: Row, inputs: dict[str, pa.Table]):
         self.replay = replay
-        self.run_root = run_root
+        self.snapshot = snapshot
         self.stored = stored
         self.row_id = stored["_row_id"]
         self.inputs = inputs
         self.outputs = [c for c in stored if c not in CONTRACT_COLUMNS]
         self.baseline: Row = {}
-        columns = replay.job.columns or {}
-        self.refs = {
-            o: refs_for(spec, None if isinstance(spec, list) else str(stored.get(spec["by"]) or ""))
-            for o, spec in columns.items()
-            if o in self.outputs
-        }
+        # What this row says each of its values is computed from.
+        self.refs: dict[str, list[str]] = dict(stored.get("_fields") or {})
 
     def run(self) -> list[Finding]:
         for table, rows in self.inputs.items():
@@ -324,7 +320,7 @@ class RowCheck:
         detail = f"not reproduced from its _sources ({', '.join(differences)})"
         culprits = []
         for table in sorted(self.inputs):
-            self.replay.load(table, input_source(table, self.run_root))
+            self.replay.load(table, self.snapshot.source(table))
             if not row_differences(self.replay.row(self.row_id), self.stored):
                 culprits.append(table)
             self.replay.load(table, self.inputs[table])
@@ -463,19 +459,18 @@ class RowCheck:
 # ── Checking a job ────────────────────────────────────────────────────────────
 
 
-def sample_rows(run_root: Path, job: Job, per_branch: int) -> list[Row]:
-    """A few rows per value of each `by` column, picked by a hash of `_row_id` so runs agree."""
-    by_columns = sorted({s["by"] for s in (job.columns or {}).values() if isinstance(s, dict)})
-    partition = ", ".join(f'"{c}"' for c in by_columns) or "1"
-    path = sql_string(str(run_root / "tables" / f"{job.name}.parquet"))
-    with duckdb.connect() as con:
+def sample_rows(snapshot: Snapshot, job: Job, per_branch: int) -> list[Row]:
+    """A few rows per distinct `_fields`, picked by a hash of `_row_id` so runs agree. Rows that
+    read different columns took different branches of the query, so each branch gets checked."""
+    with snapshot.connect() as con:
         con.execute("SET TimeZone = 'UTC'")
         cursor = con.execute(f"""
             SELECT * EXCLUDE (_rank) FROM (
               SELECT *, row_number() OVER (
-                PARTITION BY {partition} ORDER BY md5(cast(_row_id AS VARCHAR))
+                PARTITION BY md5(cast(_fields AS VARCHAR))
+                ORDER BY md5(cast(_row_id AS VARCHAR))
               ) AS _rank
-              FROM read_parquet({path})
+              FROM {snapshot.source(job.name)}
             )
             WHERE _rank <= {int(per_branch)}
             ORDER BY _row_id
@@ -485,20 +480,20 @@ def sample_rows(run_root: Path, job: Job, per_branch: int) -> list[Row]:
 
 
 def verify_job(
-    job: Job, client: Mapping[str, Any], run_root: Path, per_branch: int
+    job: Job, client: Mapping[str, Any], snapshot: Snapshot, per_branch: int
 ) -> tuple[int, dict[Finding, list[int]]]:
     """Check a sample of one job's rows. Returns how many rows it checked and what it found,
     with the rows each finding came from."""
-    rows = sample_rows(run_root, job, per_branch)
+    rows = sample_rows(snapshot, job, per_branch)
     wanted: dict[str, set[str]] = {table: set() for table in job.inputs}
     for row in rows:
         for table, row_id in source_set(row):
             wanted.setdefault(table, set()).add(row_id)
-    loaded = {table: load_sources(run_root, table, ids) for table, ids in wanted.items()}
+    loaded = {table: load_sources(snapshot, table, ids) for table, ids in wanted.items()}
 
     found: dict[Finding, list[int]] = {}
     with tempfile.TemporaryDirectory(prefix="waymark-verify-") as spill_dir:
-        replay = Replay(job, client, spill_dir)
+        replay = Replay(job, client, spill_dir, snapshot)
         try:
             for row in rows:
                 ids = source_set(row)
@@ -506,7 +501,7 @@ def verify_job(
                     table: only_rows(data, id_column(table), {i for t, i in ids if t == table})
                     for table, data in loaded.items()
                 }
-                for finding in RowCheck(replay, run_root, row, inputs).run():
+                for finding in RowCheck(replay, snapshot, row, inputs).run():
                     found.setdefault(finding, []).append(row["_row_id"])
         finally:
             replay.close()
@@ -523,11 +518,24 @@ def report(job: Job, checked: int, found: dict[Finding, list[int]], seconds: flo
         print(f"  {finding.level:<7} {finding.check:<10} {where}{finding.detail}  ({rows})")
 
 
+def verify_jobs(
+    jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot, per_branch: int = 2
+) -> bool:
+    """Check each job and print what it finds. True if no job has an error."""
+    passed = True
+    for job in jobs:
+        started = time.monotonic()
+        checked, found = verify_job(job, client, snapshot, per_branch)
+        report(job, checked, found, time.monotonic() - started)
+        passed &= not any(f.level == "error" for f in found)
+    return passed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", required=True, type=Path, help="Client config TOML")
-    parser.add_argument("--bucket-url", required=True, help="file:// base URL")
-    parser.add_argument("--run-id", required=True, help="A run runner.py has built")
+    parser.add_argument("--bucket-url", required=True, help="file://, s3:// or az:// base URL")
+    parser.add_argument("--snapshot-id", help="A snapshot runner.py saved; defaults to latest")
     parser.add_argument("--job", action="append", help="Only check this job; repeatable")
     parser.add_argument("--rows-per-branch", type=int, default=2)
     args = parser.parse_args()
@@ -535,17 +543,11 @@ def main() -> None:
     client = tomllib.loads(args.client.read_text())
     job_dirs = [JOBS_DIR, CLIENTS_DIR / client["client"] / "jobs"]
     jobs = build_order(load_jobs([d for d in job_dirs if d.is_dir()]))
-    run_root = Path(duckdb_path(run_url(args.bucket_url, args.run_id)))
+    snapshot = snapshots.load(args.bucket_url, args.snapshot_id, os.environ)
 
-    failed = False
-    for job in jobs:
-        if args.job and job.name not in args.job:
-            continue
-        started = time.monotonic()
-        checked, found = verify_job(job, client, run_root, args.rows_per_branch)
-        report(job, checked, found, time.monotonic() - started)
-        failed |= any(f.level == "error" for f in found)
-    if failed:
+    if args.job:
+        jobs = [job for job in jobs if job.name in args.job]
+    if not verify_jobs(jobs, client, snapshot, args.rows_per_branch):
         sys.exit(1)
 
 

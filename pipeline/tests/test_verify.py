@@ -5,7 +5,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+import snapshot as snapshots
 from runner import Job, run_jobs
+from snapshot import Snapshot
 from verify import JSON_SEED, Finding, perturb_json, verify_job
 
 CLIENT = {
@@ -27,8 +29,14 @@ ITEMS = [
 ROW = "stable_id('item', id) as _row_id, [source_ref('raw.items', _dlt_id)] as _sources"
 
 
-def item_job(name: str, select: str, columns: dict) -> Job:
-    return Job(name, ("raw.items",), f"select {ROW}, {select} from raw.items", None, columns)
+def fields(columns: dict[str, list[str]]) -> str:
+    """A `_fields` map literal giving every row the same references."""
+    entries = ", ".join(f"'{c}': [{', '.join(repr(r) for r in refs)}]" for c, refs in columns.items())
+    return f"map {{{entries}}} as _fields"
+
+
+def item_job(name: str, select: str, columns: dict[str, list[str]]) -> Job:
+    return Job(name, ("raw.items",), f"select {ROW}, {fields(columns)}, {select} from raw.items")
 
 
 GOOD = item_job(
@@ -39,27 +47,27 @@ GOOD = item_job(
 
 
 @pytest.fixture
-def run_root(tmp_path: Path) -> Path:
+def run_root(tmp_path: Path) -> Snapshot:
     (tmp_path / "raw" / "items").mkdir(parents=True)
-    pq.write_table(pa.Table.from_pylist(ITEMS), tmp_path / "raw" / "items" / "load.parquet")
-    return tmp_path
+    pq.write_table(pa.Table.from_pylist(ITEMS), tmp_path / "raw" / "items" / "r1.1.0.parquet")
+    return snapshots.start(str(tmp_path), "r1", "s1", {})
 
 
-def verify(run_root: Path, *jobs: Job) -> dict[Finding, list[int]]:
+def verify(snap: Snapshot, *jobs: Job) -> dict[Finding, list[int]]:
     """Build every job, then check the last one."""
-    assert set(run_jobs(list(jobs), CLIENT, run_root).values()) == {"built"}
-    return verify_job(jobs[-1], CLIENT, run_root, per_branch=5)[1]
+    assert set(run_jobs(list(jobs), CLIENT, snap).values()) == {"built"}
+    return verify_job(jobs[-1], CLIENT, snap, per_branch=5)[1]
 
 
 def details(found: dict[Finding, list[int]]) -> set[tuple[str, str | None, str]]:
     return {(f.check, f.column, f.detail) for f in found}
 
 
-def test_a_correct_map_passes(run_root):
+def test_correct_fields_pass(run_root):
     assert verify(run_root, GOOD) == {}
 
 
-def test_reports_a_column_the_map_leaves_out(run_root):
+def test_reports_a_column_fields_leave_out(run_root):
     job = item_job("labels", "name || size as label", {"label": ["raw.items.name"]})
     assert details(verify(run_root, job)) == {
         ("undeclared", "label", "changes with raw.items.size")
@@ -94,36 +102,32 @@ def test_a_row_that_does_not_list_all_its_inputs_fails_replay(run_root):
         """
         select stable_id('total', 'all') as _row_id,
           [source_ref('good', min(_row_id))] as _sources,
+          map {'items': ['good._row_id']} as _fields,
           count(*) as items
         from good
         """,
-        None,
-        {"items": ["good._row_id"]},
     )
     (finding,) = verify(run_root, GOOD, total)
     assert finding.check == "replay"
     assert "reproduced with all of good" in finding.detail
 
 
-def test_checks_each_branch_of_a_keyed_column(run_root):
+def test_checks_each_branch_of_the_query(run_root):
     keyed = Job(
         "keyed",
         ("raw.items",),
-        f"""
+        """
         select stable_id('kv', id || ':' || k) as _row_id,
-          [source_ref('raw.items', _dlt_id)] as _sources, k as key, v as value
+          [source_ref('raw.items', _dlt_id)] as _sources,
+          -- Wrong for `size`: its value comes from raw.items.size.
+          map {'key': [], 'value': ['raw.items.name']} as _fields,
+          k as key, v as value
         from (
-          select *, unnest([{{'k': 'name', 'v': name}}, {{'k': 'size', 'v': cast(size as varchar)}}],
+          select *, unnest([{'k': 'name', 'v': name}, {'k': 'size', 'v': cast(size as varchar)}],
             recursive := true)
           from raw.items
         )
         """,
-        None,
-        {
-            "key": [],
-            # Wrong for `size`: its value comes from raw.items.size.
-            "value": {"by": "key", "when": {"name": ["raw.items.name"], "size": ["raw.items.name"]}},
-        },
     )
     assert details(verify(run_root, keyed)) == {
         ("undeclared", "value", "changes with raw.items.size"),

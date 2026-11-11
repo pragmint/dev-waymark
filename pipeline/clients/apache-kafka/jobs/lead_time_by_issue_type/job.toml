@@ -1,9 +1,2 @@
 description = "Hours from a ticket's first pull request opening to its last one merging, by issue type."
 inputs = ["tickets", "changes", "ticket_change_links"]
-
-[columns]
-issue_type = ["tickets.issue_type"]
-# Which changes count toward a ticket depends on its links; a ticket counts once one merged.
-tickets = ["tickets._row_id", "ticket_change_links._row_id", "changes.merged_at"]
-avg_lead_time_hours = ["changes.created_at", "changes.merged_at", "ticket_change_links._row_id"]
-median_lead_time_hours = ["changes.created_at", "changes.merged_at", "ticket_change_links._row_id"]

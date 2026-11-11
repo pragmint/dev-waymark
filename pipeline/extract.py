@@ -1,12 +1,12 @@
-"""Extract GitHub and Jira into raw Parquet at <bucket>/runs/<run_id>/raw/<table>/.
+"""Extract GitHub and Jira into raw Parquet at <bucket>/raw/<table>/<run_id>.<load>.<file>.parquet.
 
-Each run is a full snapshot in its own folder, so a run stands alone and a failed
-one is never read: nothing points at it until the publish step says so.
+Raw is append-only: a run adds files named after it and never touches another run's, so every
+snapshot built from earlier raw stays readable. A failed or partial run is never read, because
+runner.py only builds a snapshot from a run id it's given (the layout is in snapshot.py).
 """
 
 import argparse
 import os
-import re
 import tempfile
 import tomllib
 from datetime import UTC, datetime
@@ -17,7 +17,8 @@ import dlt
 from dlt.destinations import filesystem
 from dlt.sources.rest_api import rest_api_source
 
-RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+from snapshot import check_id, join, new_snapshot_id
+
 PAGE_SIZE = 100
 
 # dlt drops a column that is all null in a load, so a run could lose a field depending on what
@@ -33,13 +34,11 @@ GITHUB_PULL_COLUMNS = {
 
 
 def new_run_id(now: datetime) -> str:
-    return now.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return new_snapshot_id(now)
 
 
-def run_url(bucket_url: str, run_id: str) -> str:
-    if not RUN_ID_PATTERN.match(run_id):
-        raise ValueError(f"Invalid run id: {run_id!r}")
-    return f"{bucket_url.rstrip('/')}/runs/{run_id}"
+# Every file a run writes starts with its id, so a run's files are exactly `<table>/<run_id>.*`.
+RAW_LAYOUT = "{table_name}/{run_id}.{load_id}.{file_id}.{ext}"
 
 
 def slim_pull(pull: dict[str, Any]) -> dict[str, Any]:
@@ -153,8 +152,9 @@ def extract(
         # A throwaway working dir keeps runs stateless: nothing carries over between them.
         pipelines_dir=tempfile.mkdtemp(prefix="waymark-dlt-"),
         destination=filesystem(
-            bucket_url=run_url(bucket_url, run_id),
-            layout="{table_name}/{load_id}.{file_id}.{ext}",
+            bucket_url=bucket_url,
+            layout=RAW_LAYOUT,
+            extra_placeholders={"run_id": check_id(run_id)},
         ),
         dataset_name="raw",
     )
@@ -168,7 +168,8 @@ def extract(
         source = rest_api_source(config, name=name, max_table_nesting=0)
         if max_pages:
             source.add_limit(max_pages)
-        pipeline.run(source, loader_file_format="parquet", write_disposition="replace")
+        # Append: "replace" would delete earlier runs' files, which older snapshots still read.
+        pipeline.run(source, loader_file_format="parquet", write_disposition="append")
         print(pipeline.last_trace.last_normalize_info)
 
 
@@ -183,7 +184,8 @@ def main() -> None:
     run_id = args.run_id or new_run_id(datetime.now(UTC))
     client = tomllib.loads(args.client.read_text())
     extract(client, args.bucket_url, run_id, os.environ, args.max_pages)
-    print(f"run_url={run_url(args.bucket_url, run_id)}")
+    print(f"run_id={run_id}")
+    print(f"raw_url={join(args.bucket_url, 'raw')}")
 
 
 if __name__ == "__main__":

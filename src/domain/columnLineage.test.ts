@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { ColumnMap } from '../schemas/lineage';
-import {
-  directColumns,
-  followFor,
-  parseColumnRef,
-  refLabel,
-  refsFor,
-  traceField,
-} from './columnLineage';
+import { directColumns, followFor, parseColumnRef, refLabel, traceField } from './columnLineage';
 import { expandToRaw } from './lineage';
 import type { FetchSources } from './lineage';
 
-// Column maps shaped like the Kafka jobs.
+// Column maps shaped like the Kafka jobs: each is the union of its table's rows' `_fields`.
 const MAPS: Record<string, ColumnMap> = {
   lead_time: {
     issue_type: ['tickets.issue_type'],
@@ -29,11 +22,7 @@ const MAPS: Record<string, ColumnMap> = {
   },
   metadata: {
     key: [],
-    value: {
-      by: 'key',
-      when: { priority: ['tickets.priority'], author: ['changes.author'] },
-      else: ['tickets.custom_fields'],
-    },
+    value: ['changes.author', 'tickets.custom_fields', 'tickets.priority'],
   },
 };
 
@@ -48,19 +37,6 @@ describe('parseColumnRef / refLabel', () => {
   it('rejects malformed references', () => {
     expect(parseColumnRef('merged_at')).toBeNull();
     expect(parseColumnRef('raw.x.fields:priority')).toBeNull();
-  });
-});
-
-describe('refsFor', () => {
-  const keyed = MAPS.metadata?.value ?? [];
-
-  it('picks the branch for a keyed column, falling back to else', () => {
-    expect(refsFor(keyed, 'author')).toEqual(['changes.author']);
-    expect(refsFor(keyed, 'votes')).toEqual(['tickets.custom_fields']);
-  });
-
-  it('takes every branch without a key value', () => {
-    expect(refsFor(keyed)).toEqual(['tickets.priority', 'changes.author', 'tickets.custom_fields']);
   });
 });
 
@@ -80,13 +56,32 @@ describe('traceField', () => {
     });
   });
 
-  it('uses the row’s own key for a keyed column', () => {
-    const trace = traceField(MAPS, 'metadata', 'value', { key: 'priority' });
+  it('starts from the row’s own _fields', () => {
+    const values = { key: 'priority', _fields: { key: [], value: ['tickets.priority'] } };
+    const trace = traceField(MAPS, 'metadata', 'value', values);
     expect(trace?.columns).toEqual({
       tickets: ['priority'],
       'raw.jira_issues': ['fields:$.priority.name'],
     });
     expect(trace?.follows.metadata).toEqual(['tickets']);
+  });
+
+  it('falls back to the table’s map, every row’s columns, without _fields', () => {
+    const trace = traceField(MAPS, 'metadata', 'value', { key: 'priority' });
+    expect(trace?.follows.metadata).toEqual(['changes', 'tickets']);
+  });
+
+  it('traces a row’s own _fields when its table has no map', () => {
+    const values = { _fields: { n: ['tickets.priority'] } };
+    expect(traceField({}, 'orphan', 'n', values)?.direct).toEqual([
+      { table: 'tickets', column: 'priority' },
+    ]);
+  });
+
+  it('ignores _fields that are not a column map', () => {
+    expect(traceField(MAPS, 'lead_time', 'tickets', { _fields: 'nope' })?.direct).toEqual([
+      { table: 'tickets', column: '_row_id' },
+    ]);
   });
 
   it('follows every source of a row referenced by _row_id', () => {

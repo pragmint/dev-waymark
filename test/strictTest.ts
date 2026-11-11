@@ -205,11 +205,11 @@ async function prepareSource(
 ): Promise<{ env: Record<string, string>; cleanup: () => void }> {
   if (fixture !== 'lineage') return { env: {}, cleanup: () => {} };
   const root = mkdtempSync(join(tmpdir(), 'waymark-e2e-lineage-'));
-  const tables = await writeLineageFixture(root);
+  const bucket = await writeLineageFixture(root);
   return {
     env: {
       DEV_WAYMARK_SOURCE_DB_ADAPTER: 'duckdb',
-      DEV_WAYMARK_SOURCE_DB_URL: tables,
+      DEV_WAYMARK_SOURCE_DB_URL: bucket,
       DEV_WAYMARK_SOURCE_DB_SEED: 'none',
     },
     cleanup: () => rmSync(root, { recursive: true, force: true }),

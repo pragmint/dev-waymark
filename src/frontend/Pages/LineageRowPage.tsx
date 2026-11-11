@@ -1,6 +1,12 @@
 import type { FC } from 'hono/jsx';
 import type { LineageRow, ParentGroup } from '../../schemas/lineage';
-import { lineagePath, withQuery } from '../../domain/lineage';
+import {
+  CONTRACT_COLUMNS,
+  FIELDS_COLUMN,
+  SOURCES_COLUMN,
+  lineagePath,
+  withQuery,
+} from '../../domain/lineage';
 import { refLabel } from '../../domain/columnLineage';
 import type { FieldTrace } from '../../domain/columnLineage';
 import { LineageFieldNote } from '../components/LineageFieldNote';
@@ -23,9 +29,8 @@ function expandJsonText(values: Record<string, unknown>): Record<string, unknown
   return expanded;
 }
 
-const CONTRACT_COLUMNS = new Set(['_row_id', '_sources']);
-
-// With a column map, each field name links to that field's lineage.
+// With a column map, each field name links to that field's lineage. `_sources` and `_fields`
+// are what the links follow, so they aren't shown as fields themselves.
 const RowFields: FC<{ row: LineageRow; fieldHref?: (field: string) => string; field?: string }> = ({
   row,
   fieldHref,
@@ -33,11 +38,11 @@ const RowFields: FC<{ row: LineageRow; fieldHref?: (field: string) => string; fi
 }) => (
   <dl class="entity-fields lineage-fields">
     {Object.entries(row.values)
-      .filter(([key]) => key !== '_sources')
+      .filter(([key]) => key !== SOURCES_COLUMN && key !== FIELDS_COLUMN)
       .map(([key, value]) => (
         <>
           <dt class={key === field ? 'lineage-field--active' : undefined}>
-            {fieldHref && !CONTRACT_COLUMNS.has(key) ? (
+            {fieldHref && !CONTRACT_COLUMNS.includes(key) ? (
               <a class="lineage-field-link" href={fieldHref(key)}>
                 {key}
               </a>

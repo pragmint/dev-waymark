@@ -57,6 +57,31 @@ latest as (
 select
   stable_id('jira', latest.source_id) as _row_id,
   [source_ref('raw.jira_issues', latest._dlt_id)] as _sources,
+  map {
+    'source_id': ['raw.jira_issues.id'],
+    'ticket_key': ['raw.jira_issues.key'],
+    'summary': ['raw.jira_issues.fields:$.summary'],
+    'project': ['raw.jira_issues.fields:$.project.key'],
+    'issue_type': ['raw.jira_issues.fields:$.issuetype.name'],
+    'status': ['raw.jira_issues.fields:$.status.name'],
+    'status_category': ['raw.jira_issues.fields:$.status.statusCategory.name'],
+    'priority': ['raw.jira_issues.fields:$.priority.name'],
+    'resolution': ['raw.jira_issues.fields:$.resolution.name'],
+    'assignee': ['raw.jira_issues.fields:$.assignee.displayName'],
+    'reporter': ['raw.jira_issues.fields:$.reporter.displayName'],
+    'created_at': ['raw.jira_issues.fields:$.created'],
+    'updated_at': ['raw.jira_issues.fields:$.updated'],
+    'resolved_at': ['raw.jira_issues.fields:$.resolutiondate'],
+    'custom_fields': (
+      select coalesce(list('raw.jira_issues.fields:' || path order by path), [])
+      from params.jira_fields
+    ),
+    'status_group': case
+      when status_map.status_group is not null then ['raw.jira_issues.fields:$.status.name']
+      else ['raw.jira_issues.fields:$.status.statusCategory.name']
+    end,
+    'url': ['raw.jira_issues.key']
+  } as _fields,
   latest.* exclude (_dlt_id, _dlt_load_id),
   custom_fields.custom_fields,
   -- A status the client has not mapped falls back to Jira's own category.

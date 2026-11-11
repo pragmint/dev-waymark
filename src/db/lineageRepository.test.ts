@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expandToRaw } from '../domain/lineage';
@@ -41,9 +41,10 @@ describe('lineage over a pipeline run', () => {
       (await adapter.query<{ column_name: string }>(`DESCRIBE ${view}`)).map(r => r.column_name);
     for (const table of ['entities', 'entity_metadata']) {
       expect(await columns(table)).not.toContain('_sources');
+      expect(await columns(table)).not.toContain('_fields');
       expect(await columns(table)).not.toContain('_row_id');
       expect(await columns(`lineage.${table}`)).toEqual(
-        expect.arrayContaining(['_row_id', '_sources'])
+        expect.arrayContaining(['_row_id', '_sources', '_fields'])
       );
     }
   });
@@ -148,5 +149,64 @@ describe('column lineage over a pipeline run', () => {
     await expect(
       repo.getRows('raw.jira_issues', ['x'], { extracts: ["fields:$.a'; DROP"] })
     ).rejects.toThrow('Invalid JSON path');
+  });
+});
+
+describe('reading a published snapshot', () => {
+  let root: string;
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'waymark-snapshot-'));
+    await writeLineageFixture(root);
+  });
+
+  afterAll(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  async function withAdapter<T>(url: string, run: (a: DuckdbSourceAdapter) => Promise<T>) {
+    const adapter = await DuckdbSourceAdapter.create(url);
+    try {
+      return await run(adapter);
+    } finally {
+      await adapter.close();
+    }
+  }
+
+  it('reads only the files the manifest lists, not other runs or snapshots', async () => {
+    await withAdapter(root, async adapter => {
+      const raw = await adapter.query<{ key: string }>(
+        `SELECT key FROM raw.jira_issues WHERE _dlt_id = 'jira/a+1'`
+      );
+      expect(raw.map(row => row.key)).toEqual(['DEMO-1']);
+      const stale = await adapter.query<{ n: number }>(
+        `SELECT count(*) AS n FROM tickets WHERE ticket_key = '${LINEAGE_FIXTURE.staleTicketKey}'`
+      );
+      expect(stale[0]?.n).toBe(0);
+    });
+  });
+
+  it('reads a pinned snapshot from its manifest URL', async () => {
+    const url = `${root}/snapshots/${LINEAGE_FIXTURE.snapshotId}.json`;
+    await withAdapter(url, async adapter => {
+      expect(adapter.listLineageTables()).toContain('raw.jira_issues');
+    });
+  });
+
+  it('rejects a manifest that names a file outside its root', async () => {
+    const bad = mkdtempSync(join(tmpdir(), 'waymark-snapshot-bad-'));
+    try {
+      mkdirSync(join(bad, 'snapshots'));
+      const tables = { entities: { files: ['../elsewhere/entities.parquet'] } };
+      writeFileSync(
+        join(bad, 'snapshots', 'x.json'),
+        JSON.stringify({ version: 1, snapshot: 'x', extract: 'r', tables })
+      );
+      await expect(DuckdbSourceAdapter.create(`${bad}/snapshots/x.json`)).rejects.toThrow(
+        'leaves the bucket root'
+      );
+    } finally {
+      rmSync(bad, { recursive: true, force: true });
+    }
   });
 });

@@ -1,11 +1,2 @@
 description = "The entities Waymark lists: one per ticket and one per pull request."
 inputs = ["tickets", "changes"]
-
-[columns]
-id = ["tickets._row_id", "changes._row_id"]
-type = []
-created_at = ["tickets.created_at", "changes.created_at"]
-
-[columns.name]
-by = "type"
-when = { ticket = ["tickets.ticket_key"], change = ["changes.repo", "changes.number"] }

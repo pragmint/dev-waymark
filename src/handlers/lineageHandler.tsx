@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { getLineageRepo } from '../db/source/index';
 import type { LineageRepository } from '../db/lineageRepository';
 import {
+  FIELDS_COLUMN,
   entityHrefFor,
   expandToRaw,
   hopToSourceRefs,
@@ -64,7 +65,7 @@ export async function lineageRowHandler(c: Context) {
       isRaw={isRawTable(table)}
       parents={parents}
       entityHref={entityHrefFor(table, rowId)}
-      hasColumnMap={table in repo.columnMaps()}
+      hasColumnMap={table in repo.columnMaps() || FIELDS_COLUMN in row.values}
       field={field}
       trace={trace}
     />

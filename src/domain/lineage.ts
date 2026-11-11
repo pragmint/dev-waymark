@@ -9,6 +9,13 @@ export const RAW_PREFIX = 'raw.';
 export const RAW_ID_COLUMN = '_dlt_id';
 export const DERIVED_ID_COLUMN = '_row_id';
 export const SOURCES_COLUMN = '_sources';
+export const FIELDS_COLUMN = '_fields';
+/** The columns every derived row carries for lineage, beside its own values. */
+export const CONTRACT_COLUMNS: readonly string[] = [
+  DERIVED_ID_COLUMN,
+  SOURCES_COLUMN,
+  FIELDS_COLUMN,
+];
 
 // A derived table's plain view leaves out the contract columns, so entity
 // queries never read them; this schema holds the full view for lineage.
