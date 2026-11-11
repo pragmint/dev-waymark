@@ -1,9 +1,11 @@
 """Build a snapshot of a client's tables from one extract run, with jobs that follow CONTRACT.md.
 
-Reads the run's raw files and writes each table once, to <bucket>/tables/<name>/<snapshot>.parquet
-(the layout is in snapshot.py). Each job runs after the jobs it reads, in its own DuckDB connection
-that sees only its declared inputs, resolved to the snapshot's exact files. A table is written only
-if it passes the contract checks, and a failure skips everything downstream of it. Then verify.py
+Reads the raw files of the run's chain (its last full run and every run since) and writes each
+table once, to <bucket>/tables/<name>/<snapshot>.parquet, with its diff against the published
+snapshot beside it (the layout is in snapshot.py). Each job runs after the jobs it reads, in its
+own DuckDB connection that sees only its declared inputs, resolved to the snapshot's exact files.
+A table is written only if it passes the contract checks, and a failure skips everything
+downstream of it. Then verify.py
 checks each table's lineage by re-running its job on a sample of the same files. The manifest is
 saved either way; latest.json moves to it only if every job built and verified.
 """
@@ -42,6 +44,7 @@ REF_PATTERN = re.compile(
     r"^((?:raw\.)?[a-z][a-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?::(\$(?:\.[A-Za-z0-9_]+)+))?$"
 )
 COLUMNS_METADATA_KEY = "waymark_columns"
+CHANGE_KINDS = ("added", "changed", "removed")
 JSON_TYPES = {"VARCHAR", "JSON"}
 
 
@@ -289,6 +292,47 @@ def column_map(con: duckdb.DuckDBPyConnection) -> dict[str, list[str]]:
     return {column: refs for column, refs in sorted(rows)}
 
 
+def write_changes(
+    con: duckdb.DuckDBPyConnection, job: Job, snapshot: Snapshot
+) -> dict[str, Any] | None:
+    """Compare the `result` table with the base snapshot's version of it by `_row_id` and a hash
+    of the row's values, and write the rows that were added, changed or removed. Lineage columns
+    aren't hashed: a record fetched again unchanged gets new raw ids but the same values.
+
+    Returns the manifest's `changes` entry, or None when the base has no such table."""
+    base = snapshot.base
+    if base is None or job.name not in base.tables:
+        return None
+    hashed = (
+        "SELECT _row_id, md5(to_json(r)) AS row_hash "
+        "FROM (SELECT * EXCLUDE (_sources, _fields) FROM {}) AS r"
+    )
+    con.execute(f"CREATE TEMP TABLE now_hashes AS {hashed.format('result')}")
+    con.execute(f"CREATE TEMP TABLE base_hashes AS {hashed.format(base.source(job.name))}")
+    con.execute("""
+        CREATE TEMP TABLE changes AS
+        SELECT coalesce(now._row_id, base._row_id) AS _row_id,
+          CASE WHEN base._row_id IS NULL THEN 'added'
+               WHEN now._row_id IS NULL THEN 'removed'
+               ELSE 'changed' END AS change
+        FROM now_hashes AS now FULL JOIN base_hashes AS base USING (_row_id)
+        WHERE now.row_hash IS DISTINCT FROM base.row_hash
+        ORDER BY _row_id
+    """)
+    key = snapshot.changes_key(job.name)
+    out = sql_string(snapshot.url(key))
+    con.execute(f"COPY changes TO {out} (FORMAT parquet, COMPRESSION zstd)")
+    counts = dict(con.sql("SELECT change, count(*) FROM changes GROUP BY change").fetchall())
+    return {"file": key, "base": base.id, **{kind: counts.get(kind, 0) for kind in CHANGE_KINDS}}
+
+
+def describe_changes(changes: Mapping[str, Any] | None) -> str:
+    if changes is None:
+        return "no base to compare"
+    counts = ", ".join(f"{changes[kind]} {kind}" for kind in CHANGE_KINDS)
+    return f"{counts} since {changes['base']}"
+
+
 def run_job(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> int:
     """Build one job's table into the snapshot and return its row count. Raises if it breaks
     the contract, before writing anything."""
@@ -314,11 +358,13 @@ def run_job(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> int:
               KV_METADATA {{{COLUMNS_METADATA_KEY}: {columns}}})
         """)
         (rows,) = con.sql("SELECT count(*) FROM result").fetchone()
+        changes = write_changes(con, job, snapshot)
     snapshot.tables[job.name] = {
         "files": [key],
         "rows": rows,
         "job": job.version,
         "inputs": list(job.inputs),
+        "changes": changes,
     }
     return rows
 
@@ -335,7 +381,8 @@ def run_jobs(jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot) -> 
             try:
                 rows = run_job(job, client, snapshot)
                 statuses[job.name] = "built"
-                print(f"{job.name}: {rows} rows")
+                changes = describe_changes(snapshot.tables[job.name]["changes"])
+                print(f"{job.name}: {rows} rows ({changes})")
                 continue
             except (duckdb.Error, ContractError) as error:
                 statuses[job.name] = "failed"
@@ -357,7 +404,10 @@ def main() -> None:
     job_dirs = [JOBS_DIR, CLIENTS_DIR / client["client"] / "jobs"]
     jobs = load_jobs([d for d in job_dirs if d.is_dir()])
     snapshot_id = args.snapshot_id or snapshots.new_snapshot_id(datetime.now(UTC))
-    snapshot = snapshots.start(args.bucket_url, args.run_id, snapshot_id, os.environ)
+    run = snapshots.load_run(args.bucket_url, args.run_id)
+    base = snapshots.published(args.bucket_url, os.environ)
+    snapshot = snapshots.start(args.bucket_url, run.chain, snapshot_id, os.environ, base)
+    print(f"run {run.id} ({run.kind}) reads runs {', '.join(run.chain)}")
     statuses = run_jobs(jobs, client, snapshot)
     failed = any(status != "built" for status in statuses.values())
     if not args.no_verify:
@@ -372,8 +422,12 @@ def main() -> None:
         print(f"snapshot {snapshot.id} not published", file=sys.stderr)
         sys.exit(1)
     if not args.no_publish:
-        snapshots.publish(snapshot)
-        print(f"published snapshot {snapshot.id}")
+        newer = snapshots.publish(snapshot)
+        if newer:
+            # Not a failure: this build is good, and newer data is already live.
+            print(f"snapshot {snapshot.id} not published: {newer} is newer", file=sys.stderr)
+        else:
+            print(f"published snapshot {snapshot.id}")
 
 
 if __name__ == "__main__":

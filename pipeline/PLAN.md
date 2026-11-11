@@ -261,25 +261,62 @@ old versions.
     15–130 ms local. DuckDB's HTTP caching is untuned;
   - Waymark picking up a new `latest.json` without a restart;
   - dlt's own Azure credentials (it doesn't take a connection string);
-  - a retention rule. Fine by age today, since each snapshot reads only its own run's raw.
-    Phase 3 changes that: an incremental snapshot reads older raw, so expiry must outlive the
-    `--full` interval or follow the manifests.
+  - a retention rule. Since Phase 3 a snapshot reads raw back to its chain's full run, so
+    expiry must outlive the `--full` interval or follow the manifests.
 
-### Phase 3: incremental (1–2 days)
+### Phase 3: incremental (done, 2026-11-11)
 
-- **Extract:**
-  - ~~one stable dataset path per client~~ and ~~`write_disposition="append"`~~: done in 2e;
-  - drop the throwaway `pipelines_dir` so dlt can restore cursor state from the bucket.
-- **Cursors:**
-  - Jira: add `updated >= "<cursor>"` to the JQL. JQL has minute precision, so allow overlap; the
-    dedupe absorbs it.
-  - GitHub pulls: there's no `since` filter, so sort by `updated` descending and stop at the
-    cursor.
-- **`--full`:** marks a full load. "Current" means the IDs in the last full load plus anything
-  changed since, which is how deletes are detected. Run it weekly.
-- **Layout:** the 2e layout, plus `<snapshot>.changes.parquet` beside each table file. A
-  snapshot's raw entry lists the last full run's files plus every run since.
-- **Runner:** writes the diff by `_row_id` plus a row hash.
+- **Run records instead of dlt state.** The plan was to keep dlt's working directory so it
+  restores its cursor from the bucket. Instead, each extract writes `runs/<run_id>.json` once
+  every source has loaded: `kind` (full or incremental), `started_at`, and `chain` (the last full
+  run, then every run since, ending with this one). This changes three things:
+  - the cursor is the previous run's _start_, not the newest `updated` value fetched, so a record
+    that changes while a run is paging is fetched again next time;
+  - a failed run has no record, so nothing builds on it and the next run retries its window;
+  - dlt's own state restore is turned off (`restore_from_destination = False`). Left on, it read
+    `_dlt_pipeline_state` back from the bucket and its `last_value` overrode the run record's
+    cursor. A live run caught this: it fetched no PRs from a one-hour window that held 14.
+- **Extract:** incremental by default; `--full` fetches everything. Overlap: an hour for GitHub
+  (clock skew) and a day for Jira, whose JQL dates are in the Jira user's time zone and to the
+  minute.
+  - Jira: `(<client JQL>) AND updated >= "<cursor>"`, keeping the client's `ORDER BY`.
+  - GitHub pulls: `sort=updated&direction=desc` with dlt's `row_order="desc"` incremental, which
+    stops paging at the first page past the cursor.
+  - `--max-pages` runs are recorded as `limited`: they can be built, but nothing builds on them.
+  - `--adopt-run <id>` records a full run from before run records, taking `started_at` from its id.
+- **Deletes:** a snapshot's raw is its chain's full run plus every run since, and the jobs
+  already keep the latest version of each record, so no job changed. A deleted record stays until
+  the next `--full` run leaves it out.
+- **Runner:** builds from the run's chain and diffs each table against the snapshot published
+  when it started (`base` in the manifest), by `_row_id` and `md5(to_json(row))` over everything
+  but the lineage columns. A record fetched again unchanged gets new `_dlt_id`s, so `_sources`
+  would count it as changed otherwise. It writes `<snapshot>.changes.parquet` (`_row_id`,
+  `change`) and counts per table in the manifest. Every table is still written in full;
+  rebuilding only what's downstream of a change is Phase 4's orchestrator.
+- **Kafka, live (on a scratch copy of the demo bucket, with `20261102T000000Z` adopted):**
+  - incremental extract since 11/02: 9 s, 282 PRs and 147 issues;
+  - build: 38 s, verification included. `changes` +101 / ~174, `tickets` +52 / ~81,
+    `entities` +153, `entity_metadata` +1871 / ~2725 / −2 (an issue was reopened, so its
+    `resolution` and `resolved_at` rows went). Rows fetched again in the overlap count as
+    unchanged;
+  - two more incremental runs chained to four runs; `trace.py` takes a changed ticket to its raw
+    row in the incremental run.
+- **Copied-in raw:** a local bucket whose `raw/` was copied by hand (the demo bucket, from 2e)
+  has no dlt `raw/init` marker. dlt then treats raw as new, and its `makedirs` fails with
+  `FileExistsError` on a local disk (on R2 it does nothing). `extract.py` now writes the marker
+  as dlt would before loading. The demo bucket's run is adopted (`runs/20261102T000000Z.json`), so
+  it takes an incremental run: tried on a copy, the extract ran live and the build verified.
+- **Tests:** 102 pytest, including a full → incremental → full chain through every shared job,
+  verified.
+- **One extract at a time:** each extract holds `runs/extract.lock`, created only if absent
+  (`O_EXCL` locally, `If-None-Match: *` on S3 and Azure). `--break-lock` clears one a crash left.
+- **Demo rehearsal (2026-11-11, on a copy of the demo bucket):** a live incremental extract took
+  8 s (285 PRs, 148 issues since 11/02); the build took 44 s, verified, and published. Bug average
+  lead time went from 1846.6 h over 2682 tickets to 1858.9 h over 2692. `trace.py` took a new
+  ticket to its raw row, and Waymark's `/lineage` pages served the new snapshot.
+- **Not yet done:**
+  - a retention rule that follows the manifests;
+  - showing a snapshot's changes (`*.changes.parquet`) in Waymark.
 
 ### Phase 4: registry and orchestrator (1 day)
 

@@ -518,12 +518,36 @@ def report(job: Job, checked: int, found: dict[Finding, list[int]], seconds: flo
         print(f"  {finding.level:<7} {finding.check:<10} {where}{finding.detail}  ({rows})")
 
 
+def version_mismatch(job: Job, snapshot: Snapshot) -> str | None:
+    """Why the job's current files can't check this snapshot's table, or None if they can."""
+    entry = snapshot.tables.get(job.name)
+    if entry is None:
+        return f"snapshot {snapshot.id} has no {job.name} table"
+    built_with = entry.get("job")
+    if built_with != job.version:
+        return (
+            f"its files changed since snapshot {snapshot.id} was built "
+            f"(built with {built_with or 'unknown'}, now {job.version}); "
+            f"check out the job as it was to verify this snapshot"
+        )
+    return None
+
+
 def verify_jobs(
     jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot, per_branch: int = 2
 ) -> bool:
-    """Check each job and print what it finds. True if no job has an error."""
+    """Check each job and print what it finds. True if no job has an error.
+
+    A replay runs the job's current code, so a job whose files changed since the snapshot was built
+    isn't checked: new SQL against old output would fail for reasons that aren't the snapshot's.
+    That counts as an error."""
     passed = True
     for job in jobs:
+        mismatch = version_mismatch(job, snapshot)
+        if mismatch:
+            print(f"{job.name}: not checked, {mismatch}")
+            passed = False
+            continue
         started = time.monotonic()
         checked, found = verify_job(job, client, snapshot, per_branch)
         report(job, checked, found, time.monotonic() - started)

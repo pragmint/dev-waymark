@@ -8,7 +8,7 @@ import pytest
 import snapshot as snapshots
 from runner import Job, run_jobs
 from snapshot import Snapshot
-from verify import JSON_SEED, Finding, perturb_json, verify_job
+from verify import JSON_SEED, Finding, perturb_json, verify_job, verify_jobs
 
 CLIENT = {
     "client": "test",
@@ -50,7 +50,7 @@ GOOD = item_job(
 def run_root(tmp_path: Path) -> Snapshot:
     (tmp_path / "raw" / "items").mkdir(parents=True)
     pq.write_table(pa.Table.from_pylist(ITEMS), tmp_path / "raw" / "items" / "r1.1.0.parquet")
-    return snapshots.start(str(tmp_path), "r1", "s1", {})
+    return snapshots.start(str(tmp_path), ["r1"], "s1", {})
 
 
 def verify(snap: Snapshot, *jobs: Job) -> dict[Finding, list[int]]:
@@ -139,3 +139,13 @@ def test_perturb_json_grows_a_null_parent_into_the_declared_path():
     selected = lambda p: p == "$.a.b"  # noqa: E731
     assert perturb_json({"a": None}, "null", selected, grow="$.a.b") == {"a": {"b": JSON_SEED}}
     assert perturb_json({"a": {"b": 1}}, "shift", selected, grow="$.a.b") == {"a": {"b": 2}}
+
+
+def test_does_not_check_a_job_whose_files_changed_since_the_build(run_root, capsys):
+    job = item_job("items_copy", "name", {"name": ["raw.items.name"]})
+    built = Job(job.name, job.inputs, job.sql, version="v1")
+    run_jobs([built], CLIENT, run_root)
+    assert verify_jobs([built], CLIENT, run_root)
+    changed = Job(job.name, job.inputs, job.sql, version="v2")
+    assert not verify_jobs([changed], CLIENT, run_root)
+    assert "files changed since snapshot" in capsys.readouterr().out

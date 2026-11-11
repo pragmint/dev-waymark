@@ -24,7 +24,7 @@ from runner import (
 import snapshot as snapshots
 from snapshot import Snapshot
 from trace import column_maps, raw_values, row_values, trace, trace_field
-from verify import verify_job
+from verify import verify_job, verify_jobs
 
 CLIENT = {
     "client": "test",
@@ -77,6 +77,13 @@ PULLS = [
 ]
 
 
+# verify.py perturbs values in place, so it needs the pulls' timestamps typed, as dlt writes them.
+def typed(pull: dict) -> dict:
+    stamps = ("created_at", "updated_at", "closed_at", "merged_at")
+    return {**pull, **{k: pull[k] and datetime.fromisoformat(pull[k]) for k in stamps}}
+
+
+TYPED_PULLS = [typed(p) for p in PULLS]
 RUN = "r1"
 
 
@@ -90,7 +97,7 @@ def write_raw(root: Path, table: str, rows: list[dict], run_id: str = RUN) -> No
 def snap(tmp_path: Path) -> Snapshot:
     write_raw(tmp_path, "jira_issues", ISSUES)
     write_raw(tmp_path, "github_pulls", PULLS)
-    return snapshots.start(str(tmp_path), RUN, "s1", {})
+    return snapshots.start(str(tmp_path), [RUN], "s1", {})
 
 
 @pytest.fixture
@@ -370,18 +377,60 @@ def test_trace_field_returns_none_for_an_undeclared_field(built, snap: Snapshot)
 
 
 def test_every_shared_job_passes_verification(tmp_path: Path):
-    # The shared jobs' hand-written _fields, checked by re-running each job. verify.py perturbs
-    # values in place, so the pulls' timestamps are typed, as dlt writes them.
-    def typed(pull: dict) -> dict:
-        stamps = ("created_at", "updated_at", "closed_at", "merged_at")
-        return {**pull, **{k: pull[k] and datetime.fromisoformat(pull[k]) for k in stamps}}
-
+    # The shared jobs' hand-written _fields, checked by re-running each job.
     root = tmp_path / "typed"
     write_raw(root, "jira_issues", ISSUES)
-    write_raw(root, "github_pulls", [typed(p) for p in PULLS])
-    snap = snapshots.start(str(root), RUN, "s1", {})
+    write_raw(root, "github_pulls", TYPED_PULLS)
+    snap = snapshots.start(str(root), [RUN], "s1", {})
     jobs = build_order(load_jobs([JOBS_DIR]))
     assert set(run_jobs(jobs, CLIENT, snap).values()) == {"built"}
     for job in jobs:
         _, found = verify_job(job, CLIENT, snap, per_branch=1)
         assert [f for f in found if f.level == "error"] == [], job.name
+
+
+def build(root: Path, runs: list[str], snapshot_id: str, base: Snapshot | None) -> Snapshot:
+    snap = snapshots.start(str(root), runs, snapshot_id, {}, base)
+    assert set(run_jobs(load_jobs([JOBS_DIR]), CLIENT, snap).values()) == {"built"}
+    snapshots.save(snap)
+    return snap
+
+
+def tickets_by_key(snap: Snapshot) -> dict[str, tuple[str, str]]:
+    with snap.connect() as con:
+        rows = con.sql(f"""
+            SELECT ticket_key, status, _sources[1].row_id FROM {snap.source("tickets")}
+        """).fetchall()
+    return {key: (status, source) for key, status, source in rows}
+
+
+def counts(snap: Snapshot, table: str) -> tuple[int, int, int]:
+    changes = snap.tables[table]["changes"]
+    return changes["added"], changes["changed"], changes["removed"]
+
+
+def test_an_incremental_snapshot_reads_its_full_run_plus_the_changes_since(tmp_path: Path):
+    write_raw(tmp_path, "jira_issues", ISSUES, "full1")
+    write_raw(tmp_path, "github_pulls", TYPED_PULLS, "full1")
+    first = build(tmp_path, ["full1"], "s1", None)
+
+    # The incremental run fetched one changed issue and one new one, and no pull requests.
+    write_raw(tmp_path, "jira_issues", [
+        issue("j2-inc", "3", "102", "KAFKA-2", "Resolved", "2026-01-07T00:00:00.000+0000"),
+        issue("j4", "3", "104", "KAFKA-4", "Open", "2026-01-07T00:00:00.000+0000"),
+    ], "inc1")  # fmt: skip
+    second = build(tmp_path, ["full1", "inc1"], "s2", first)
+    tickets = tickets_by_key(second)
+    assert tickets["KAFKA-2"] == ("Resolved", "j2-inc")
+    assert tickets["KAFKA-3"] == ("Open", "j3")  # unchanged, still read from the full run
+    assert set(tickets) == {"KAFKA-1", "KAFKA-2", "KAFKA-3", "KAFKA-4"}
+    assert counts(second, "tickets") == (1, 1, 0)
+    assert counts(second, "changes") == (0, 0, 0)
+    assert verify_jobs(build_order(load_jobs([JOBS_DIR])), CLIENT, second, per_branch=1)
+
+    # The next full run no longer has KAFKA-3: it was deleted, and drops out.
+    write_raw(tmp_path, "jira_issues", [i for i in ISSUES if i["key"] != "KAFKA-3"], "full2")
+    write_raw(tmp_path, "github_pulls", TYPED_PULLS, "full2")
+    third = build(tmp_path, ["full2"], "s3", second)
+    assert "KAFKA-3" not in tickets_by_key(third)
+    assert counts(third, "tickets") == (0, 1, 2)  # KAFKA-2 back to the full run's In Progress

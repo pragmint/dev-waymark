@@ -25,8 +25,12 @@ about the tables, not the language that builds them, but the runner only runs SQ
 - **Raw tables are the root.** They are what dlt writes, named `raw.<table>`, and have no
   `_sources`. A raw row is identified by its `_dlt_id`.
 - **Only derived IDs are stable across runs.** dlt assigns a new `_dlt_id` on every load, so a
-  derived row keeps its `_row_id` from run to run, but the raw rows it traces to have different
-  IDs in each run. Raw `row_id` values are only meaningful within the run that wrote them.
+  derived row keeps its `_row_id` from run to run, but the raw row it traces to changes whenever
+  its record is fetched again. Raw `row_id` values are only meaningful within a snapshot.
+- **Raw holds every version a snapshot's runs fetched.** An incremental snapshot reads the last
+  full run plus every run since (see [Snapshot layout](#snapshot-layout)), so the same record can
+  appear more than once. A job reading raw keeps the latest version of each, by the source's own
+  `updated` time and then `_dlt_load_id`, and lists only that version in `_sources`.
 - **`_sources.row_id` is text** because it holds both derived `_row_id` values (`BIGINT`) and raw
   `_dlt_id` values (text) in one column.
 
@@ -145,19 +149,33 @@ through a manifest, never by listing folders, so the layout is part of the contr
 ```
 <bucket>/
   raw/<table>/<run_id>.<load_id>.<file_id>.parquet   # what dlt wrote; append-only
+  runs/<run_id>.json                                  # a finished extract run
   tables/<name>/<snapshot_id>.parquet                 # one file per job per snapshot
+  tables/<name>/<snapshot_id>.changes.parquet         # its diff against the base snapshot
   snapshots/<snapshot_id>.json                        # the manifest
   latest.json                                         # {"snapshot", "manifest"}: the published one
 ```
 
+- **An extract run is full or incremental**, and its run record, written once every source has
+  loaded, says which. It also gives the run's `started_at`, which is the next incremental run's
+  cursor, and its `chain`: the last full run, then every run after it, ending with this one. A
+  run with no record failed or is still going, and is never built. A `limited` run (a smoke test)
+  is never built on.
+
 - **A snapshot is the unit of identity.** Its manifest lists every table's exact files, raw
-  (`raw.<table>`) and derived, plus each built table's row count, inputs and `job` (a hash of the
-  job's files), the status of each job and whether verification passed. A table version is
+  (`raw.<table>`, from every run in the chain) and derived, plus each built table's row count,
+  inputs and `job` (a hash of the job's files), the status of each job and whether verification
+  passed. It also names the run it was built from (`extract`), that run's chain (`runs`) and the
+  `base`: the snapshot published when the build started.
+- **Each built table's `changes`** lists the `_row_id`s added, changed or removed since the
+  base, with a `change` column, plus their counts in the manifest. A row changed if any column
+  other than `_row_id`, `_sources` and `_fields` did. `changes` is null when the base has no such
+  table. A table version is
   `(name, snapshot_id)`. A job, `verify.py`, `trace.py` and Waymark all read a snapshot's tables
   from its manifest, so raw or tables written later can't change what a snapshot reads.
 - **Nothing is rewritten.** Raw files are named after their run and dlt appends them; a table is
   written once per snapshot; a snapshot id is never reused. Only `latest.json` changes, and only
-  after every job built and verified. That's also what object stores require, since they can't
+  after every job built and verified, and never back to an older snapshot. That's also what object stores require, since they can't
   rename: no reader ever trusts a file that may still be half written.
 - **`raw.<table>`** is the union of the manifest's files for it, read with `union_by_name`,
   because dlt can add columns between loads. Folders starting with `_dlt` hold dlt's own
@@ -166,8 +184,9 @@ through a manifest, never by listing folders, so the layout is part of the contr
   digit. Run and snapshot ids use letters, digits, `_` and `-`. Manifest file keys are relative
   to the bucket and never contain `..`.
 - **Retention**: old snapshots can be expired by age (an object-store lifecycle rule on `raw/`
-  and `tables/`), as long as nothing still published reads an expired file. Today every snapshot
-  reads only its own run's raw, so the rule just has to outlive the run interval.
+  and `tables/`), as long as nothing still published reads an expired file. A snapshot reads raw
+  as old as its chain's full run, so a rule on `raw/` must outlive the interval between full runs
+  plus the run interval, or follow the manifests.
 
 ## What Waymark reads
 
@@ -181,6 +200,3 @@ through a manifest, never by listing folders, so the layout is part of the contr
 - Waymark traces a field from the row's own `_fields`, then each table's column map from its
   Parquet metadata. A table without a valid map still shows row lineage, and a field traced
   through it follows all of its sources.
-
-Phase 3 of [PLAN.md](PLAN.md) replaces this layout with per-snapshot files and `latest.json`.
-Waymark's DuckDB adapter (`src/db/source/duckdb.ts`) has to change with it.

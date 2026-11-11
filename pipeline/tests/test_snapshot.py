@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pyarrow as pa
@@ -20,10 +21,13 @@ COPY = Job(
 )
 
 
-def write_raw(root: Path, table: str, run_id: str, names: list[str]) -> None:
+def write_raw(
+    root: Path, table: str, run_id: str, names: list[str], ids: list[int] | None = None
+) -> None:
     directory = root / "raw" / table
     directory.mkdir(parents=True, exist_ok=True)
-    rows = [{"id": i, "name": n, "_dlt_id": f"{run_id}-{i}"} for i, n in enumerate(names)]
+    ids = ids if ids is not None else list(range(len(names)))
+    rows = [{"id": i, "name": n, "_dlt_id": f"{run_id}-{i}"} for i, n in zip(ids, names)]
     pq.write_table(pa.Table.from_pylist(rows), directory / f"{run_id}.1.0.parquet")
 
 
@@ -36,7 +40,7 @@ def test_a_snapshot_reads_only_its_own_runs_raw_files(tmp_path: Path):
     write_raw(tmp_path, "items", "r1", ["a", "b"])
     write_raw(tmp_path, "items", "r2", ["c"])
     write_raw(tmp_path, "_dlt_loads", "r1", ["bookkeeping"])
-    snap = snapshots.start(str(tmp_path), "r1", "s1", {})
+    snap = snapshots.start(str(tmp_path), ["r1"], "s1", {})
     assert snap.tables == {"raw.items": {"files": ["raw/items/r1.1.0.parquet"]}}
     assert names(snap, "raw.items") == ["a", "b"]
 
@@ -44,7 +48,7 @@ def test_a_snapshot_reads_only_its_own_runs_raw_files(tmp_path: Path):
 def test_a_later_run_does_not_change_a_saved_snapshot(tmp_path: Path):
     # The race from the 11/9 call: raw lands between a build and its verification.
     write_raw(tmp_path, "items", "r1", ["a", "b"])
-    snap = snapshots.start(str(tmp_path), "r1", "s1", {})
+    snap = snapshots.start(str(tmp_path), ["r1"], "s1", {})
     assert run_jobs([COPY], CLIENT, snap) == {"copy": "built"}
     snapshots.save(snap)
     write_raw(tmp_path, "items", "r2", ["changed"])
@@ -55,21 +59,21 @@ def test_a_later_run_does_not_change_a_saved_snapshot(tmp_path: Path):
 
 def test_tables_are_written_once_per_snapshot(tmp_path: Path):
     write_raw(tmp_path, "items", "r1", ["a"])
-    first = snapshots.start(str(tmp_path), "r1", "s1", {})
+    first = snapshots.start(str(tmp_path), ["r1"], "s1", {})
     run_jobs([COPY], CLIENT, first)
     snapshots.save(first)
-    second = snapshots.start(str(tmp_path), "r1", "s2", {})
+    second = snapshots.start(str(tmp_path), ["r1"], "s2", {})
     run_jobs([COPY], CLIENT, second)
     assert first.tables["copy"]["files"] == ["tables/copy/s1.parquet"]
     assert second.tables["copy"]["files"] == ["tables/copy/s2.parquet"]
     with pytest.raises(ValueError, match="already exists"):
-        snapshots.start(str(tmp_path), "r1", "s1", {})
+        snapshots.start(str(tmp_path), ["r1"], "s1", {})
 
 
 def test_load_without_an_id_reads_the_published_snapshot(tmp_path: Path):
     write_raw(tmp_path, "items", "r1", ["a"])
     for snapshot_id in ("s1", "s2"):
-        snap = snapshots.start(str(tmp_path), "r1", snapshot_id, {})
+        snap = snapshots.start(str(tmp_path), ["r1"], snapshot_id, {})
         run_jobs([COPY], CLIENT, snap)
         snapshots.save(snap)
     snapshots.publish(snapshots.load(str(tmp_path), "s1", {}))
@@ -81,14 +85,14 @@ def test_load_without_an_id_reads_the_published_snapshot(tmp_path: Path):
 
 def test_a_snapshot_needs_raw_files_from_its_run(tmp_path: Path):
     write_raw(tmp_path, "items", "r1", ["a"])
-    with pytest.raises(ValueError, match="No raw files for run r2"):
-        snapshots.start(str(tmp_path), "r2", "s1", {})
+    with pytest.raises(ValueError, match=r"No raw files for runs \[.r2.\]"):
+        snapshots.start(str(tmp_path), ["r2"], "s1", {})
 
 
 @pytest.mark.parametrize("bad", ["../x", "a/b", ""])
 def test_ids_cannot_escape_their_folder(tmp_path: Path, bad: str):
     with pytest.raises(ValueError):
-        snapshots.start(str(tmp_path), "r1", bad, {})
+        snapshots.start(str(tmp_path), ["r1"], bad, {})
 
 
 def test_local_urls_need_no_secret():
@@ -124,3 +128,115 @@ def test_azure_without_a_connection_string_needs_an_account():
     assert "PROVIDER credential_chain" in statement and "ACCOUNT_NAME 'acct'" in statement
     with pytest.raises(ValueError):
         snapshots.secret_statements("az://c", {})
+
+
+def build(root: Path, run_id: str, snapshot_id: str) -> snapshots.Snapshot:
+    snap = snapshots.start(str(root), [run_id], snapshot_id, {})
+    run_jobs([COPY], CLIENT, snap)
+    snapshots.save(snap)
+    return snap
+
+
+def published(root: Path) -> str:
+    return snapshots.load(str(root), None, {}).id
+
+
+def test_a_slow_build_of_an_older_extract_does_not_replace_a_newer_one(tmp_path: Path):
+    # A starts first on extract r1; B starts later on r2 and finishes first.
+    write_raw(tmp_path, "items", "20261110T000000Z", ["old"])
+    write_raw(tmp_path, "items", "20261111T000000Z", ["new"])
+    a = build(tmp_path, "20261110T000000Z", "20261111T010000Z")
+    b = build(tmp_path, "20261111T000000Z", "20261111T010500Z")
+    assert snapshots.publish(b) is None
+    assert snapshots.publish(a) == b.id
+    assert published(tmp_path) == b.id
+
+
+def test_a_newer_build_of_the_same_extract_is_published(tmp_path: Path):
+    write_raw(tmp_path, "items", "r1", ["a"])
+    first, second = build(tmp_path, "r1", "s1"), build(tmp_path, "r1", "s2")
+    assert snapshots.publish(first) is None
+    assert snapshots.publish(second) is None
+    assert published(tmp_path) == "s2"
+    assert snapshots.publish(second) is None  # republishing is harmless
+
+
+def record(root: Path, run_id: str, started_at: str, chain: list[str], **extra) -> snapshots.Run:
+    kind = "full" if len(chain) == 1 else "incremental"
+    run = snapshots.Run(run_id, kind, started_at, tuple(chain), **extra)
+    snapshots.save_run(str(root), run)
+    return run
+
+
+def test_a_run_record_round_trips(tmp_path: Path):
+    run = record(tmp_path, "r2", "2026-11-11T00:00:00Z", ["r1", "r2"], since={"jira": "x"})
+    assert snapshots.load_run(str(tmp_path), "r2") == run
+
+
+def test_a_run_without_a_record_is_never_built(tmp_path: Path):
+    write_raw(tmp_path, "items", "r1", ["a"])
+    with pytest.raises(ValueError, match="no record"):
+        snapshots.load_run(str(tmp_path), "r1")
+
+
+def test_a_run_record_must_end_its_chain_with_itself(tmp_path: Path):
+    with pytest.raises(ValueError, match="end with itself"):
+        record(tmp_path, "r2", "2026-11-11T00:00:00Z", ["r1"])
+
+
+def test_the_last_run_is_the_latest_started_complete_one(tmp_path: Path):
+    assert snapshots.last_run(str(tmp_path)) is None
+    record(tmp_path, "b", "2026-11-10T00:00:00Z", ["b"])
+    record(tmp_path, "a", "2026-11-11T00:00:00Z", ["b", "a"])  # ids needn't sort by time
+    record(tmp_path, "c", "2026-11-12T00:00:00Z", ["c"], limited=True)
+    last = snapshots.last_run(str(tmp_path))
+    assert last is not None and last.id == "a"
+
+
+def test_a_snapshot_reads_every_run_in_its_chain(tmp_path: Path):
+    write_raw(tmp_path, "items", "full", ["a", "b"])
+    write_raw(tmp_path, "items", "older", ["not read"])
+    write_raw(tmp_path, "items", "inc2", ["c"])  # inc1 changed nothing, so it wrote no files
+    snap = snapshots.start(str(tmp_path), ["full", "inc1", "inc2"], "s1", {})
+    assert snap.extract == "inc2"
+    assert snap.tables["raw.items"]["files"] == [
+        "raw/items/full.1.0.parquet",
+        "raw/items/inc2.1.0.parquet",
+    ]
+    assert names(snap, "raw.items") == ["a", "b", "c"]
+    snapshots.save(snap)
+    assert snapshots.load(str(tmp_path), "s1", {}).runs == ["full", "inc1", "inc2"]
+
+
+def changes(snap: snapshots.Snapshot, table: str) -> dict[int, str]:
+    with snap.connect() as con:
+        key = snap.tables[table]["changes"]["file"]
+        rows = con.sql(f"SELECT _row_id, change FROM read_parquet('{snap.url(key)}')").fetchall()
+    return dict(rows)
+
+
+def test_each_table_records_its_changes_since_the_base(tmp_path: Path):
+    write_raw(tmp_path, "items", "r1", ["a", "b", "c"])  # ids 0, 1, 2
+    first = snapshots.start(str(tmp_path), ["r1"], "s1", {})
+    run_jobs([COPY], CLIENT, first)
+    assert first.tables["copy"]["changes"] is None  # nothing to compare with
+    snapshots.save(first)
+
+    # Fetched again: 0 is unchanged but has a new _dlt_id, 1 changed, 2 is gone and 3 is new.
+    write_raw(tmp_path, "items", "r2", ["a", "B", "d"], ids=[0, 1, 3])
+    second = snapshots.start(str(tmp_path), ["r2"], "s2", {}, base=first)
+    run_jobs([COPY], CLIENT, second)
+    entry = second.tables["copy"]["changes"]
+    assert {k: entry[k] for k in ("base", "added", "changed", "removed")} == {
+        "base": "s1", "added": 1, "changed": 1, "removed": 1,
+    }  # fmt: skip
+    ids = {name: row_id for row_id, name in rows(second, "copy") + rows(first, "copy")}
+    assert changes(second, "copy") == {ids["B"]: "changed", ids["c"]: "removed", ids["d"]: "added"}
+    snapshots.save(second)
+    with open(tmp_path / "snapshots" / "s2.json") as file:
+        assert json.load(file)["base"] == "s1"
+
+
+def rows(snap: snapshots.Snapshot, table: str) -> list[tuple[int, str]]:
+    with snap.connect() as con:
+        return con.sql(f"SELECT _row_id, name FROM {snap.source(table)}").fetchall()
