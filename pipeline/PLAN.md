@@ -255,7 +255,10 @@ old versions.
     snapshot of it read only its 100 issues and left `latest.json` alone.
 - **Tests:** 69 pytest (11 in `tests/test_snapshot.py`), 609 bun and 4 lineage E2E pass.
 - **Not yet done:**
-  - provisioning: Dave is setting up an AWS account to test on real S3;
+  - provisioning: Dave is setting up an AWS account to test on real S3. Cloudflare R2 works
+    (2026-11-11, `s3://demo-waymark/apache-kafka`, `AWS_REGION=auto`): trace and verify pass
+    (verify 52 s vs 33 s local); Waymark pages take 0.4–1.6 s warm and up to 4.4 s cold, against
+    15–130 ms local. DuckDB's HTTP caching is untuned;
   - Waymark picking up a new `latest.json` without a restart;
   - dlt's own Azure credentials (it doesn't take a connection string);
   - a retention rule. Fine by age today, since each snapshot reads only its own run's raw.
