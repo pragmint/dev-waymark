@@ -1,9 +1,12 @@
 # Row-lineage pipeline plan
 
 Working plan for replacing the dbt + derived-tables prototype with a language-agnostic, row-level
-lineage pipeline. Status as of 2026-11-09.
+lineage pipeline. Status as of 2026-11-11.
 
 - **Worktree:** `/Users/pratt/Developer/dev-waymark-lineage`
+- **Demo bucket:** `pipeline/.data/demo-bucket` (gitignored), snapshot `20261111T143608Z` built
+  and verified from Kafka extract `20261102T000000Z`. Serve it with
+  `DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=$PWD/pipeline/.data/demo-bucket bun dev`.
 - **Branch:** `row-lineage-pipeline` (from `main`)
 - **Old exploration (reference only):** branch `duckdb-pipeline` in
   `/Users/pratt/Developer/dev-waymark`, mostly uncommitted. It has the dbt project, `derive.py` and
@@ -138,7 +141,9 @@ From the call with Dave Moore (stakeholder):
   - expand-to-raw takes `?field=` too and extracts JSON paths as columns.
 - **On the Kafka run:**
   - "Task" `avg_lead_time_hours` reaches 596 PRs, using only `created_at` and `merged_at`, with
-    the 387 tickets dropped;
+    the 387 tickets dropped. Since Phase 2c the field also names `ticket_change_links._row_id`
+    (the links decide which PRs count), so it reaches the 387 Jira issues again; the raw
+    fields it reads are still only `created_at` and `merged_at`;
   - an `entity_metadata` value keyed `author` reaches `raw.github_pulls.user:$.login`.
 - **`trace.py --field <column>`** runs the same walk as Waymark's `traceField`, reusing the
   runner's reference parser. It prints the hops and a few sample values of each raw field.
@@ -202,8 +207,8 @@ From the call with Dave Moore (stakeholder):
   leave out `_fields` along with `_row_id` and `_sources`.
 - **Tests:** 60 pytest, 601 bun and 4 lineage E2E pass.
 - **Not yet done:**
-  - re-running the Kafka extract and build. No run was on disk, so storage cost and verify time
-    on real data are unmeasured;
+  - re-running the Kafka extract. The build was re-run on 2026-11-11 from the 11/02 extract:
+    38 s locally, verification included;
   - exact deeper hops: reading each source row's `_fields` rather than the union. Phase 2c's
     custom-field values still name all of `tickets.custom_fields`, since a reference can't name
     one key of a map.
