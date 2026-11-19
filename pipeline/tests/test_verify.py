@@ -149,3 +149,35 @@ def test_does_not_check_a_job_whose_files_changed_since_the_build(run_root, caps
     changed = Job(job.name, job.inputs, job.sql, version="v2")
     assert not verify_jobs([changed], CLIENT, run_root)
     assert "files changed since snapshot" in capsys.readouterr().out
+
+
+def total_job(refs: list[str]) -> Job:
+    """One row summing the size of every item but `three`."""
+    return Job(
+        "total",
+        ("raw.items",),
+        "select stable_id('total', 'all') as _row_id, "
+        "list(source_ref('raw.items', _dlt_id)) as _sources, "
+        f"{fields({'total': refs})}, "
+        "sum(size) filter (where name <> 'three') as total from raw.items",
+    )
+
+
+def test_filtered_references_that_cover_every_row_read_pass(run_root):
+    job = total_job(["raw.items[name=one].size", "raw.items[name=two].size", "raw.items.name"])
+    assert details(verify(run_root, job)) == set()
+
+
+def test_reports_a_row_a_filtered_reference_leaves_out(run_root):
+    job = total_job(["raw.items[name=one].size", "raw.items.name"])
+    assert details(verify(run_root, job)) == {
+        ("undeclared", "total", "changes with raw.items.size outside raw.items[name=one]")
+    }
+
+
+def test_warns_about_a_filtered_reference_whose_rows_nothing_reads(run_root):
+    refs = ["raw.items[name=one].size", "raw.items[name=two].size", "raw.items[name=three].size"]
+    job = total_job([*refs, "raw.items.name"])
+    assert details(verify(run_root, job)) == {
+        ("unused", "total", "never changed by raw.items[name=three].size")
+    }

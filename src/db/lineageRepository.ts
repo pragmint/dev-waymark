@@ -2,6 +2,7 @@ import type { SourceDataAdapter } from './source/adapter';
 import { ColumnMapSchema, LineageRowSchema, SourceRefsSchema } from '../schemas/lineage';
 import type { ColumnMap, LineageRow, ParentGroup, SourceRef } from '../schemas/lineage';
 import { JSON_PATH_PATTERN } from '../domain/columnLineage';
+import type { FieldFetchers, RowSource } from '../domain/columnLineage';
 import {
   DERIVED_ID_COLUMN,
   LINEAGE_SCHEMA,
@@ -20,7 +21,7 @@ export type RowOptions = {
   extracts?: string[];
 };
 
-export type LineageRepository = {
+export type LineageRepository = FieldFetchers & {
   tables(): string[];
   hasTable(table: string): boolean;
   /** One row with every column in full, `_sources` included. */
@@ -172,6 +173,32 @@ export function createLineageRepository(
         [JSON.stringify(rowIds)]
       );
       return SourceRefsSchema.parse(rows);
+    },
+
+    async rowSources(table, rowIds) {
+      assertTable(table);
+      if (isRawTable(table) || rowIds.length === 0) return [];
+      const rows = await adapter.query<RowSource>(
+        `SELECT DISTINCT CAST(_row_id AS VARCHAR) AS "rowId", source."table" AS "table",
+           source.row_id AS row_id
+         FROM (SELECT _row_id, unnest(_sources) AS source FROM ${tableRef(table)}
+               WHERE ${idMatch(table)})`,
+        [JSON.stringify(rowIds)]
+      );
+      return rows.map(({ rowId, table: source, row_id }) => ({ rowId, table: source, row_id }));
+    },
+
+    async columnValues(table, column, rowIds) {
+      if (!known.has(table) || rowIds.length === 0) return {};
+      // A filter names a column the pipeline checked exists; one this run lacks matches nothing.
+      if (!(await columnsOf(table)).some(({ name }) => name === column)) return {};
+      const rows = await adapter.query<{ row_id: string; value: string | null }>(
+        `SELECT CAST(${idColumnFor(table)} AS VARCHAR) AS row_id,
+           CAST(${quoteIdent(column)} AS VARCHAR) AS value
+         FROM ${tableRef(table)} WHERE ${idMatch(table)}`,
+        [JSON.stringify(rowIds)]
+      );
+      return Object.fromEntries(rows.map(({ row_id, value }) => [row_id, value]));
     },
 
     async getParents(sources, limit, highlight = {}) {

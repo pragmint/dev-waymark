@@ -111,19 +111,13 @@ export const MAX_HOPS = 32;
  * Follow `_sources` hop by hop from `start` until only raw rows remain, and
  * return every raw row reached. A derived table may read raw directly, so raw
  * rows can turn up at any hop. Each row is expanded once even when several
- * paths reach it, and `maxHops` stops a malformed cycle. `follow` limits which source tables
- * are followed from each table, which is how a single field is traced.
+ * paths reach it, and `maxHops` stops a malformed cycle. A single field is traced by
+ * `walkField` in columnLineage.ts instead.
  */
-export type ExpandOptions = {
-  /** Whether to follow sources from one table to another; field lineage narrows this. */
-  follow?: (from: string, to: string) => boolean;
-  maxHops?: number;
-};
-
 export async function expandToRaw(
   start: Hop,
   fetchSources: FetchSources,
-  { follow = () => true, maxHops = MAX_HOPS }: ExpandOptions = {}
+  { maxHops = MAX_HOPS }: { maxHops?: number } = {}
 ): Promise<Expansion> {
   const hops: Hop[] = [start];
   const leaves: Hop = {};
@@ -138,9 +132,7 @@ export async function expandToRaw(
         mergeInto(leaves, { [query.table]: query.ids });
         continue;
       }
-      const sources = await fetchSources(query.table, query.ids);
-      const followed = sources.filter(source => follow(query.table, source.table));
-      mergeInto(next, groupSourcesByTable(followed));
+      mergeInto(next, groupSourcesByTable(await fetchSources(query.table, query.ids)));
     }
     frontier = withoutSeen(next, seen);
     if (Object.keys(frontier).length === 0) return { hops, leaves };

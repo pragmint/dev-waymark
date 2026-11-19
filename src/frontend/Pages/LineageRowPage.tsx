@@ -7,7 +7,7 @@ import {
   lineagePath,
   withQuery,
 } from '../../domain/lineage';
-import { refLabel } from '../../domain/columnLineage';
+import { refText } from '../../domain/columnLineage';
 import type { FieldTrace } from '../../domain/columnLineage';
 import { LineageFieldNote } from '../components/LineageFieldNote';
 import { Layout } from '../components/Layout';
@@ -87,7 +87,7 @@ const FieldNote: FC<{ table: string; rowId: string; field: string; trace: FieldT
     <LineageFieldNote
       field={field}
       heading="computed from"
-      columns={trace.direct.map(ref => `${ref.table}.${refLabel(ref)}`)}
+      columns={trace.direct.map(refText)}
       empty="A constant: it reads no input column."
     >
       {trace.direct.length > 0 ? (

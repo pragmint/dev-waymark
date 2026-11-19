@@ -333,15 +333,29 @@ old versions.
 - **Field tracing got coarser past the first hop.** A table's column map is the union over its
   rows, and tickets and PRs now share one, so `entities.created_at` maps to both raw `created`
   fields. The Task lead time's field trace now also names `raw.jira_issues.fields:$.created`.
-  The rows it reaches are still right; only the raw-field list is a superset. **Accepted for now
-  (2026-11-19).**
-  - Following each row's own `_fields` at every hop would not fix this case: a lead-time row's
-    `_sources` hold ticket and PR rows of `entities` alike, and `_fields` names columns, not
-    rows. It would only tighten traces whose source rows are all one kind.
-  - **If Dave needs exact fields for aggregates:** let a reference name a subset of rows, e.g.
-    `entities[type=change].created_at`, so tracing follows only matching sources. That touches
-    the contract, `runner.py`'s reference checks, `verify.py`, `trace.py` and Waymark's lineage
-    code.
+  The rows it reaches are still right; only the raw-field list is a superset. Fixed in Phase 3c.
+
+### Phase 3c: references to a subset of rows (done, 2026-11-19)
+
+- **A reference can name a subset of an input's rows:** `entities[type=change].created_at` reads
+  the column only in the source rows whose `type` is `change`, compared as text. The filter
+  column must be text, and a filtered reference can't also take a JSON path; `runner.py` checks
+  both. Kafka's `lead_time_by_issue_type` and `entity_metadata`'s `change_count`,
+  `first_change_at` and `last_merged_at` rollups use it.
+- **A filter alone wasn't enough, so the field walk changed too.** It merged every row it reached
+  in a table, so the tickets reached through `ticket_change_links._row_id` brought Jira's
+  `created` back. Now each row carries the columns the value needs from it, and follows only
+  those of its own `_sources` that those columns' references name (and that a filter matches).
+  A row is followed again at a later hop only for what it needs beyond what was already followed.
+  `trace.py` and Waymark's `walkField` (`src/domain/columnLineage.ts`) are the same walk.
+- **`verify.py`:** a filtered reference covers its column only in the rows it matches, so verify
+  changes the column in the other rows alone and expects the output not to change. A filtered
+  reference is reported as unused when changing its matching rows changes nothing.
+- **Kafka (copy of the demo bucket, snapshot `20261119T120000Z`):** build and verify take 54 s,
+  with no errors. The Task lead time's field trace reaches 596 `entities` at hop 1 instead of
+  983, and names only `raw.github_pulls.created_at` and `merged_at`. Waymark's walk reaches the
+  same rows and fields in 64 ms.
+- **Tests:** 111 pytest; Waymark's unit tests and its lineage E2E pass.
 - Waymark's lineage fixture (`src/db/source/lineageFixture.ts`) and its E2E test still model
   `tickets`/`changes`. They test the generic hop walk, so they were left as they are.
 

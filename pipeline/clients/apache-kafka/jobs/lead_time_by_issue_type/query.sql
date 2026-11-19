@@ -23,11 +23,21 @@ select
   map {
     'issue_type': ['entities.issue_type'],
     -- Which changes count toward a ticket depends on its links; a ticket counts once one merged.
-    'tickets': ['entities._row_id', 'ticket_change_links._row_id', 'entities.merged_at'],
-    'avg_lead_time_hours':
-      ['entities.created_at', 'entities.merged_at', 'ticket_change_links._row_id'],
-    'median_lead_time_hours':
-      ['entities.created_at', 'entities.merged_at', 'ticket_change_links._row_id']
+    'tickets': [
+      'entities[type=ticket]._row_id',
+      'ticket_change_links._row_id',
+      'entities[type=change].merged_at'
+    ],
+    'avg_lead_time_hours': [
+      'entities[type=change].created_at',
+      'entities[type=change].merged_at',
+      'ticket_change_links._row_id'
+    ],
+    'median_lead_time_hours': [
+      'entities[type=change].created_at',
+      'entities[type=change].merged_at',
+      'ticket_change_links._row_id'
+    ]
   } as _fields,
   issue_type,
   count(*) as tickets,

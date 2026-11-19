@@ -41,6 +41,7 @@ from runner import (
     JOBS_DIR,
     RAW_ROW_ID,
     Job,
+    Ref,
     build_order,
     connect,
     is_raw,
@@ -49,7 +50,6 @@ from runner import (
     sql_string,
 )
 from snapshot import Snapshot
-from trace import ROW_IDENTITY
 
 KINDS = ("shift", "replace", "null")
 # Identity columns join rows to their sources; changing them tests the join, not the lineage.
@@ -62,6 +62,8 @@ JSON_SEED = "2000-01-01T00:00:00.000+0000"
 
 Row = dict[str, Any]
 Selector = Callable[[str], bool]
+# Which rows of an input a perturbation changes; None for all of them.
+Mask = list[bool] | None
 
 
 @dataclass(frozen=True)
@@ -191,10 +193,22 @@ def flatten(nodes: list[Any]) -> list[Any]:
     return flat
 
 
-def with_column(table: pa.Table, name: str, values: list[Any]) -> pa.Table:
+def with_column(table: pa.Table, name: str, values: list[Any], only: Mask = None) -> pa.Table:
+    """`table` with column `name` replaced by `values`, in the rows `only` picks."""
     index = table.schema.get_field_index(name)
     field = table.schema.field(index)
+    if only is not None:
+        original = table[name].to_pylist()
+        values = [new if pick else old for new, old, pick in zip(values, original, only)]
     return table.set_column(index, field, pa.array(values, type=field.type))
+
+
+def matching(rows: pa.Table, ref: Ref) -> list[bool]:
+    """Which rows a reference reads: all of them, or those its filter matches."""
+    if ref.where is None:
+        return [True] * rows.num_rows
+    column, value = ref.where
+    return [v == value for v in rows[column].to_pylist()]
 
 
 # ── Comparing rows ────────────────────────────────────────────────────────────
@@ -349,30 +363,45 @@ class RowCheck:
         documents: list[Any],
         selected: Selector,
         grow: str | None = None,
+        only: Mask = None,
     ) -> tuple[set[str], bool]:
         def perturbed(kind: str) -> pa.Table:
             values = [
                 None if d is None else json.dumps(perturb_json(d, kind, selected, grow=grow))
                 for d in documents
             ]
-            return with_column(self.inputs[table], column, values)
+            return with_column(self.inputs[table], column, values, only)
 
         return self.changed(table, perturbed)
 
-    def declared(self, output: str, table: str, column: str) -> tuple[bool, list[str]]:
-        """Whether `output` declares all of table.column, and else the JSON paths it declares."""
-        whole, paths = False, []
-        for ref in self.refs.get(output, []):
-            ref_table, ref_column, path = parse_ref(ref)
-            if ref_table != table:
+    def declared(self, output: str, table: str, column: str) -> tuple[Mask, list[str], list[str]]:
+        """What `output` declares of table.column: the rows not declared in full (None when
+        none is, all of them when no reference names the column in full), the JSON paths it
+        declares, and the filters that declare some rows in full."""
+        rows = self.inputs[table]
+        undeclared = [True] * rows.num_rows
+        paths, filters = [], []
+        for ref in map(parse_ref, self.refs.get(output, [])):
+            if ref.table != table:
                 continue
-            if ref_column in ROW_IDENTITY or (ref_column == column and path is None):
-                whole = True
-            elif ref_column == column:
-                paths.append(path)
-        return whole, paths
+            if ref.is_identity or (ref.column == column and ref.path is None):
+                if ref.where is None:
+                    return None, [], []
+                filters.append(f"{table}[{ref.where[0]}={ref.where[1]}]")
+                undeclared = [u and not m for u, m in zip(undeclared, matching(rows, ref))]
+            elif ref.column == column and ref.path is not None:
+                paths.append(ref.path)
+        return (undeclared if any(undeclared) else None), paths, filters
 
-    def narrow(self, table: str, column: str, documents: list[Any], output: str, keep: list[str]):
+    def narrow(
+        self,
+        table: str,
+        column: str,
+        documents: list[Any],
+        output: str,
+        keep: list[str],
+        only: Mask = None,
+    ):
         """The undeclared JSON paths that change `output`, as deep as they can be pinned down."""
         budget = [NARROW_LIMIT]
 
@@ -386,7 +415,7 @@ class RowCheck:
                     continue
                 budget[0] -= 1
                 selector = lambda p, c=child: within(p, c) and not kept(p)  # noqa: E731
-                if output in self.json_changed(table, column, documents, selector)[0]:
+                if output in self.json_changed(table, column, documents, selector, only=only)[0]:
                     hits.extend(search(child) or [child])
             return hits
 
@@ -405,14 +434,7 @@ class RowCheck:
                 if documents is not None:
                     effect = self.json_changed(table, column, documents, lambda _: True)
                 else:
-                    values = rows[column].to_pylist()
-                    type_ = rows.schema.field(column).type
-                    effect = self.changed(
-                        table,
-                        lambda kind, c=column, v=values, t=type_: with_column(
-                            rows, c, [perturb_value(x, t, kind) for x in v]
-                        ),
-                    )
+                    effect = self.scalar_changed(table, column)
                 effects[(table, column)] = effect
                 for output in sorted(effect[0]):
                     findings.extend(self.undeclared(output, table, column, documents))
@@ -421,29 +443,62 @@ class RowCheck:
     def undeclared(
         self, output: str, table: str, column: str, documents: list[Any] | None
     ) -> list[Finding]:
-        whole, paths = self.declared(output, table, column)
-        if whole:
+        only, paths, filters = self.declared(output, table, column)
+        if only is None:
             return []
+        # The change seen was to every row; a filter declares some of them, so try the rest.
+        outside = f" outside {', '.join(filters)}" if filters else ""
         if documents is None:
-            return [Finding("error", "undeclared", output, f"changes with {table}.{column}")]
+            if filters and output not in self.scalar_changed(table, column, only)[0]:
+                return []
+            detail = f"changes with {table}.{column}{outside}"
+            return [Finding("error", "undeclared", output, detail)]
+        if filters and output not in self.json_changed(
+            table, column, documents, lambda _: True, only=only
+        )[0]:
+            return []
         if paths:
             rest = self.json_changed(
-                table, column, documents, lambda p: not any(within(p, k) for k in paths)
+                table, column, documents, lambda p: not any(within(p, k) for k in paths), only=only
             )
             if output not in rest[0]:
                 return []
-        found = self.narrow(table, column, documents, output, paths)
+        found = self.narrow(table, column, documents, output, paths, only)
         refs = [f"{table}.{column}:{p}" for p in found] or [f"{table}.{column}"]
-        return [Finding("error", "undeclared", output, f"changes with {r}") for r in refs]
+        return [Finding("error", "undeclared", output, f"changes with {r}{outside}") for r in refs]
+
+    def scalar_changed(self, table: str, column: str, only: Mask = None) -> tuple[set[str], bool]:
+        rows = self.inputs[table]
+        values = rows[column].to_pylist()
+        type_ = rows.schema.field(column).type
+        return self.changed(
+            table,
+            lambda kind: with_column(
+                rows, column, [perturb_value(x, type_, kind) for x in values], only
+            ),
+        )
 
     def unused(self, effects: Mapping[tuple[str, str], tuple[set[str], bool]]) -> list[Finding]:
         findings = []
         for output, refs in sorted(self.refs.items()):
-            for ref in refs:
-                table, column, path = parse_ref(ref)
-                if column in ROW_IDENTITY or (table, column) not in effects:
+            for text in refs:
+                ref = parse_ref(text)
+                table, column, path = ref.table, ref.column, ref.path
+                if ref.is_identity or (table, column) not in effects:
                     continue
                 changed, vanished = effects[(table, column)]
+                if ref.where is not None:
+                    only = matching(self.inputs[table], ref)
+                    if not any(only):
+                        # This row has no source the filter matches; other rows may.
+                        continue
+                    documents = json_documents(self.inputs[table][column])
+                    if documents is None:
+                        changed, vanished = self.scalar_changed(table, column, only)
+                    else:
+                        changed, vanished = self.json_changed(
+                            table, column, documents, lambda _: True, only=only
+                        )
                 if path is not None:
                     documents = json_documents(self.inputs[table][column])
                     if documents is None:
@@ -452,7 +507,8 @@ class RowCheck:
                         table, column, documents, lambda p, prefix=path: within(p, prefix), path
                     )
                 if not vanished and output not in changed:
-                    findings.append(Finding("warning", "unused", output, f"never changed by {ref}"))
+                    detail = f"never changed by {text}"
+                    findings.append(Finding("warning", "unused", output, detail))
         return findings
 
 

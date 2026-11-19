@@ -11,8 +11,7 @@ import {
   parseRowLimit,
   sourcesOf,
 } from '../domain/lineage';
-import { directColumns, followFor, traceField } from '../domain/columnLineage';
-import type { FieldTrace } from '../domain/columnLineage';
+import { directColumns, traceField, walkField } from '../domain/columnLineage';
 import { LineageNotFoundPage } from '../frontend/Pages/LineageNotFoundPage';
 import { LineageRawPage } from '../frontend/Pages/LineageRawPage';
 import { LineageRowPage } from '../frontend/Pages/LineageRowPage';
@@ -51,9 +50,13 @@ export async function lineageRowHandler(c: Context) {
   // With ?field=, show only the sources that field reads, and the columns it reads first.
   const field = c.req.query('field') || undefined;
   const trace = field ? traceField(repo.columnMaps(), table, field, row.values) : null;
-  const follow = trace ? followFor(trace) : () => true;
+  const sources = trace
+    ? hopToSourceRefs(
+        (await walkField(table, rowId, trace, repo.columnMaps(), repo, { depth: 1 })).hops[1] ?? {}
+      )
+    : sourcesOf(table, row);
   const parents = await repo.getParents(
-    sourcesOf(table, row).filter(source => follow(table, source.table)),
+    sources,
     parseRowLimit(c.req.query('limit')),
     trace ? directColumns(trace) : {}
   );
@@ -82,26 +85,25 @@ export async function lineageRawHandler(c: Context) {
   if (!row) return notFound(c, `${table} has no row ${rowId}.`);
 
   const field = c.req.query('field') || undefined;
-  const trace: FieldTrace | null = field
-    ? traceField(repo.columnMaps(), table, field, row.values)
-    : null;
-  const { hops, leaves } = await expandToRaw({ [table]: [rowId] }, repo.getSources, {
-    follow: trace ? followFor(trace) : undefined,
-  });
+  const trace = field ? traceField(repo.columnMaps(), table, field, row.values) : null;
+  const walk = trace
+    ? await walkField(table, rowId, trace, repo.columnMaps(), repo)
+    : { ...(await expandToRaw({ [table]: [rowId] }, repo.getSources)), columns: {} };
   const groups = await repo.getParents(
-    hopToSourceRefs(leaves),
+    hopToSourceRefs(walk.leaves),
     parseRowLimit(c.req.query('limit')),
-    trace?.columns ?? {}
+    walk.columns
   );
 
   return c.html(
     <LineageRawPage
       table={table}
       rowId={rowId}
-      hops={hops}
+      hops={walk.hops}
       leaves={groups}
       field={field}
       trace={trace}
+      columns={walk.columns}
     />
   );
 }

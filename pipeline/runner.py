@@ -39,10 +39,16 @@ RAW_ROW_ID = "_dlt_id"
 SOURCES_TYPE = 'STRUCT("table" VARCHAR, row_id VARCHAR)[]'
 FIELDS_TYPE = "MAP(VARCHAR, VARCHAR[])"
 CONTRACT_COLUMNS = ("_row_id", "_sources", "_fields")
-# `<input>.<column>`, with `:<json path>` for a value inside a JSON text column.
+# `<input>.<column>`, with `:<json path>` for a value inside a JSON text column, and
+# `<input>[<column>=<value>].<column>` for only the rows of the input whose column holds value.
 REF_PATTERN = re.compile(
-    r"^((?:raw\.)?[a-z][a-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?::(\$(?:\.[A-Za-z0-9_]+)+))?$"
+    r"^((?:raw\.)?[a-z][a-z0-9_]*)"
+    r"(?:\[([A-Za-z_][A-Za-z0-9_]*)=([^\[\]]+)\])?"
+    r"\.([A-Za-z_][A-Za-z0-9_]*)"
+    r"(?::(\$(?:\.[A-Za-z0-9_]+)+))?$"
 )
+# Columns that stand for a row's identity: a reference to one reads the whole row.
+ROW_IDENTITY = frozenset({"_row_id", RAW_ROW_ID})
 COLUMNS_METADATA_KEY = "waymark_columns"
 CHANGE_KINDS = ("added", "changed", "removed")
 JSON_TYPES = {"VARCHAR", "JSON"}
@@ -66,13 +72,37 @@ def is_raw(table: str) -> bool:
     return table.startswith(RAW_PREFIX)
 
 
-def parse_ref(ref: str) -> tuple[str, str, str | None]:
-    """Split a column reference into (table, column, json path or None)."""
+@dataclass(frozen=True)
+class Ref:
+    """One column reference in `_fields` (CONTRACT.md, "Column lineage")."""
+
+    table: str
+    column: str
+    path: str | None = None
+    # (column, value): the reference reads only the rows of `table` whose column holds value.
+    where: tuple[str, str] | None = None
+
+    @property
+    def label(self) -> str:
+        """The column as it reads within its table: `column` or `column:<json path>`."""
+        return f"{self.column}:{self.path}" if self.path else self.column
+
+    @property
+    def is_identity(self) -> bool:
+        return self.column in ROW_IDENTITY
+
+    def matches(self, value: str | None) -> bool:
+        """Whether a row whose filter column holds `value` is one this reference reads."""
+        return self.where is None or value == self.where[1]
+
+
+def parse_ref(ref: str) -> Ref:
     match = REF_PATTERN.match(ref)
     if not match:
         raise ValueError(f"Invalid column reference: {ref!r}")
-    table, column, path = match.groups()
-    return table, column, path
+    table, where_column, where_value, column, path = match.groups()
+    where = (where_column, where_value) if where_column else None
+    return Ref(table, column, path, where)
 
 
 def load_job(directory: Path) -> Job:
@@ -263,10 +293,11 @@ def field_errors(con: duckdb.DuckDBPyConnection, inputs: tuple[str, ...]) -> lis
             errors.append(f"{where} holds a null reference")
             continue
         try:
-            table, column, path = parse_ref(ref)
+            parsed = parse_ref(ref)
         except ValueError as error:
             errors.append(f"{where}: {error}")
             continue
+        table, column, path = parsed.table, parsed.column, parsed.path
         if table not in inputs:
             errors.append(f"{where} reads {table}, which is not an input")
             continue
@@ -277,6 +308,14 @@ def field_errors(con: duckdb.DuckDBPyConnection, inputs: tuple[str, ...]) -> lis
             errors.append(f"{where}: {table} has no column {column}")
         elif path and type_ not in JSON_TYPES:
             errors.append(f"{where}: {ref} has a JSON path on a {type_} column")
+        if parsed.where:
+            filter_type = input_types[table].get(parsed.where[0])
+            if filter_type is None:
+                errors.append(f"{where}: {table} has no column {parsed.where[0]} to filter on")
+            elif filter_type != "VARCHAR":
+                errors.append(f"{where}: {ref} filters on a {filter_type} column, not text")
+            if path:
+                errors.append(f"{where}: {ref} has both a filter and a JSON path")
     return errors
 
 

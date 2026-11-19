@@ -35,7 +35,8 @@ export const HopSchema = z.record(z.string(), z.array(z.string()));
 export type Hop = z.infer<typeof HopSchema>;
 
 // Column lineage (pipeline/CONTRACT.md, "Column lineage"): each output column lists the input
-// columns it is computed from, as `<table>.<column>` or `<table>.<column>:<json path>`. A row's
+// columns it is computed from, as `<table>.<column>` or `<table>.<column>:<json path>`, with
+// `<table>[<column>=<value>]` for only the rows of the table whose column holds value. A row's
 // `_fields` says this for that row alone; a table's column map, read from its Parquet metadata,
 // is the union over all of its rows.
 export const ColumnMapSchema = z.record(z.string(), z.array(z.string()));
@@ -45,5 +46,6 @@ export const ColumnRefSchema = z.object({
   table: z.string(),
   column: z.string(),
   path: z.string().optional(),
+  where: z.object({ column: z.string(), value: z.string() }).optional(),
 });
 export type ColumnRef = z.infer<typeof ColumnRefSchema>;

@@ -90,6 +90,14 @@ map {
 - **`_row_id` as a reference** means the row's identity rather than one of its values, as in a
   count of tickets: `'tickets': ['entities._row_id']`. Tracing follows all of that row's sources.
   For a raw input, `_dlt_id` plays the same role: `'issues': ['raw.jira_issues._dlt_id']`.
+- **A filter names a subset of an input's rows**: `<input>[<column>=<value>].<column>` reads the
+  column only in the source rows whose filter column holds that value, compared as text. Use it
+  when a row's `_sources` mix kinds of rows and a value reads only one kind: a ticket's lead time
+  lists the ticket and its pull requests, but reads only the pull requests' times, so it names
+  `entities[type=change].created_at`. It also works on identity, as in
+  `entities[type=change]._row_id` for a count of pull requests. The filter column must be text,
+  and a filtered reference can't also take a JSON path. The value can hold anything but `[` and
+  `]`, spaces included.
 - **A value that can come from more than one place names the one it came from in that row.**
   `coalesce(a, b)` gets `case when a is not null then [...a] else [...b] end`, and a row of
   `entity_metadata` names the column its key reads:
@@ -109,9 +117,13 @@ The runner also writes each table's **column map**, the union of every row's `_f
 output file's Parquet key-value metadata under `waymark_columns` as JSON. It lets a reader trace a
 column across the whole table without scanning it, and needs no manifest.
 
-Tracing one value starts from that row's `_fields`, which is exact. Past the first hop it uses
-each source table's column map, which can name more than one particular source row read: it
-follows only the source tables that the field's columns read, then all their rows.
+Tracing one value carries, for every row it reaches, the columns of that row the value needs. At
+the first hop they come from the row's own `_fields`, which are exact; past it, from each table's
+column map. A row follows only those of its own `_sources` that its needed columns' references
+name, and only the rows a filter matches; an identity reference, or a column no map declares,
+follows all of the row's sources. A column map is the union over a table's rows, so it can name
+a column of a table that this particular row doesn't read from. Following only the row's own
+sources drops those, and a filter drops the rows of the right table that the value doesn't read.
 
 **The runner can't tell that `_fields` is complete.** It checks that every reference exists, not
 that the query reads nothing else. That is what `verify.py` is for, and the runner runs it after
@@ -128,7 +140,9 @@ The runner refuses to write a table that breaks the contract:
 - a missing or mistyped `_fields` column;
 - a row whose `_fields` doesn't map exactly the output columns;
 - a reference that is null or malformed, or names a table that isn't an input, a column that the
-  input doesn't have, or a JSON path on a column that isn't text.
+  input doesn't have, or a JSON path on a column that isn't text;
+- a filter on a column the input doesn't have or that isn't text, or a filter together with a
+  JSON path.
 
 A failed job skips every job downstream of it.
 
@@ -137,7 +151,9 @@ A failed job skips every job downstream of it.
 After building, the runner runs `verify.py` over every table it wrote, and the run fails if it
 finds an error. For a few rows per distinct `_fields`, it re-runs the job on only the rows in
 the row's `_sources` and expects the same row back, then changes each input column of those rows
-in turn: every output column that changes must name that input in the row's `_fields`. It is a
+in turn: every output column that changes must name that input in the row's `_fields`. A filtered
+reference covers only the rows it matches, so the column is then changed in the other rows alone,
+and the output must stay the same. It is a
 test, not a proof: a change the query absorbs, such as a value that isn't the largest in a
 `max()`, hides that dependency. `--no-verify` skips it.
 

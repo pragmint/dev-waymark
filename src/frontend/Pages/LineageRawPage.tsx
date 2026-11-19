@@ -13,7 +13,9 @@ export const LineageRawPage: FC<{
   leaves: ParentGroup[];
   field?: string;
   trace?: FieldTrace | null;
-}> = ({ table, rowId, hops, leaves, field, trace = null }) => (
+  /** The column labels the field reads, by table. */
+  columns?: Record<string, string[]>;
+}> = ({ table, rowId, hops, leaves, field, trace = null, columns = {} }) => (
   <Layout title={`Raw records behind ${table} ${rowId}`}>
     <div class="page-header">
       <a href={withQuery(lineagePath(table, rowId), { field })} class="back-link">
@@ -27,7 +29,7 @@ export const LineageRawPage: FC<{
       <LineageFieldNote
         field={field}
         heading={trace ? 'raw fields it comes from' : 'no column lineage'}
-        columns={Object.entries(trace?.columns ?? {})
+        columns={Object.entries(trace ? columns : {})
           .filter(([columnTable]) => isRawTable(columnTable))
           .flatMap(([columnTable, labels]) => labels.map(label => `${columnTable}.${label}`))}
         empty={

@@ -17,13 +17,15 @@ from runner import (
     field_errors,
     load_job,
     load_jobs,
+    Ref,
+    is_raw,
     parse_ref,
     run_job,
     run_jobs,
 )
 import snapshot as snapshots
 from snapshot import Snapshot
-from trace import column_maps, raw_values, row_values, trace, trace_field
+from trace import raw_values, row_values, trace
 from verify import verify_job, verify_jobs
 
 CLIENT = {
@@ -240,20 +242,30 @@ def test_trace_follows_a_metadata_value_back_to_raw(built, snap: Snapshot):
         SELECT m._row_id FROM entity_metadata AS m JOIN entities ON entities.id = m.entity_id
         WHERE entities.name = 'KAFKA-1' AND m.key = 'change_count'
     """).fetchone()
-    hops = trace(snap, "entity_metadata", str(row_id))
-    assert set(hops[1]) == {"entities", "ticket_change_links"}
-    assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+    result = trace(snap, "entity_metadata", str(row_id))
+    assert result is not None
+    assert set(result.hops[1]) == {"entities", "ticket_change_links"}
+    assert result.hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
 def test_parse_ref_splits_table_column_and_json_path():
-    assert parse_ref("changes.merged_at") == ("changes", "merged_at", None)
-    assert parse_ref("raw.jira_issues.fields:$.priority.name") == (
-        "raw.jira_issues",
-        "fields",
-        "$.priority.name",
-    )
+    assert parse_ref("changes.merged_at") == Ref("changes", "merged_at")
+    ref = parse_ref("raw.jira_issues.fields:$.priority.name")
+    assert ref == Ref("raw.jira_issues", "fields", "$.priority.name")
+    assert ref.label == "fields:$.priority.name"
     with pytest.raises(ValueError, match="Invalid column reference"):
         parse_ref("fields:$.priority")
+
+
+def test_parse_ref_reads_a_row_filter():
+    ref = parse_ref("entities[type=change].created_at")
+    assert ref == Ref("entities", "created_at", where=("type", "change"))
+    assert ref.matches("change") and not ref.matches("ticket") and not ref.matches(None)
+    spaced = parse_ref("entities[issue_type=New Feature]._row_id")
+    assert spaced.where == ("issue_type", "New Feature")
+    for bad in ["entities[type].x", "entities[=a].x", "entities[type=].x", "entities[a=[b]].x"]:
+        with pytest.raises(ValueError, match="Invalid column reference"):
+            parse_ref(bad)
 
 
 def test_load_job_rejects_a_column_map_in_job_toml(tmp_path: Path):
@@ -274,11 +286,14 @@ def test_load_job_rejects_a_column_map_in_job_toml(tmp_path: Path):
         ("map {'n': ['other.y']}", "_fields[n] reads other, which is not an input"),
         ("map {'n': ['up.missing']}", "up has no column missing"),
         ("map {'n': ['up.y:$.a']}", "JSON path on a INTEGER column"),
+        ("map {'n': ['up[missing=a].y']}", "up has no column missing to filter on"),
+        ("map {'n': ['up[y=2].y']}", "filters on a INTEGER column, not text"),
+        ("map {'n': ['up[q=a].q:$.a']}", "has both a filter and a JSON path"),
     ],
 )
 def test_field_errors_catch_fields_that_do_not_match_the_tables(fields, problem):
     con = connect(CLIENT)
-    con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y")
+    con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y, 'a' AS q")
     con.execute(f"CREATE TEMP TABLE result AS SELECT 7::bigint AS _row_id, {fields} AS _fields, 1 AS n")
     errors = field_errors(con, ("up",))
     assert any(problem in error for error in errors), errors
@@ -294,6 +309,15 @@ def test_field_errors_pass_fields_that_differ_by_row():
     """)
     assert field_errors(con, ("up",)) == []
 
+
+def test_field_errors_pass_a_filter_on_a_text_column():
+    con = connect(CLIENT)
+    con.execute("CREATE TABLE up AS SELECT 1::bigint AS _row_id, 2 AS y, 'a' AS q")
+    con.execute(
+        "CREATE TEMP TABLE result AS SELECT 7::bigint AS _row_id, "
+        "map {'n': ['up[q=a].y', 'up[q=b]._row_id']} AS _fields, 1 AS n"
+    )
+    assert field_errors(con, ("up",)) == []
 
 
 def test_every_table_carries_the_union_of_its_rows_fields(built, snap: Snapshot):
@@ -339,39 +363,54 @@ def metadata_row_id(built, entity_name: str, key: str) -> str:
     return str(row_id)
 
 
-def test_trace_field_follows_only_the_tables_a_field_reads(built, snap: Snapshot):
-    # change_count is sourced from the ticket, its changes and their links, but counts only the
-    # linked changes and the links, so tracing it skips the ticket's own fields.
-    tables = snap
+def change_entity_ids(built) -> set[str]:
+    rows = built.sql("SELECT _row_id FROM entities WHERE type = 'change'").fetchall()
+    return {str(row_id) for (row_id,) in rows}
+
+
+def test_a_filtered_reference_follows_only_the_rows_it_matches(built, snap: Snapshot):
+    # change_count counts the ticket's linked changes: its own row is a source, but not counted.
     row_id = metadata_row_id(built, "KAFKA-1", "change_count")
-    values = row_values(tables, "entity_metadata", row_id)
-    field = trace_field(column_maps(tables), "entity_metadata", "value", values)
-    assert field is not None
-    assert field.direct == ["entities._row_id", "ticket_change_links._row_id"]
-    hops = trace(tables, "entity_metadata", row_id, field.follow)
-    assert set(hops[1]) == {"entities", "ticket_change_links"}
-    assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+    result = trace(snap, "entity_metadata", row_id, "value")
+    assert result is not None
+    assert result.direct == ["entities[type=change]._row_id", "ticket_change_links._row_id"]
+    assert result.hops[1]["entities"] <= change_entity_ids(built)
+    assert set(result.hops[1]) == {"entities", "ticket_change_links"}
+    # A link's identity depends on the ticket it names, so the ticket is reached through it.
+    raw = {t: ids for hop in result.hops for t, ids in hop.items() if is_raw(t)}
+    assert raw == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+
+
+def test_a_field_reaches_only_the_raw_fields_of_the_rows_it_reads(built, snap: Snapshot):
+    # entities.created_at reads either raw created field, but first_change_at reads only the
+    # changes' rows, so the trace names only the pull request's. The ticket is still reached as a
+    # whole row, through the link, without making its created field part of the value.
+    row_id = metadata_row_id(built, "KAFKA-1", "first_change_at")
+    result = trace(snap, "entity_metadata", row_id, "value")
+    assert result is not None
+    raw_fields = {t: set(labels) for t, labels in result.columns.items() if is_raw(t)}
+    assert raw_fields == {"raw.github_pulls": {"created_at"}}
+    assert result.columns["raw.github_pulls"]["created_at"] == {"p10"}
 
 
 def test_trace_field_reaches_a_json_path_in_raw(built, snap: Snapshot):
-    tables = snap
     row_id = metadata_row_id(built, "KAFKA-1", "status")
-    values = row_values(tables, "entity_metadata", row_id)
-    field = trace_field(column_maps(tables), "entity_metadata", "value", values)
-    assert field is not None
-    assert field.columns == {
+    values = row_values(snap, "entity_metadata", row_id)
+    result = trace(snap, "entity_metadata", row_id, "value")
+    assert result is not None
+    assert {t: set(labels) for t, labels in result.columns.items()} == {
         "entities": {"status"},
         "raw.jira_issues": {"fields:$.status.name"},
     }
-    hops = trace(tables, "entity_metadata", row_id, field.follow)
-    raw_ids = hops[-1]["raw.jira_issues"]
+    raw_ids = result.columns["raw.jira_issues"]["fields:$.status.name"]
     assert raw_values(snap, "raw.jira_issues", "fields:$.status.name", raw_ids) == [
         values["value"]
     ]
 
 
-def test_trace_field_returns_none_for_an_undeclared_field(built, snap: Snapshot):
-    assert trace_field(column_maps(snap), "entities", "nope", {}) is None
+def test_trace_returns_none_for_an_undeclared_field(built, snap: Snapshot):
+    (row_id,) = built.sql("SELECT _row_id FROM entities LIMIT 1").fetchone()
+    assert trace(snap, "entities", str(row_id), "nope") is None
 
 
 def test_every_shared_job_passes_verification(tmp_path: Path):

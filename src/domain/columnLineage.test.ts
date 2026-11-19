@@ -1,32 +1,80 @@
 import { describe, expect, it } from 'bun:test';
 import type { ColumnMap } from '../schemas/lineage';
-import { directColumns, followFor, parseColumnRef, refLabel, traceField } from './columnLineage';
-import { expandToRaw } from './lineage';
-import type { FetchSources } from './lineage';
+import type { FieldFetchers } from './columnLineage';
+import {
+  directColumns,
+  parseColumnRef,
+  refLabel,
+  refText,
+  traceField,
+  walkField,
+} from './columnLineage';
 
 // Column maps shaped like the Kafka jobs: each is the union of its table's rows' `_fields`.
+// Tickets and pull requests share `entities`, so its created_at reads either raw created field.
 const MAPS: Record<string, ColumnMap> = {
   lead_time: {
-    issue_type: ['tickets.issue_type'],
-    tickets: ['tickets._row_id'],
-    avg_hours: ['changes.created_at', 'changes.merged_at'],
+    issue_type: ['entities[type=ticket].issue_type'],
+    avg_hours: [
+      'entities[type=change].created_at',
+      'entities[type=change].merged_at',
+      'links._row_id',
+    ],
+    any_created: ['entities.created_at'],
   },
-  tickets: {
+  entities: {
+    type: [],
     issue_type: ['raw.jira_issues.fields:$.issuetype.name'],
-    priority: ['raw.jira_issues.fields:$.priority.name'],
-  },
-  changes: {
-    created_at: ['raw.github_pulls.created_at'],
+    created_at: ['raw.github_pulls.created_at', 'raw.jira_issues.fields:$.created'],
     merged_at: ['raw.github_pulls.merged_at'],
-    author: ['raw.github_pulls.user:$.login'],
   },
-  metadata: {
-    key: [],
-    value: ['changes.author', 'tickets.custom_fields', 'tickets.priority'],
+  links: {
+    ticket_id: ['entities._row_id'],
+    change_id: ['entities._row_id'],
   },
 };
 
-describe('parseColumnRef / refLabel', () => {
+// lead_time 1 summarizes ticket t1, its change c1 and the link l1 between them.
+const SOURCES: Record<string, Record<string, Array<{ table: string; row_id: string }>>> = {
+  lead_time: {
+    '1': [
+      { table: 'entities', row_id: 't1' },
+      { table: 'entities', row_id: 'c1' },
+      { table: 'links', row_id: 'l1' },
+    ],
+  },
+  entities: {
+    t1: [{ table: 'raw.jira_issues', row_id: 'j1' }],
+    c1: [{ table: 'raw.github_pulls', row_id: 'p1' }],
+  },
+  links: {
+    l1: [
+      { table: 'entities', row_id: 't1' },
+      { table: 'entities', row_id: 'c1' },
+    ],
+  },
+};
+const TYPES: Record<string, string> = { t1: 'ticket', c1: 'change' };
+
+const FETCHERS: FieldFetchers = {
+  async rowSources(table, rowIds) {
+    return rowIds.flatMap(rowId =>
+      (SOURCES[table]?.[rowId] ?? []).map(source => ({ rowId, ...source }))
+    );
+  },
+  async columnValues(table, column, rowIds) {
+    expect([table, column]).toEqual(['entities', 'type']);
+    return Object.fromEntries(rowIds.map(id => [id, TYPES[id] ?? null]));
+  },
+};
+
+async function walk(field: string, values: Record<string, unknown> = {}, depth?: number) {
+  const trace = traceField(MAPS, 'lead_time', field, values);
+  if (!trace) throw new Error('expected a trace');
+  return walkField('lead_time', '1', trace, MAPS, FETCHERS, { depth });
+}
+
+describe('parseColumnRef / refLabel / refText', () => {
   it('parses table, column and JSON path', () => {
     expect(parseColumnRef('changes.merged_at')).toEqual({ table: 'changes', column: 'merged_at' });
     const ref = parseColumnRef('raw.jira_issues.fields:$.priority.name');
@@ -34,66 +82,50 @@ describe('parseColumnRef / refLabel', () => {
     expect(ref && refLabel(ref)).toBe('fields:$.priority.name');
   });
 
+  it('parses a row filter', () => {
+    const ref = parseColumnRef('entities[type=change].created_at');
+    expect(ref).toEqual({
+      table: 'entities',
+      column: 'created_at',
+      where: { column: 'type', value: 'change' },
+    });
+    expect(ref && refLabel(ref)).toBe('created_at');
+    expect(ref && refText(ref)).toBe('entities[type=change].created_at');
+    expect(parseColumnRef('entities[issue_type=New Feature]._row_id')?.where?.value).toBe(
+      'New Feature'
+    );
+  });
+
   it('rejects malformed references', () => {
     expect(parseColumnRef('merged_at')).toBeNull();
     expect(parseColumnRef('raw.x.fields:priority')).toBeNull();
+    expect(parseColumnRef('entities[type].x')).toBeNull();
+    expect(parseColumnRef('entities[type=].x')).toBeNull();
   });
 });
 
 describe('traceField', () => {
-  it('follows a field through each column map to raw columns and JSON paths', () => {
-    expect(traceField(MAPS, 'lead_time', 'avg_hours', {})).toEqual({
-      field: 'avg_hours',
-      direct: [
-        { table: 'changes', column: 'created_at' },
-        { table: 'changes', column: 'merged_at' },
-      ],
-      columns: {
-        changes: ['created_at', 'merged_at'],
-        'raw.github_pulls': ['created_at', 'merged_at'],
-      },
-      follows: { lead_time: ['changes'], changes: ['raw.github_pulls'] },
-    });
+  it('starts from the table’s map without _fields', () => {
+    expect(traceField(MAPS, 'lead_time', 'issue_type', {})?.direct).toEqual([
+      { table: 'entities', column: 'issue_type', where: { column: 'type', value: 'ticket' } },
+    ]);
   });
 
   it('starts from the row’s own _fields', () => {
-    const values = { key: 'priority', _fields: { key: [], value: ['tickets.priority'] } };
-    const trace = traceField(MAPS, 'metadata', 'value', values);
-    expect(trace?.columns).toEqual({
-      tickets: ['priority'],
-      'raw.jira_issues': ['fields:$.priority.name'],
-    });
-    expect(trace?.follows.metadata).toEqual(['tickets']);
-  });
-
-  it('falls back to the table’s map, every row’s columns, without _fields', () => {
-    const trace = traceField(MAPS, 'metadata', 'value', { key: 'priority' });
-    expect(trace?.follows.metadata).toEqual(['changes', 'tickets']);
-  });
-
-  it('traces a row’s own _fields when its table has no map', () => {
-    const values = { _fields: { n: ['tickets.priority'] } };
-    expect(traceField({}, 'orphan', 'n', values)?.direct).toEqual([
-      { table: 'tickets', column: 'priority' },
+    const values = { _fields: { avg_hours: ['links._row_id'] } };
+    expect(traceField(MAPS, 'lead_time', 'avg_hours', values)?.direct).toEqual([
+      { table: 'links', column: '_row_id' },
     ]);
   });
 
   it('ignores _fields that are not a column map', () => {
-    expect(traceField(MAPS, 'lead_time', 'tickets', { _fields: 'nope' })?.direct).toEqual([
-      { table: 'tickets', column: '_row_id' },
+    expect(traceField(MAPS, 'lead_time', 'any_created', { _fields: 'nope' })?.direct).toEqual([
+      { table: 'entities', column: 'created_at' },
     ]);
   });
 
-  it('follows every source of a row referenced by _row_id', () => {
-    const trace = traceField(MAPS, 'lead_time', 'tickets', {});
-    expect(trace?.columns).toEqual({ tickets: ['_row_id'] });
-    expect(trace?.follows).toEqual({ lead_time: ['tickets'] });
-  });
-
   it('marks a constant column as reading nothing', () => {
-    const trace = traceField(MAPS, 'metadata', 'key', {});
-    expect(trace?.direct).toEqual([]);
-    expect(trace?.follows).toEqual({ metadata: [] });
+    expect(traceField(MAPS, 'entities', 'type', {})?.direct).toEqual([]);
   });
 
   it('returns null without a column map or an undeclared field', () => {
@@ -103,34 +135,64 @@ describe('traceField', () => {
 
   it('lists direct references by table', () => {
     const trace = traceField(MAPS, 'lead_time', 'avg_hours', {});
-    expect(trace && directColumns(trace)).toEqual({ changes: ['created_at', 'merged_at'] });
+    expect(trace && directColumns(trace)).toEqual({
+      entities: ['created_at', 'merged_at'],
+      links: ['_row_id'],
+    });
   });
 });
 
-describe('expandToRaw with field lineage', () => {
-  const GRAPH: Record<string, Record<string, Array<{ table: string; row_id: string }>>> = {
-    lead_time: {
-      '1': [
-        { table: 'tickets', row_id: 't1' },
-        { table: 'changes', row_id: 'c1' },
-      ],
-    },
-    tickets: { t1: [{ table: 'raw.jira_issues', row_id: 'j1' }] },
-    changes: { c1: [{ table: 'raw.github_pulls', row_id: 'p1' }] },
-  };
-  const fetch: FetchSources = async (table, ids) => ids.flatMap(id => GRAPH[table]?.[id] ?? []);
-
-  it('reaches only the raw rows that feed the field', async () => {
-    const trace = traceField(MAPS, 'lead_time', 'avg_hours', {});
-    if (!trace) throw new Error('expected a trace');
-    const { leaves } = await expandToRaw({ lead_time: ['1'] }, fetch, {
-      follow: followFor(trace),
-    });
-    expect(leaves).toEqual({ 'raw.github_pulls': ['p1'] });
+describe('walkField', () => {
+  it('follows a filtered reference to the rows it matches only', async () => {
+    const { hops } = await walk('avg_hours');
+    expect(hops[1]).toEqual({ entities: ['c1'], links: ['l1'] });
   });
 
-  it('reaches every raw row without a field', async () => {
-    const { leaves } = await expandToRaw({ lead_time: ['1'] }, fetch);
+  it('names only the raw fields of the rows a field reads', async () => {
+    // The ticket is reached through the link, as a whole row, but its created field isn't read.
+    const { columns, leaves } = await walk('avg_hours');
+    expect(columns).toEqual({
+      entities: ['created_at', 'merged_at'],
+      links: ['_row_id'],
+      'raw.github_pulls': ['created_at', 'merged_at'],
+    });
+    expect(leaves).toEqual({ 'raw.github_pulls': ['p1'], 'raw.jira_issues': ['j1'] });
+  });
+
+  it('follows a row again only for what it needs beyond what was followed', async () => {
+    // c1 is followed for two columns at hop 1, then whole through the link at hop 2.
+    const { hops } = await walk('avg_hours');
+    expect(hops.slice(2)).toEqual([
+      { entities: ['c1', 't1'], 'raw.github_pulls': ['p1'] },
+      { 'raw.github_pulls': ['p1'], 'raw.jira_issues': ['j1'] },
+    ]);
+  });
+
+  it('reaches only the ticket’s raw row for a ticket field', async () => {
+    const { columns, leaves } = await walk('issue_type');
+    expect(columns).toEqual({
+      entities: ['issue_type'],
+      'raw.jira_issues': ['fields:$.issuetype.name'],
+    });
+    expect(leaves).toEqual({ 'raw.jira_issues': ['j1'] });
+  });
+
+  it('reads each row’s own sources, so an unfiltered column still names only what is reached', async () => {
+    const { columns, leaves } = await walk('any_created');
+    expect(columns['raw.github_pulls']).toEqual(['created_at']);
+    expect(columns['raw.jira_issues']).toEqual(['fields:$.created']);
+    expect(leaves).toEqual({ 'raw.github_pulls': ['p1'], 'raw.jira_issues': ['j1'] });
+  });
+
+  it('stops after the hops it is asked for', async () => {
+    const { hops, leaves } = await walk('avg_hours', {}, 1);
+    expect(hops).toHaveLength(2);
+    expect(leaves).toEqual({});
+  });
+
+  it('follows every source of a column nothing maps', async () => {
+    const values = { _fields: { avg_hours: ['links.unmapped'] } };
+    const { leaves } = await walk('avg_hours', values);
     expect(leaves).toEqual({ 'raw.github_pulls': ['p1'], 'raw.jira_issues': ['j1'] });
   });
 });

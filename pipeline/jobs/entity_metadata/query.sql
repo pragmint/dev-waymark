@@ -64,9 +64,9 @@ ticket_rows as (
     {'key': 'url', 'value': url, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.url']},
     {'key': 'updated_at', 'value': iso_utc(updated_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.updated_at']},
     {'key': 'resolved_at', 'value': iso_utc(resolved_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.resolved_at']},
-    {'key': 'change_count', 'value': cast(change_count as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['entities._row_id', 'ticket_change_links._row_id']},
-    {'key': 'first_change_at', 'value': iso_utc(first_change_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities.created_at', 'ticket_change_links._row_id']},
-    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities.merged_at', 'ticket_change_links._row_id']}
+    {'key': 'change_count', 'value': cast(change_count as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['entities[type=change]._row_id', 'ticket_change_links._row_id']},
+    {'key': 'first_change_at', 'value': iso_utc(first_change_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities[type=change].created_at', 'ticket_change_links._row_id']},
+    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities[type=change].merged_at', 'ticket_change_links._row_id']}
   ]) as m
   from ticket_values
 ),
