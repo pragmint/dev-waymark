@@ -11,6 +11,11 @@ For a sample of each table's rows, a few per distinct `_fields`:
   down. A declared reference that no change affects is a warning: thresholds and `CASE` buckets
   can hide a real dependency, so it may be listed correctly.
 
+  A change can rename the row as well as change it, when its `_row_id` comes from the changed
+  column, as a grouping key's does. The row is then looked for under its new id: the one new row
+  with the same `_sources`. Only when there's none, or no single one, has it gone, as a filter or
+  a join drops it.
+
 It's a test, not a proof. A change the query absorbs, such as a value that isn't the largest in
 a `max()`, hides that dependency.
 """
@@ -275,7 +280,7 @@ class Replay:
         if any(is_raw(t) for t in job.inputs):
             self.con.execute("CREATE SCHEMA raw")
         self.loaded: dict[str, pa.Table | str] = {}
-        self.outputs: OrderedDict[tuple[tuple[str, str], ...], dict[Any, Row]] = OrderedDict()
+        self.outputs: OrderedDict[tuple[tuple[str, str], ...], list[Row]] = OrderedDict()
         self.container_runs = 0
 
     def load(self, table: str, data: pa.Table | str) -> None:
@@ -291,15 +296,24 @@ class Replay:
         self.con.execute(f"CREATE OR REPLACE VIEW {table} AS SELECT * FROM {source}")
         self.loaded[table] = data
 
+    def rows(self) -> list[Row]:
+        """Every row the job writes for the loaded inputs. A change can give two rows one
+        `_row_id`, so they aren't keyed by it."""
+        if self.job.kind == "container":
+            return self.container_rows()
+        cursor = self.con.execute(f"SELECT * FROM (\n{self.job.sql}\n)")
+        names = [d[0] for d in cursor.description]
+        return [dict(zip(names, v)) for v in cursor.fetchall()]
+
     def row(self, row_id: int) -> Row | None:
         if self.job.kind == "container":
-            return self.container_rows().get(row_id)
+            return next((r for r in self.container_rows() if r["_row_id"] == row_id), None)
         cursor = self.con.execute(f"SELECT * FROM (\n{self.job.sql}\n) WHERE _row_id = ?", [row_id])
         values = cursor.fetchone()
         return dict(zip([d[0] for d in cursor.description], values)) if values else None
 
-    def container_rows(self) -> dict[Any, Row]:
-        """Every row the container writes for the loaded inputs, by `_row_id`."""
+    def container_rows(self) -> list[Row]:
+        """Every row the container writes for the loaded inputs."""
         key = tuple(sorted((table, fingerprint(data)) for table, data in self.loaded.items()))
         if key in self.outputs:
             self.outputs.move_to_end(key)
@@ -308,18 +322,22 @@ class Replay:
         self.container_runs += 1
         cursor = self.con.execute("SELECT * FROM replay_result")
         names = [d[0] for d in cursor.description]
-        rows = {row["_row_id"]: row for row in (dict(zip(names, v)) for v in cursor.fetchall())}
+        rows = [dict(zip(names, v)) for v in cursor.fetchall()]
         self.outputs[key] = rows
         if len(self.outputs) > CONTAINER_CACHE_SIZE:
             self.outputs.popitem(last=False)
         return rows
 
-    def row_with(self, row_id: int, table: str, data: pa.Table) -> Row | None:
-        """The row with one input swapped for `data`, leaving the other inputs as they were."""
+    def row_with(
+        self, row_id: int, table: str, data: pa.Table, renamed: Callable[[], Row | None]
+    ) -> tuple[Row | None, bool]:
+        """The row with one input swapped for `data`, leaving the other inputs as they were, and
+        whether it lost its `_row_id`. `renamed` finds it, with `data` still loaded, when it did."""
         previous = self.loaded[table]
         self.load(table, data)
         try:
-            return self.row(row_id)
+            row = self.row(row_id)
+            return (row, False) if row is not None else (renamed(), True)
         finally:
             self.load(table, previous)
 
@@ -357,6 +375,8 @@ class RowCheck:
         self.inputs = inputs
         self.outputs = [c for c in stored if c not in CONTRACT_COLUMNS]
         self.baseline: Row = {}
+        # The ids of every row the replay writes before any change, to tell a renamed row apart.
+        self.baseline_ids: set[Any] = set()
         # What this row says each of its values is computed from.
         self.refs: dict[str, list[str]] = dict(stored.get("_fields") or {})
 
@@ -368,6 +388,7 @@ class RowCheck:
         if differences or baseline is None:
             return [Finding("error", "replay", None, self.replay_failure(differences))]
         self.baseline = baseline
+        self.baseline_ids = {row["_row_id"] for row in self.replay.rows()}
         return self.perturb()
 
     def replay_failure(self, differences: list[str]) -> str:
@@ -383,18 +404,32 @@ class RowCheck:
         return f"{detail}; no single input table in full reproduces it"
 
     def changed(self, table: str, perturbed: Callable[[str], pa.Table]) -> tuple[set[str], bool]:
-        """The output columns that change, over every kind, and whether the row ever disappeared.
+        """The output columns that change, over every kind, and whether the row ever lost its id.
 
-        A row that disappears depends on the input for its existence, as a filter or join does."""
+        A row that loses its id depends on the input for its identity, or for its existence when
+        it's gone altogether, as a filter or join drops it. One that was renamed still has values
+        to compare."""
         changed: set[str] = set()
         vanished = False
         for kind in KINDS:
-            row = self.replay.row_with(self.row_id, table, perturbed(kind))
-            if row is None:
-                vanished = True
-                continue
-            changed |= {o for o in self.outputs if not same(row[o], self.baseline[o])}
+            row, lost_id = self.replay.row_with(self.row_id, table, perturbed(kind), self.renamed)
+            vanished |= lost_id
+            if row is not None:
+                changed |= {o for o in self.outputs if not same(row[o], self.baseline[o])}
         return changed, vanished
+
+    def renamed(self) -> Row | None:
+        """The row under a new `_row_id`: the one new row built from the same input rows, and
+        failing that, the one of those that also reads the same columns. None when it's gone."""
+        sources = source_set(self.baseline)
+        candidates = [
+            row
+            for row in self.replay.rows()
+            if row["_row_id"] not in self.baseline_ids and source_set(row) == sources
+        ]
+        if len(candidates) > 1:
+            candidates = [r for r in candidates if same(r["_fields"], self.baseline["_fields"])]
+        return candidates[0] if len(candidates) == 1 else None
 
     def json_changed(
         self,

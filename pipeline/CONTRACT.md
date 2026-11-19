@@ -203,7 +203,10 @@ finds an error. For a few rows per distinct `_fields`, it re-runs the job on onl
 the row's `_sources` and expects the same row back, then changes each input column of those rows
 in turn: every output column that changes must name that input in the row's `_fields`. A filtered
 reference covers only the rows it matches, so the column is then changed in the other rows alone,
-and the output must stay the same. It is a
+and the output must stay the same. A change to a column the `_row_id` is built from, such as a
+grouping key, renames the row; verify then compares the one new row built from the same `_sources`,
+so a group key's own value must be declared like any other. Only a row that no longer appears at
+all (a filter or join dropped it) counts as depending on the input to exist. It is a
 test, not a proof: a change the query absorbs, such as a value that isn't the largest in a
 `max()`, hides that dependency. `--no-verify` skips it.
 

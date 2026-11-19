@@ -181,3 +181,38 @@ def test_warns_about_a_filtered_reference_whose_rows_nothing_reads(run_root):
     assert details(verify(run_root, job)) == {
         ("unused", "total", "never changed by raw.items[name=three].size")
     }
+
+
+def grouped_job(columns: dict[str, list[str]]) -> Job:
+    """One row per name, identified by it: changing a name renames the row."""
+    return Job(
+        "by_name",
+        ("raw.items",),
+        "select stable_id('by_name', name) as _row_id, "
+        "list(source_ref('raw.items', _dlt_id)) as _sources, "
+        f"{fields(columns)}, "
+        "name, sum(size) as total from raw.items group by name",
+    )
+
+
+def test_a_grouping_key_declared_correctly_passes(run_root):
+    job = grouped_job({"name": ["raw.items.name"], "total": ["raw.items.size"]})
+    assert details(verify(run_root, job)) == set()
+
+
+def test_reports_a_grouping_key_its_fields_leave_out(run_root):
+    # Changing name gives the row a new _row_id; verify follows it there rather than taking
+    # the row's absence as a dependency of its existence.
+    job = grouped_job({"name": [], "total": ["raw.items.size"]})
+    assert details(verify(run_root, job)) == {
+        ("undeclared", "name", "changes with raw.items.name")
+    }
+
+
+def test_a_row_a_filter_drops_is_still_not_a_value_change(run_root):
+    # Changing size drops the row from the output altogether: no row with its sources is left,
+    # so it counts as the row depending on size to exist, as before.
+    job = item_job("big", "name", {"name": ["raw.items.name"]}).sql.replace(
+        "from raw.items", "from raw.items where size >= 10"
+    )
+    assert details(verify(run_root, Job("big", ("raw.items",), job))) == set()

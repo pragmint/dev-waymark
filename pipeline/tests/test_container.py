@@ -271,6 +271,29 @@ def test_verify_catches_an_input_a_container_job_reads_but_does_not_declare(
     assert ("undeclared", "name_length", "changes with entities.name") in errors
 
 
+def test_verify_follows_a_container_row_that_a_change_renames(
+    tmp_path: Path, fake_docker: FakeDocker
+):
+    # The row's _row_id hashes type, so changing type renames it; type still has to be declared.
+    renamed = """
+        select
+          (hash(type) & 9007199254740991)::bigint as _row_id,
+          list({'table': 'entities', 'row_id': cast(_row_id as varchar)}) as _sources,
+          map {'type': [], 'entities': ['entities._row_id']} as _fields,
+          type,
+          count(*) as entities
+        from entities group by type
+    """
+    snap = typed_snapshot(tmp_path / "bucket")
+    container_job(tmp_path / "jobs", "counts", fake_docker.image(renamed))
+    jobs = {job.name: job for job in load_jobs([JOBS_DIR, tmp_path / "jobs"])}
+    assert run_jobs(list(jobs.values()), CLIENT, snap)["counts"] == "built"
+
+    _, found = verify_job(jobs["counts"], CLIENT, snap, per_branch=1)
+    errors = {(f.check, f.column, f.detail) for f in found if f.level == "error"}
+    assert errors == {("undeclared", "type", "changes with entities.type")}
+
+
 # ── The TypeScript example, in a real container ───────────────────────────────
 
 

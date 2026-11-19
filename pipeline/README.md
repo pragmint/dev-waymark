@@ -314,7 +314,8 @@ uv run python verify.py \
 For a sample of rows (`--rows-per-branch`, default 2, per distinct `_fields`), it re-runs the job
 on only the rows in the row's `_sources` and expects the same row back. Then it changes each input
 column of those rows in turn and checks that every output column that changes names that input in
-the row's `_fields`. Add `--job <name>` to check one job. It exits non-zero on an error; warnings
+the row's `_fields`. When a change renames the row, because its `_row_id` comes from that column
+as a grouping key's does, it follows the row to its new id. Add `--job <name>` to check one job. It exits non-zero on an error; warnings
 mark references no change affected, which can be correct for a filter or a threshold.
 
 It replays the job's current files, so it won't check a job whose files changed since the snapshot
