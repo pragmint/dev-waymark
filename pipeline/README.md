@@ -12,6 +12,209 @@ in [CONTRACT.md](CONTRACT.md#snapshot-layout)):
   `<snapshot_id>.changes.parquet` beside it
 - `<bucket>/snapshots/<snapshot_id>.json` and `<bucket>/latest.json`
 
+This README is in three parts: a [quick start](#quick-start), a [reference](#reference) for the
+commands, environment variables and client config, and then [how each step works](#run-it).
+
+## Quick start
+
+You need `uv` (`devenv shell` provides it) and the GitHub CLI for a token. The Kafka client's Jira
+is public, so it needs no Jira credentials. From this directory:
+
+```sh
+uv sync
+export BUCKET=file:///tmp/waymark-bucket
+```
+
+**1. Extract.** `--max-pages 1` fetches one page from each source, which takes a few seconds:
+
+```sh
+GITHUB_TOKEN=$(gh auth token) uv run python extract.py \
+  --client clients/apache-kafka.toml --bucket-url $BUCKET --full --max-pages 1
+```
+
+It ends by printing the run's id, `run_id=20261119T165653Z` for example.
+
+**2. Build a snapshot.** This runs every job, verifies each table's lineage and publishes the
+snapshot, in about 35 seconds:
+
+```sh
+uv run python runner.py \
+  --client clients/apache-kafka.toml --bucket-url $BUCKET --run-id <run_id>
+```
+
+```
+entities: 200 rows (no base to compare)
+ticket_change_links: 0 rows (no base to compare)
+entity_metadata: 2171 rows (no base to compare)
+lead_time_by_issue_type: 0 rows (no base to compare)
+entities: 4 rows checked in 2.7s, ok
+...
+published snapshot 20261119T165702Z
+```
+
+One page fetches the oldest 100 Kafka tickets and the newest 100 pull requests, so nothing links
+them and `lead_time_by_issue_type` is empty. Leave out `--max-pages` for the whole project.
+
+**3. Trace a value.** Pick a ticket, then trace its summary back to the raw Jira record:
+
+```sh
+uv run python -c "import duckdb; print(duckdb.sql(\"select _row_id, summary
+  from '/tmp/waymark-bucket/tables/entities/*.parquet' where type = 'ticket' limit 3\"))"
+
+uv run python trace.py \
+  --bucket-url $BUCKET --table entities --row-id <_row_id> --field summary
+```
+
+```
+summary = 'The log4j appender still uses the SyncProducer API'
+  computed from: raw.jira_issues.fields:$.summary
+hop 0: entities                      1 rows  (_row_id 969896219318802, ...)
+hop 1: raw.jira_issues               1 rows  (_dlt_id tGSOsjnp2p8ZQg, ...)
+raw field: raw.jira_issues.fields:$.summary  e.g. The log4j appender still uses the SyncProducer API
+```
+
+**4. Add a job.** A job is a folder named after the table it writes, holding `job.toml` and
+`query.sql` ([CONTRACT.md](CONTRACT.md#jobs) has the rules). Try one in a scratch folder:
+
+```sh
+mkdir -p /tmp/my-jobs/tickets_by_status_group
+cat > /tmp/my-jobs/tickets_by_status_group/job.toml <<'EOF'
+description = "How many tickets are in each status group."
+inputs = ["entities"]
+EOF
+cat > /tmp/my-jobs/tickets_by_status_group/query.sql <<'EOF'
+select
+  stable_id('tickets_by_status_group', coalesce(status_group, '')) as _row_id,
+  list(source_ref('entities', _row_id)) as _sources,
+  map {
+    'status_group': ['entities.status_group'],
+    'tickets': ['entities._row_id']
+  } as _fields,
+  status_group,
+  count(*) as tickets
+from entities
+where type = 'ticket'
+group by status_group
+order by status_group
+EOF
+uv run python runner.py \
+  --client clients/apache-kafka.toml --bucket-url $BUCKET --run-id <run_id> \
+  --job-dir /tmp/my-jobs
+```
+
+Each row lists the `entities` rows it counts in `_sources`, and in `_fields` the columns each
+value reads: `status_group` reads `entities.status_group`, and `tickets` counts rows, so it names
+their identity. The runner orders jobs by their inputs and checks the output against the contract.
+To keep a job, move its folder into `clients/<client>/jobs/`, or into `jobs/` for every client.
+
+**5. See verify catch a mistake.** Add `max(resolved_at) as latest_resolved_at` to the select and
+declare it as reading nothing, `'latest_resolved_at': []`. Build again with `--no-publish`. The
+runner exits 1:
+
+```
+tickets_by_status_group: 1 rows checked in 0.2s, 1 errors
+  error   undeclared latest_resolved_at: changes with entities.resolved_at  (1 rows, ...)
+```
+
+Verify re-ran the job with `entities.resolved_at` changed, saw `latest_resolved_at` change, and
+found no reference to that column in `_fields`.
+
+**6. View it in Waymark.** From the repo root, then open an entity and follow its lineage links:
+
+```sh
+DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket bun dev
+```
+
+## Reference
+
+### Commands
+
+Run each from this directory with `uv run python <script>`. Every `--bucket-url` takes `file://`,
+`s3://` or `az://` ([S3 and Azure](#s3-and-azure)). `--client` is a client config such as
+`clients/apache-kafka.toml` ([Client config](#client-config)).
+
+**`extract.py`** fetches GitHub and Jira into `raw/` and records the run. It prints `run_id=<id>`.
+
+| Flag                 | Default          | Meaning                                                              |
+| -------------------- | ---------------- | -------------------------------------------------------------------- |
+| `--client`           |                  | Client config. Required unless `--adopt-run` or `--break-lock`.      |
+| `--bucket-url`       | required         | Bucket to write to.                                                  |
+| `--run-id`           | current UTC time | Id of this run, `YYYYMMDDTHHMMSSZ`.                                  |
+| `--full`             | off              | Fetch everything. Without it, fetch what changed since the last run. |
+| `--max-pages N`      | no limit         | Stop each source after N pages. The run is marked limited.           |
+| `--adopt-run RUN_ID` |                  | Record a full run extracted before run records existed, then stop.   |
+| `--break-lock`       | off              | Remove the lock a crashed extract left behind, then stop.            |
+
+**`runner.py`** builds a snapshot from a run, verifies it, and moves `latest.json` to it. It exits
+non-zero if any job fails to build or verify.
+
+| Flag            | Default          | Meaning                                                             |
+| --------------- | ---------------- | ------------------------------------------------------------------- |
+| `--client`      | required         | Client config.                                                      |
+| `--bucket-url`  | required         | Bucket to read raw from and write the snapshot to.                  |
+| `--run-id`      | required         | Run to build from, as `extract.py` printed it.                      |
+| `--snapshot-id` | current UTC time | Id of the new snapshot.                                             |
+| `--job-dir DIR` |                  | Another folder of jobs, replacing the client's by name. Repeatable. |
+| `--no-verify`   | off              | Skip the lineage check.                                             |
+| `--no-publish`  | off              | Save the snapshot but leave `latest.json` alone.                    |
+
+**`verify.py`** re-checks the lineage of a snapshot that `runner.py` built. It exits non-zero on
+any error; warnings don't fail it.
+
+| Flag                  | Default   | Meaning                                                 |
+| --------------------- | --------- | ------------------------------------------------------- |
+| `--client`            | required  | Client config.                                          |
+| `--bucket-url`        | required  | Bucket holding the snapshot.                            |
+| `--snapshot-id`       | published | Snapshot to check.                                      |
+| `--job NAME`          | all jobs  | Check only this job. Repeatable.                        |
+| `--job-dir DIR`       |           | The same extra job folders the snapshot was built with. |
+| `--rows-per-branch N` | 2         | Rows to check per distinct `_fields` in each table.     |
+
+**`trace.py`** prints the rows, hop by hop, that a row or one of its values was built from.
+
+| Flag            | Default   | Meaning                      |
+| --------------- | --------- | ---------------------------- |
+| `--bucket-url`  | required  | Bucket holding the snapshot. |
+| `--snapshot-id` | published | Snapshot to read.            |
+| `--table`       | required  | Table the row is in.         |
+| `--row-id`      | required  | The row's `_row_id`.         |
+| `--field`       | whole row | Trace only this column.      |
+
+**Tests:** `uv run pytest` runs the pipeline tests (about 80 seconds). The container example has
+its own: `cd containers/lead-time && bun test`. Both run in the pre-commit hook when a commit
+touches `pipeline/` (see the repo's `bun install-hooks`).
+
+### Environment variables
+
+| Variable                                                   | Read by                  | Meaning                                                                                |
+| ---------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`                                             | `extract.py`             | Required. `gh auth token` works.                                                       |
+| `JIRA_EMAIL`, `JIRA_API_TOKEN`                             | `extract.py`             | Required for Jira Cloud. On Jira Server the token is optional, sent as a bearer token. |
+| `AWS_*`, `AWS_ENDPOINT_URL`                                | every script             | S3 credentials, region and endpoint ([S3 and Azure](#s3-and-azure)).                   |
+| `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT` | every script             | Azure credentials ([S3 and Azure](#s3-and-azure)).                                     |
+| `WAYMARK_DOCKER`                                           | `runner.py`, `verify.py` | Container runtime for container jobs. Default `docker`.                                |
+
+### Client config
+
+A client is one TOML file in `clients/`, plus its own jobs in `clients/<client>/jobs/`.
+[`clients/apache-kafka.toml`](clients/apache-kafka.toml) is a complete example.
+
+| Key                          | Meaning                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `client`                     | The client's name. Names its jobs folder and namespaces every `_row_id`.                                         |
+| `github.repos`               | Repositories to fetch pull requests from, as `owner/name`.                                                       |
+| `jira.flavor`                | `server` for Jira Server or Data Center, `cloud` for `*.atlassian.net`.                                          |
+| `jira.base_url`              | Jira's base URL.                                                                                                 |
+| `jira.jql`                   | Which issues to fetch. Order by a stable field, such as `key`, so paging can't skip issues.                      |
+| `mapping.ticket_key_pattern` | Regex for a ticket key in pull request text, uppercase, such as `KAFKA-[0-9]+`.                                  |
+| `[mapping.statuses]`         | Jira status to status group, such as `"In Review" = "In Progress"`. An unlisted status uses Jira's own category. |
+| `[[mapping.jira_fields]]`    | Extra Jira fields to keep as entity metadata, one table per field (below).                                       |
+
+Each `[[mapping.jira_fields]]` entry has a `key` (the metadata name: lowercase letters, digits and
+`_`), a `path` into the issue's `fields` JSON (`$.votes.votes`) and a `value_type` (`string`,
+`number`, `date` or `boolean`). Jobs see all of this as `params` tables and variables
+([CONTRACT.md](CONTRACT.md#jobs)), and container jobs as `WAYMARK_PARAMS`.
+
 ## Run it
 
 Inside `devenv shell` (which provides `uv`), from this directory:

@@ -62,6 +62,16 @@ Set `DEV_WAYMARK_SOURCE_DB_SEED` to opt into automatic schema + seed management 
 
 Any value other than `none` TRUNCATES the source on every start — never point at a real source DB.
 
+### Data pipeline
+
+[`pipeline/`](pipeline/README.md) is a separate Python project that extracts GitHub and Jira and builds the `entities` and `entity_metadata` tables (and any client-specific tables) as Parquet snapshots in a bucket, with row-level lineage back to the raw records. Point the DuckDB adapter at the bucket to read it:
+
+```bash
+DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket bun dev
+```
+
+Lineage pages live at `/lineage/<table>/<_row_id>`. Start with the pipeline's [quick start](pipeline/README.md#quick-start); [`pipeline/CONTRACT.md`](pipeline/CONTRACT.md) defines the tables it writes.
+
 ### App-state database
 
 Dev Waymark owns and manages the app-state database schema. Migrations run automatically at startup via `appStateRepo.initialize()`. To run them explicitly without starting the server:
@@ -190,7 +200,7 @@ Application state writes flow through `AppStateRepository`, never through the so
 - **`src/domain/`** — Pure business logic.
 - **`src/schemas/`** — Shared Zod schemas and inferred types.
 - **`src/frontend/`** — JSX page/component templates and client-side scripts.
-- **`pipelines/`** — Development utilities (seed, fixture generation). Not part of app startup.
+- **`pipeline/`** — The Python data pipeline that builds the source tables. Separate from the app; see [Data pipeline](#data-pipeline).
 
 ### Adding a new source adapter
 
