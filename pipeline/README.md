@@ -29,7 +29,7 @@ commands, environment variables and client config, and then [how each step works
    client's Jira is public, so it needs no Jira credentials.
 
 Without devenv, install `uv`, `gh` and `duckdb` yourself and run `uv sync` in `pipeline/`; `uv`
-downloads a matching Python. Either way, check the setup with the tests (about 90 seconds):
+downloads a matching Python. Either way, check the setup with the tests (about 100 seconds):
 
 ```sh
 cd pipeline
@@ -138,11 +138,14 @@ tickets_by_status_group: 1 rows checked in 0.2s, 1 errors
 Verify re-ran the job with `entities.resolved_at` changed, saw `latest_resolved_at` change, and
 found no reference to that column in `_fields`.
 
-**6. View it in Waymark.** From the repo root, then open an entity and follow its lineage links:
+**6. View it in Waymark.** From the repo root, then open an entity and follow its lineage links.
+On a fresh clone, run `bun install` and `bun b` once first:
 
 ```sh
 DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket bun dev
 ```
+Next, the [job registry](#job-registry) runs the same jobs from the bucket instead of this repo.
+
 
 ## Reference
 
@@ -171,7 +174,7 @@ registry, optional) before it, and exits non-zero if a build or verify fails.
 | Command               | Meaning                                                                                                                |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `run`                 | Extract, build every active job, verify, publish. Reuses each table that would come out the same as the published one. |
-| `run --extract full`  | The same with a full extract; `--extract none` builds the last run (or `--run-id`) without extracting.                 |
+| `run --extract full`  | The same with a full extract; `--extract none` builds the last complete run (or `--run-id`) without extracting.        |
 | `run --rebuild`       | Build every table, reusing nothing.                                                                                    |
 | `preview JOB VERSION` | Build the last run with one job at another version. Saved, never published. `VERSION` can be a job folder to push.     |
 | `promote JOB VERSION` | A preview, then make the version active if it passed. `--shared` promotes in the shared registry.                      |
@@ -224,7 +227,7 @@ any error; warnings don't fail it.
 | `--row-id`      | required  | The row's `_row_id`.         |
 | `--field`       | whole row | Trace only this column.      |
 
-**Tests:** `uv run pytest` runs the pipeline tests (about 95 seconds). The container example has
+**Tests:** `uv run pytest` runs the pipeline tests (about 100 seconds). The container example has
 its own: `cd containers/lead-time && bun test`. Both run in the pre-commit hook when a commit
 touches `pipeline/` (see the repo's `bun install-hooks`).
 
@@ -375,23 +378,35 @@ hash the manifest records beside each table, so a snapshot names the exact code 
 `jobs/<name>/active` names the version that runs.
 
 A client's jobs are the shared registry's active jobs, with the client's own replacing them by
-name. Seed both from this repo, then run:
+name. To try it on the [quick start](#quick-start)'s bucket, give the shared registry a folder of
+its own, seed both from this repo, then run:
 
 ```sh
-registry.py --bucket-url "$SHARED" push --activate jobs
-registry.py --bucket-url "$BUCKET" push --activate clients/apache-kafka/jobs
-orchestrate.py --client clients/apache-kafka.toml --bucket-url "$BUCKET" --shared-url "$SHARED" \
-  run --extract none
+export SHARED=file:///tmp/waymark-shared
+uv run python registry.py --bucket-url "$SHARED" push --activate jobs
+uv run python registry.py --bucket-url "$BUCKET" push --activate clients/apache-kafka/jobs
+uv run python orchestrate.py --client clients/apache-kafka.toml \
+  --bucket-url "$BUCKET" --shared-url "$SHARED" run --extract none --run-id <run_id>
 ```
+
+`--extract none` builds the last complete run without extracting. The quick start's run was
+limited by `--max-pages`, so it never counts as the last and has to be named with `--run-id`;
+leave that out once the bucket has a full run. The jobs are the versions `runner.py` built with,
+so every table is reused.
 
 To change a job, promote a new version. `promote` builds the last extract with that version swapped
 in, reusing every table it doesn't affect, and verifies it. It moves `active` only if that passed,
-and the next `run` publishes it:
+and the next `run` publishes it. The job from quick start step 5 still fails verify, so promoting
+it is refused; declare `'latest_resolved_at': ['entities.resolved_at']` and promote it again:
 
 ```sh
-orchestrate.py --client clients/apache-kafka.toml --bucket-url "$BUCKET" --shared-url "$SHARED" \
-  promote lead_time_by_issue_type path/to/lead_time_by_issue_type
+uv run python orchestrate.py --client clients/apache-kafka.toml \
+  --bucket-url "$BUCKET" --shared-url "$SHARED" \
+  promote tickets_by_status_group /tmp/my-jobs/tickets_by_status_group --run-id <run_id>
 ```
+
+A job folder in place of a version is pushed to the client's registry first (`--shared` pushes and
+promotes in the shared one).
 
 `preview` does the same build without moving `active`. Its snapshot is saved under
 `snapshots/preview-*.json` and never published; its change files are the diff against what's live.

@@ -237,17 +237,22 @@ def load_run(root: str, run_id: str) -> Run:
     return run_from_record(read_json(url))
 
 
-def last_run(root: str) -> Run | None:
-    """The run an incremental run builds on: the most recently started finished run that
-    fetched everything it was asked to."""
+def finished_runs(root: str) -> list[Run]:
+    """Every run under `root` that wrote its record, limited or not, in no particular order."""
     fs, base = filesystem(join(root, "runs"))
     if not fs.exists(base):
-        return None
+        return []
     runs = []
     for path in fs.glob(f"{base.rstrip('/')}/*.json"):
         with fs.open(path, "r") as file:
             runs.append(run_from_record(json.load(file)))
-    complete = [run for run in runs if not run.limited]
+    return runs
+
+
+def last_run(root: str) -> Run | None:
+    """The run an incremental run builds on: the most recently started finished run that
+    fetched everything it was asked to."""
+    complete = [run for run in finished_runs(root) if not run.limited]
     return max(complete, key=lambda run: (run.started_at, run.id), default=None)
 
 

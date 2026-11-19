@@ -188,6 +188,19 @@ def test_run_builds_the_last_extract_from_the_registry_then_reuses_it(bucket: Bu
     assert snapshots.published(bucket.root, {}).id == "s2"
 
 
+def test_a_limited_run_is_built_only_by_name(tmp_path: Path):
+    root = tmp_path / "client"
+    write_raw(root, "jira_issues", ISSUES)
+    write_raw(root, "github_pulls", TYPED_PULLS)
+    snapshots.save_run(str(root), Run(RUN, "full", "2026-01-10T00:00:00Z", (RUN,), limited=True))
+    limited = Bucket(str(root), None, {})
+    with pytest.raises(ValueError, match=f"is limited.*--run-id {RUN}"):
+        run(CLIENT, limited, extract="none")
+    registry.activate(str(root), "entities", registry.push(str(root), JOBS_DIR / "entities"))
+    built = run(CLIENT, limited, extract="none", run_id=RUN, snapshot_id="s1")
+    assert built is not None and snapshots.published(str(root), {}).id == "s1"
+
+
 def test_run_refuses_an_empty_registry(tmp_path: Path, bucket: Bucket):
     empty = Bucket(bucket.root, str(tmp_path / "nothing"), {})
     with pytest.raises(ValueError, match="No active jobs"):

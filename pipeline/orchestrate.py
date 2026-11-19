@@ -63,9 +63,16 @@ def extract_run(client: Mapping[str, Any], bucket: Bucket, kind: str, run_id: st
     if run_id:
         return snapshots.load_run(bucket.root, run_id)
     last = snapshots.last_run(bucket.root)
-    if last is None:
-        raise ValueError(f"No finished extract run under {bucket.root}; run with --extract full")
-    return last
+    if last is not None:
+        return last
+    limited = sorted(run.id for run in snapshots.finished_runs(bucket.root) if run.limited)
+    if limited:
+        # A --max-pages run can be built, but only by name: it never stands in for "the last".
+        raise ValueError(
+            f"Every finished run under {bucket.root} is limited (--max-pages), so there is no last"
+            f" run to build; pass --run-id {limited[-1]}, or run with --extract full"
+        )
+    raise ValueError(f"No finished extract run under {bucket.root}; run with --extract full")
 
 
 def start(bucket: Bucket, run: Run, snapshot_id: str) -> Snapshot:
