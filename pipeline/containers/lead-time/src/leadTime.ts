@@ -1,5 +1,5 @@
 // Hours from a ticket's first pull request opening to its last one merging, by issue type: the
-// same table as the SQL job clients/apache-kafka/jobs/lead_time_by_issue_type, in TypeScript.
+// same table as the SQL job in reference/lead_time_by_issue_type, in TypeScript.
 import { type Fields, type SourceRef, sourceRef, stableId } from './contract';
 
 export const TABLE = 'lead_time_by_issue_type';

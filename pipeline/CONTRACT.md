@@ -118,7 +118,7 @@ inputs = ["entities", "ticket_change_links"]
   were.
 
 `containers/lead-time/` is an example: a TypeScript job, tested with `bun test`, that produces the
-same table as the SQL job `clients/apache-kafka/jobs/lead_time_by_issue_type`.
+same table as the SQL job in `containers/lead-time/reference/lead_time_by_issue_type`.
 
 ## Column lineage
 

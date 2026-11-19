@@ -66,7 +66,9 @@ ticket_rows as (
     {'key': 'resolved_at', 'value': iso_utc(resolved_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.resolved_at']},
     {'key': 'change_count', 'value': cast(change_count as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['entities[type=change]._row_id', 'ticket_change_links._row_id']},
     {'key': 'first_change_at', 'value': iso_utc(first_change_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities[type=change].created_at', 'ticket_change_links._row_id']},
-    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities[type=change].merged_at', 'ticket_change_links._row_id']}
+    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities[type=change].merged_at', 'ticket_change_links._row_id']},
+    -- First pull request opened to last one merged; none until one has merged.
+    {'key': 'lead_time_hours', 'value': cast(round(date_diff('minute', first_change_at, last_merged_at) / 60.0, 2) as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['entities[type=change].created_at', 'entities[type=change].merged_at', 'ticket_change_links._row_id']}
   ]) as m
   from ticket_values
 ),

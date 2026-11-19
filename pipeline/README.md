@@ -65,14 +65,13 @@ uv run python runner.py \
 entities: 200 rows (no base to compare)
 ticket_change_links: 0 rows (no base to compare)
 entity_metadata: 2171 rows (no base to compare)
-lead_time_by_issue_type: 0 rows (no base to compare)
 entities: 4 rows checked in 2.7s, ok
 ...
 published snapshot 20261119T165702Z
 ```
 
 One page fetches the oldest 100 Kafka tickets and the newest 100 pull requests, so nothing links
-them and `lead_time_by_issue_type` is empty. Leave out `--max-pages` for the whole project.
+them and no ticket has a `lead_time_hours` yet. Leave out `--max-pages` for the whole project.
 
 **3. Trace a value.** Pick a ticket, then trace its summary back to the raw Jira record:
 
@@ -144,8 +143,8 @@ On a fresh clone, run `bun install` and `bun b` once first:
 ```sh
 DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket bun dev
 ```
-Next, the [job registry](#job-registry) runs the same jobs from the bucket instead of this repo.
 
+Next, the [job registry](#job-registry) runs the same jobs from the bucket instead of this repo.
 
 ## Reference
 
@@ -321,26 +320,27 @@ Trace any row back to raw records:
 ```sh
 uv run python trace.py \
   --bucket-url file:///tmp/waymark-bucket \
-  --table lead_time_by_issue_type --row-id <_row_id>
+  --table entity_metadata --row-id <_row_id>
 ```
 
 Add `--field <column>` to trace one value instead of the whole row. Each row it reaches carries
 the columns the value needs from it, so it follows only the sources those columns read, and a
 filtered reference such as `entities[type=change].created_at` only the rows it matches. It ends
-with the raw fields the value comes from:
+with the raw fields the value comes from. Here, one ticket's `lead_time_hours` (first pull request
+opened to last one merged), which Waymark averages by issue type:
 
 ```
-avg_lead_time_hours = 1520.1
+value = '3891.08'
   computed from: entities[type=change].created_at, entities[type=change].merged_at, ticket_change_links._row_id
-hop 0: lead_time_by_issue_type       1 rows  (_row_id 8767488532554951, ...)
-hop 1: entities                    596 rows  (_row_id 100161251620229, ...)
-hop 1: ticket_change_links         602 rows  (_row_id 1013311773604307, ...)
-hop 2: entities                    983 rows  (_row_id 100161251620229, ...)
-hop 2: raw.github_pulls            596 rows  (_dlt_id +Bhct76HSdz/fA, ...)
-hop 3: raw.github_pulls            596 rows  (_dlt_id +Bhct76HSdz/fA, ...)
-hop 3: raw.jira_issues             387 rows  (_dlt_id +5YaqEoUfFLz8Q, ...)
-raw field: raw.github_pulls.created_at  e.g. 2021-02-04 20:57:09+00:00, ...
-raw field: raw.github_pulls.merged_at  e.g. 2021-03-18 14:27:14+00:00, ...
+hop 0: entity_metadata               1 rows  (_row_id 3572569723684, ...)
+hop 1: entities                      2 rows  (_row_id 2182115343763313, 3872359700894120, ...)
+hop 1: ticket_change_links           2 rows  (_row_id 1416744253821264, 4137821165026380, ...)
+hop 2: entities                      3 rows  (_row_id 2182115343763313, 3872359700894120, 5014142668220981, ...)
+hop 2: raw.github_pulls              2 rows  (_dlt_id Y9gwCX5Q7teYUA, vMuArjeHZV8YgQ, ...)
+hop 3: raw.github_pulls              2 rows  (_dlt_id Y9gwCX5Q7teYUA, vMuArjeHZV8YgQ, ...)
+hop 3: raw.jira_issues               1 rows  (_dlt_id CDdkn9Wo6CfC3w, ...)
+raw field: raw.github_pulls.created_at  e.g. 2026-01-21 05:49:42+00:00, 2026-08-03 05:10:54+00:00
+raw field: raw.github_pulls.merged_at  e.g. 2026-07-02 08:54:28+00:00, None
 ```
 
 Hop 1 reaches only the pull requests. A link's `_row_id` stands for the whole link, which
@@ -413,7 +413,7 @@ promotes in the shared one).
 
 On the Kafka demo bucket, the first `run` from the registry builds everything (62 s). A second
 `run` with nothing new reuses every table (0.3 s), and promoting a new version of
-`lead_time_by_issue_type` builds and verifies only that table (4 s).
+`entity_metadata` builds and verifies only that table (51 s; it's the largest).
 
 ## Container jobs
 
@@ -422,8 +422,10 @@ A job can be a container image in place of a query, for logic that needs real co
 runs it with `docker` (or the command in `WAYMARK_DOCKER`), with no network. Its output gets the
 same checks and verification as a SQL job's.
 
-`containers/lead-time/` is a TypeScript example. It computes `lead_time_by_issue_type` with the
-same rows, `_sources` and `_fields` as the Kafka SQL job:
+`containers/lead-time/` is a TypeScript example. It computes `lead_time_by_issue_type`, average
+and median lead time per issue type, with the same rows, `_sources` and `_fields` as the SQL job
+in `containers/lead-time/reference/` (no client runs that one: Waymark charts each ticket's
+`lead_time_hours` instead):
 
 ```sh
 cd containers/lead-time && bun install && bun test && cd ../..
@@ -435,8 +437,8 @@ uv run python runner.py \
   --job-dir /tmp/ts-jobs
 ```
 
-`--job-dir` adds a folder of jobs after the client's, replacing theirs by name, so the container
-job replaces the SQL one. `verify.py` takes the same `--job-dir`, so it checks the job the
+`--job-dir` adds a folder of jobs after the client's, replacing theirs by name; here it adds a
+table no other job writes. `verify.py` takes the same `--job-dir`, so it checks the job the
 snapshot was built with.
 
 ## S3 and Azure

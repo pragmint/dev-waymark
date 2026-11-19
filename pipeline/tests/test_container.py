@@ -13,7 +13,6 @@ import container
 import snapshot as snapshots
 import verify
 from runner import (
-    CLIENTS_DIR,
     COLUMNS_METADATA_KEY,
     JOBS_DIR,
     build_order,
@@ -307,7 +306,7 @@ def docker_available() -> bool:
 def test_the_typescript_lead_time_job_matches_the_sql_job(tmp_path: Path):
     ts_jobs = tmp_path / "ts-jobs"
     subprocess.run([LEAD_TIME_IMAGE / "build.sh", ts_jobs], check=True, capture_output=True)
-    sql_dirs = [JOBS_DIR, CLIENTS_DIR / "apache-kafka" / "jobs"]
+    sql_dirs = [JOBS_DIR, LEAD_TIME_IMAGE / "reference"]
     tables = {}
     for name, dirs in [("sql", sql_dirs), ("ts", [*sql_dirs, ts_jobs])]:
         snap = typed_snapshot(tmp_path / name)

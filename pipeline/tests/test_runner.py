@@ -226,6 +226,23 @@ def test_metadata_includes_custom_fields_and_rollups(built):
     assert values["last_merged_at"] == "2026-01-04T00:00:00Z"
 
 
+def test_lead_time_runs_from_the_first_change_opening_to_the_last_merging(built):
+    values = dict(built.sql("""
+        SELECT entities.name, value FROM entity_metadata JOIN entities ON entities.id = entity_id
+        WHERE key = 'lead_time_hours'
+    """).fetchall())
+    # KAFKA-3's only change hasn't merged, so it has no lead time yet.
+    assert values == {"KAFKA-1": "48.0", "KAFKA-2": "48.0"}
+
+
+def test_lead_time_traces_to_the_changes_raw_timestamps(built, snap: Snapshot):
+    row_id = metadata_row_id(built, "KAFKA-1", "lead_time_hours")
+    result = trace(snap, "entity_metadata", row_id, "value")
+    assert result is not None
+    raw_fields = {t: set(labels) for t, labels in result.columns.items() if is_raw(t)}
+    assert raw_fields == {"raw.github_pulls": {"created_at", "merged_at"}}
+
+
 def test_a_rollup_is_sourced_from_the_rows_it_rolls_up(built):
     (sources,) = built.sql("""
         SELECT list_sort(list(s.table)) FROM (
