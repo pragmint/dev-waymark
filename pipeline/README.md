@@ -17,11 +17,30 @@ commands, environment variables and client config, and then [how each step works
 
 ## Quick start
 
-You need `uv` (`devenv shell` provides it) and the GitHub CLI for a token. The Kafka client's Jira
-is public, so it needs no Jira credentials. From this directory:
+### Set up
+
+1. Install [Nix and devenv](https://devenv.sh/getting-started/). If the first `devenv` command
+   fails with `authentication required`, see the [root README](../README.md#first-run-gotcha-insteadof-git-rewrite).
+2. From the repo root, run `devenv shell`, or run `direnv allow` once to load it whenever you
+   `cd` in. It provides Python 3.13, `uv`, the GitHub CLI (`gh`) and the DuckDB CLI, and runs
+   `uv sync` in `pipeline/` so `python` and `uv run` have the pipeline's packages. The first time
+   takes a minute or two.
+3. Run `gh auth login` if you haven't: the extract reads your GitHub token from it. The Kafka
+   client's Jira is public, so it needs no Jira credentials.
+
+Without devenv, install `uv`, `gh` and `duckdb` yourself and run `uv sync` in `pipeline/`; `uv`
+downloads a matching Python. Either way, check the setup with the tests (about 90 seconds):
 
 ```sh
-uv sync
+cd pipeline
+uv run pytest -q
+```
+
+### Try it
+
+Every step runs from `pipeline/`, against a local bucket:
+
+```sh
 export BUCKET=file:///tmp/waymark-bucket
 ```
 
@@ -58,19 +77,19 @@ them and `lead_time_by_issue_type` is empty. Leave out `--max-pages` for the who
 **3. Trace a value.** Pick a ticket, then trace its summary back to the raw Jira record:
 
 ```sh
-uv run python -c "import duckdb; print(duckdb.sql(\"select _row_id, summary
-  from '/tmp/waymark-bucket/tables/entities/*.parquet' where type = 'ticket' limit 3\"))"
+duckdb -c "select _row_id, summary from '/tmp/waymark-bucket/tables/entities/*.parquet'
+  where type = 'ticket' limit 3"
 
 uv run python trace.py \
   --bucket-url $BUCKET --table entities --row-id <_row_id> --field summary
 ```
 
 ```
-summary = 'The log4j appender still uses the SyncProducer API'
+summary = 'SocketServer.scala refers to Handler-specific variables'
   computed from: raw.jira_issues.fields:$.summary
-hop 0: entities                      1 rows  (_row_id 969896219318802, ...)
-hop 1: raw.jira_issues               1 rows  (_dlt_id tGSOsjnp2p8ZQg, ...)
-raw field: raw.jira_issues.fields:$.summary  e.g. The log4j appender still uses the SyncProducer API
+hop 0: entities                      1 rows  (_row_id 19533901743043, ...)
+hop 1: raw.jira_issues               1 rows  (_dlt_id j/lKuuqoG8uwhw, ...)
+raw field: raw.jira_issues.fields:$.summary  e.g. SocketServer.scala refers to Handler-specific variables
 ```
 
 **4. Add a job.** A job is a folder named after the table it writes, holding `job.toml` and
@@ -217,10 +236,9 @@ Each `[[mapping.jira_fields]]` entry has a `key` (the metadata name: lowercase l
 
 ## Run it
 
-Inside `devenv shell` (which provides `uv`), from this directory:
+Inside `devenv shell` ([Set up](#set-up)), from this directory:
 
 ```sh
-uv sync
 GITHUB_TOKEN=$(gh auth token) uv run python extract.py \
   --client clients/apache-kafka.toml \
   --bucket-url file:///tmp/waymark-bucket \

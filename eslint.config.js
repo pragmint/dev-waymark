@@ -110,6 +110,8 @@ export default [
       'eslint-rules',
       'mirror',
       'pipeline/.venv',
+      // devenv's state, including the pipeline's venv when synced from `devenv shell`.
+      '.devenv',
       'src/db/source/goldenSeed.ts',
       ...getOtherWorktreeIgnores(),
     ],
