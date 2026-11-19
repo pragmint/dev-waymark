@@ -223,6 +223,8 @@ through a manifest, never by listing folders, so the layout is part of the contr
   tables/<name>/<snapshot_id>.changes.parquet         # its diff against the base snapshot
   snapshots/<snapshot_id>.json                        # the manifest
   latest.json                                         # {"snapshot", "manifest"}: the published one
+  jobs/<name>/versions/<version>/                     # the client's job registry (registry.py)
+  jobs/<name>/active                                  # the active version
 ```
 
 - **An extract run is full or incremental**, and its run record, written once every source has
@@ -233,29 +235,36 @@ through a manifest, never by listing folders, so the layout is part of the contr
 
 - **A snapshot is the unit of identity.** Its manifest lists every table's exact files, raw
   (`raw.<table>`, from every run in the chain) and derived, plus each built table's row count,
-  inputs and `job` (a hash of the job's files), the status of each job and whether verification
-  passed. It also names the run it was built from (`extract`), that run's chain (`runs`) and the
-  `base`: the snapshot published when the build started.
+  inputs, `job` (a hash of the job's files, which is also its version in the registry) and
+  `params` (a hash of the client's parameters), the status of each job (`built`, `reused`,
+  `failed` or `skipped`) and whether verification passed. It also names the run it was built from
+  (`extract`), that run's chain (`runs`) and the `base`: the snapshot published when the build
+  started. A preview's manifest has `preview`: the job and version it tried; it's never published.
+- **A table can be reused.** When the base was verified and built a table with the same `job`,
+  `params` and input files, the snapshot lists the base's files for it instead of building it
+  again. Its entry has `built_in`, the snapshot that wrote the files, and an empty change file.
 - **Each built table's `changes`** lists the `_row_id`s added, changed or removed since the
   base, with a `change` column, plus their counts in the manifest. A row changed if any column
   other than `_row_id`, `_sources` and `_fields` did. `changes` is null when the base has no such
   table. A table version is
-  `(name, snapshot_id)`. A job, `verify.py`, `trace.py` and Waymark all read a snapshot's tables
+  `(name, built_in or snapshot_id)`. A job, `verify.py`, `trace.py` and Waymark all read a snapshot's tables
   from its manifest, so raw or tables written later can't change what a snapshot reads.
 - **Nothing is rewritten.** Raw files are named after their run and dlt appends them; a table is
-  written once per snapshot; a snapshot id is never reused. Only `latest.json` changes, and only
-  after every job built and verified, and never back to an older snapshot. That's also what object stores require, since they can't
-  rename: no reader ever trusts a file that may still be half written.
+  written at most once per snapshot; a snapshot id and a job version are never reused. Only
+  `latest.json` and a job's `active` change, and `latest.json` only after every job built or was
+  reused and verified, and never back to an older snapshot. That's also what object stores
+  require, since they can't rename: no reader ever trusts a file that may still be half written.
 - **`raw.<table>`** is the union of the manifest's files for it, read with `union_by_name`,
   because dlt can add columns between loads. Folders starting with `_dlt` hold dlt's own
   bookkeeping and are not tables.
 - **Names**: table and job names use only letters, digits and `_`, and don't start with a
   digit. Run and snapshot ids use letters, digits, `_` and `-`. Manifest file keys are relative
   to the bucket and never contain `..`.
-- **Retention**: old snapshots can be expired by age (an object-store lifecycle rule on `raw/`
-  and `tables/`), as long as nothing still published reads an expired file. A snapshot reads raw
-  as old as its chain's full run, so a rule on `raw/` must outlive the interval between full runs
-  plus the run interval, or follow the manifests.
+- **Retention**: old snapshots can be expired, as long as nothing still published reads an
+  expired file. A snapshot reads raw as old as its chain's full run, and a reused table's files
+  are as old as the snapshot that built it, however long that table has gone unchanged. So expire
+  by following the manifests, not by age alone: an age rule on `tables/` could delete a file the
+  published snapshot still reads. Never expire `jobs/`; manifests name versions in it.
 
 ## What Waymark reads
 

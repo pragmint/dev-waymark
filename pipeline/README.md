@@ -164,8 +164,30 @@ Run each from this directory with `uv run python <script>`. Every `--bucket-url`
 | `--adopt-run RUN_ID` |                  | Record a full run extracted before run records existed, then stop.   |
 | `--break-lock`       | off              | Remove the lock a crashed extract left behind, then stop.            |
 
-**`runner.py`** builds a snapshot from a run, verifies it, and moves `latest.json` to it. It exits
-non-zero if any job fails to build or verify.
+**`orchestrate.py`** runs the pipeline from the job registry ([Job registry](#job-registry)).
+Each command takes `--client`, `--bucket-url` (the client's root) and `--shared-url` (the shared
+registry, optional) before it, and exits non-zero if a build or verify fails.
+
+| Command               | Meaning                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `run`                 | Extract, build every active job, verify, publish. Reuses each table that would come out the same as the published one. |
+| `run --extract full`  | The same with a full extract; `--extract none` builds the last run (or `--run-id`) without extracting.                 |
+| `run --rebuild`       | Build every table, reusing nothing.                                                                                    |
+| `preview JOB VERSION` | Build the last run with one job at another version. Saved, never published. `VERSION` can be a job folder to push.     |
+| `promote JOB VERSION` | A preview, then make the version active if it passed. `--shared` promotes in the shared registry.                      |
+
+**`registry.py`** keeps job versions in a bucket. `--bucket-url` is the registry's root: a
+client's bucket, or the shared registry.
+
+| Command                     | Meaning                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `push FOLDER...`            | Upload job folders, or folders of jobs, as versions. Prints each version. |
+| `push --activate FOLDER...` | The same, and make each active without a preview. For seeding.            |
+| `list`                      | Every job's versions, the active one starred.                             |
+
+**`runner.py`** builds a snapshot from a run with the jobs in this repo, verifies it, and moves
+`latest.json` to it. It reuses unchanged tables like `orchestrate.py run`. It exits non-zero if any
+job fails to build or verify.
 
 | Flag            | Default          | Meaning                                                             |
 | --------------- | ---------------- | ------------------------------------------------------------------- |
@@ -176,18 +198,21 @@ non-zero if any job fails to build or verify.
 | `--job-dir DIR` |                  | Another folder of jobs, replacing the client's by name. Repeatable. |
 | `--no-verify`   | off              | Skip the lineage check.                                             |
 | `--no-publish`  | off              | Save the snapshot but leave `latest.json` alone.                    |
+| `--rebuild`     | off              | Build every table, reusing nothing from the published snapshot.     |
 
 **`verify.py`** re-checks the lineage of a snapshot that `runner.py` built. It exits non-zero on
 any error; warnings don't fail it.
 
-| Flag                  | Default   | Meaning                                                 |
-| --------------------- | --------- | ------------------------------------------------------- |
-| `--client`            | required  | Client config.                                          |
-| `--bucket-url`        | required  | Bucket holding the snapshot.                            |
-| `--snapshot-id`       | published | Snapshot to check.                                      |
-| `--job NAME`          | all jobs  | Check only this job. Repeatable.                        |
-| `--job-dir DIR`       |           | The same extra job folders the snapshot was built with. |
-| `--rows-per-branch N` | 2         | Rows to check per distinct `_fields` in each table.     |
+| Flag                  | Default   | Meaning                                                             |
+| --------------------- | --------- | ------------------------------------------------------------------- |
+| `--client`            | required  | Client config.                                                      |
+| `--bucket-url`        | required  | Bucket holding the snapshot.                                        |
+| `--snapshot-id`       | published | Snapshot to check.                                                  |
+| `--job NAME`          | all jobs  | Check only this job. Repeatable.                                    |
+| `--job-dir DIR`       |           | The same extra job folders the snapshot was built with.             |
+| `--registry`          | off       | Check each table with the version that built it, from the registry. |
+| `--shared-url URL`    |           | With `--registry`, the shared registry too.                         |
+| `--rows-per-branch N` | 2         | Rows to check per distinct `_fields` in each table.                 |
 
 **`trace.py`** prints the rows, hop by hop, that a row or one of its values was built from.
 
@@ -199,7 +224,7 @@ any error; warnings don't fail it.
 | `--row-id`      | required  | The row's `_row_id`.         |
 | `--field`       | whole row | Trace only this column.      |
 
-**Tests:** `uv run pytest` runs the pipeline tests (about 80 seconds). The container example has
+**Tests:** `uv run pytest` runs the pipeline tests (about 95 seconds). The container example has
 its own: `cd containers/lead-time && bun test`. Both run in the pre-commit hook when a commit
 touches `pipeline/` (see the repo's `bun install-hooks`).
 
@@ -340,6 +365,40 @@ It replays the job's current files, so it won't check a job whose files changed 
 was built (the manifest records a hash of them): new SQL against old output would fail for reasons
 that aren't the snapshot's. That job is reported as not checked and counts as an error; check out
 the job as it was to verify that snapshot.
+
+## Job registry
+
+In production the jobs live in the bucket, not this repo, so a client can have its own and a new
+version can be checked before it goes live. `registry.py` keeps every version of a job under
+`jobs/<name>/versions/<version>/`, written once. A version is the hash of the job's files, the same
+hash the manifest records beside each table, so a snapshot names the exact code that built it.
+`jobs/<name>/active` names the version that runs.
+
+A client's jobs are the shared registry's active jobs, with the client's own replacing them by
+name. Seed both from this repo, then run:
+
+```sh
+registry.py --bucket-url "$SHARED" push --activate jobs
+registry.py --bucket-url "$BUCKET" push --activate clients/apache-kafka/jobs
+orchestrate.py --client clients/apache-kafka.toml --bucket-url "$BUCKET" --shared-url "$SHARED" \
+  run --extract none
+```
+
+To change a job, promote a new version. `promote` builds the last extract with that version swapped
+in, reusing every table it doesn't affect, and verifies it. It moves `active` only if that passed,
+and the next `run` publishes it:
+
+```sh
+orchestrate.py --client clients/apache-kafka.toml --bucket-url "$BUCKET" --shared-url "$SHARED" \
+  promote lead_time_by_issue_type path/to/lead_time_by_issue_type
+```
+
+`preview` does the same build without moving `active`. Its snapshot is saved under
+`snapshots/preview-*.json` and never published; its change files are the diff against what's live.
+
+On the Kafka demo bucket, the first `run` from the registry builds everything (62 s). A second
+`run` with nothing new reuses every table (0.3 s), and promoting a new version of
+`lead_time_by_issue_type` builds and verifies only that table (4 s).
 
 ## Container jobs
 

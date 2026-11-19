@@ -41,6 +41,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.compute as pc
 
+import registry
 import snapshot as snapshots
 from runner import (
     CONTRACT_COLUMNS,
@@ -699,17 +700,35 @@ def main() -> None:
         default=[],
         help="Another folder of jobs, as the snapshot was built with (runner.py --job-dir)",
     )
+    parser.add_argument(
+        "--registry",
+        action="store_true",
+        help="Check each table with the job version that built it, from the bucket's job registry",
+    )
+    parser.add_argument("--shared-url", help="With --registry, the shared registry's root too")
     parser.add_argument("--rows-per-branch", type=int, default=2)
     args = parser.parse_args()
 
     client = tomllib.loads(args.client.read_text())
-    jobs = build_order(load_jobs(job_dirs(client, args.job_dir)))
     snapshot = snapshots.load(args.bucket_url, args.snapshot_id, os.environ)
+    with registry.Registries(registry.registry_roots(args.bucket_url, args.shared_url)) as found:
+        if args.registry:
+            jobs = build_order(built_jobs(snapshot, found))
+        else:
+            jobs = build_order(load_jobs(job_dirs(client, args.job_dir)))
+        if args.job:
+            jobs = [job for job in jobs if job.name in args.job]
+        if not verify_jobs(jobs, client, snapshot, args.rows_per_branch):
+            sys.exit(1)
 
-    if args.job:
-        jobs = [job for job in jobs if job.name in args.job]
-    if not verify_jobs(jobs, client, snapshot, args.rows_per_branch):
-        sys.exit(1)
+
+def built_jobs(snapshot: Snapshot, found: registry.Registries) -> list[Job]:
+    """The job version that built each of the snapshot's tables, from the registries."""
+    return [
+        found.job(name, entry["job"])
+        for name, entry in snapshot.tables.items()
+        if not name.startswith(snapshots.RAW_PREFIX)
+    ]
 
 
 if __name__ == "__main__":

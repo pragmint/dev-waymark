@@ -6,9 +6,11 @@ snapshot beside it (the layout is in snapshot.py). Each job runs after the jobs 
 own DuckDB connection that sees only its declared inputs, resolved to the snapshot's exact files.
 A container job gets those inputs staged as local Parquet and runs locked down (container.py).
 A table is written only if it passes the contract checks, and a failure skips everything
-downstream of it. Then verify.py
-checks each table's lineage by re-running its job on a sample of the same files. The manifest is
-saved either way; latest.json moves to it only if every job built and verified.
+downstream of it. A table whose job, parameters and input files are all the same as in the
+published snapshot isn't built again: the new manifest lists the published table's files
+(`--rebuild` builds everything). Then verify.py checks each table it built by re-running its job on
+a sample of the same files. The manifest is saved either way; latest.json moves to it only if every
+job built or was reused, and verified.
 """
 
 import argparse
@@ -55,6 +57,9 @@ REF_PATTERN = re.compile(
 ROW_IDENTITY = frozenset({"_row_id", RAW_ROW_ID})
 COLUMNS_METADATA_KEY = "waymark_columns"
 CHANGE_KINDS = ("added", "changed", "removed")
+CHANGES_SCHEMA = "_row_id BIGINT, change VARCHAR"
+# A job's status in a snapshot. Only `built` and `reused` tables can be read downstream.
+READY = ("built", "reused")
 JSON_TYPES = {"VARCHAR", "JSON"}
 JOB_KINDS = ("sql", "container")
 
@@ -209,6 +214,13 @@ def job_params(client: Mapping[str, Any]) -> dict[str, Any]:
             {name: field[name] for name in ("key", "path", "value_type")} for field in jira_fields
         ],
     }
+
+
+def params_version(client: Mapping[str, Any]) -> str:
+    """A hash of the parameters every job sees: a change rebuilds every table, like a new job
+    version would."""
+    text = json.dumps(job_params(client), sort_keys=True)
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def connect(
@@ -475,31 +487,114 @@ def run_job(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> int:
         "files": [key],
         "rows": rows,
         "job": job.version,
+        "params": params_version(client),
         "inputs": list(job.inputs),
         "changes": changes,
     }
     return rows
 
 
-def run_jobs(jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot) -> dict[str, str]:
-    """Run every job in dependency order. Returns each job's status: built, failed or skipped."""
+def reusable(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> dict[str, Any] | None:
+    """The base snapshot's entry for the job's table, if building it again would give the same
+    table: the base was verified, and built it with the same job version and parameters from
+    exactly the files this snapshot has for each input. None otherwise."""
+    base = snapshot.base
+    if base is None or base.verified is not True:
+        return None
+    entry = base.tables.get(job.name)
+    if (
+        entry is None
+        or base.status.get(job.name, "built") not in READY
+        or entry.get("job") != job.version
+        or entry.get("params") != params_version(client)
+        or entry.get("inputs") != list(job.inputs)
+    ):
+        return None
+    for table in job.inputs:
+        mine, theirs = snapshot.tables.get(table), base.tables.get(table)
+        if mine is None or theirs is None or mine["files"] != theirs["files"]:
+            return None
+    return entry
+
+
+def reuse_job(job: Job, entry: Mapping[str, Any], snapshot: Snapshot) -> None:
+    """List the base's table in this snapshot, with an empty change file: nothing changed."""
+    assert snapshot.base is not None
+    key = snapshot.changes_key(job.name)
+    out = snapshot.url(key)
+    snapshots.make_parent(out)
+    with snapshot.connect() as con:
+        con.execute(f"CREATE TABLE changes ({CHANGES_SCHEMA})")
+        con.execute(f"COPY changes TO {sql_string(out)} (FORMAT parquet, COMPRESSION zstd)")
+    snapshot.tables[job.name] = {
+        **{k: v for k, v in entry.items() if k != "changes"},
+        # The snapshot that built the files, which a chain of reuses carries along unchanged.
+        "built_in": entry.get("built_in", snapshot.base.id),
+        "changes": {"file": key, "base": snapshot.base.id, **dict.fromkeys(CHANGE_KINDS, 0)},
+    }
+
+
+def run_jobs(
+    jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot, reuse: bool = False
+) -> dict[str, str]:
+    """Run every job in dependency order. With `reuse`, a job whose table would come out the same
+    as the base snapshot's isn't run (see `reusable`). Returns each job's status: built, reused,
+    failed or skipped."""
     statuses = snapshot.status
     for job in build_order(jobs):
-        blocked = [t for t in job.inputs if statuses.get(t, "built") != "built"]
+        blocked = [t for t in job.inputs if statuses.get(t, "built") not in READY]
         if blocked:
             statuses[job.name] = "skipped"
             print(f"{job.name}: skipped, {', '.join(blocked)} did not build", file=sys.stderr)
-        else:
-            try:
-                rows = run_job(job, client, snapshot)
-                statuses[job.name] = "built"
-                changes = describe_changes(snapshot.tables[job.name]["changes"])
-                print(f"{job.name}: {rows} rows ({changes})")
-                continue
-            except (duckdb.Error, ContractError, ContainerError) as error:
-                statuses[job.name] = "failed"
-                print(f"{job.name}: failed: {error}", file=sys.stderr)
+            continue
+        entry = reusable(job, client, snapshot) if reuse else None
+        if entry is not None:
+            reuse_job(job, entry, snapshot)
+            statuses[job.name] = "reused"
+            built_in = snapshot.tables[job.name]["built_in"]
+            print(f"{job.name}: {entry['rows']} rows (unchanged, built in {built_in})")
+            continue
+        try:
+            rows = run_job(job, client, snapshot)
+            statuses[job.name] = "built"
+            changes = describe_changes(snapshot.tables[job.name]["changes"])
+            print(f"{job.name}: {rows} rows ({changes})")
+        except (duckdb.Error, ContractError, ContainerError) as error:
+            statuses[job.name] = "failed"
+            print(f"{job.name}: failed: {error}", file=sys.stderr)
     return statuses
+
+
+def build_snapshot(
+    jobs: list[Job],
+    client: Mapping[str, Any],
+    snapshot: Snapshot,
+    verify: bool = True,
+    reuse: bool = True,
+) -> bool:
+    """Build and verify every job's table, then save the manifest. True if every table built or
+    was reused and every built table verified: the snapshot can be published."""
+    statuses = run_jobs(jobs, client, snapshot, reuse)
+    ok = all(status in READY for status in statuses.values())
+    if verify:
+        # Imported here because verify.py imports this module.
+        from verify import verify_jobs
+
+        # A reused table was verified in the snapshot that built it, on the same files.
+        built = [job for job in build_order(jobs) if statuses[job.name] == "built"]
+        snapshot.verified = verify_jobs(built, client, snapshot)
+        ok &= snapshot.verified
+    print(f"manifest_url={snapshots.save(snapshot)}")
+    return ok
+
+
+def publish(snapshot: Snapshot) -> None:
+    newer = snapshots.publish(snapshot)
+    if newer:
+        # Not a failure: this build is good, and newer data is already live.
+        print(f"snapshot {snapshot.id} not published: {newer} is newer", file=sys.stderr)
+    else:
+        print(f"published snapshot {snapshot.id}")
 
 
 def main() -> None:
@@ -517,6 +612,11 @@ def main() -> None:
     )
     parser.add_argument("--no-verify", action="store_true", help="Skip the lineage check")
     parser.add_argument("--no-publish", action="store_true", help="Don't move latest.json")
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Build every table, even one the published snapshot already has as it would come out",
+    )
     args = parser.parse_args()
 
     client = tomllib.loads(args.client.read_text())
@@ -526,26 +626,11 @@ def main() -> None:
     base = snapshots.published(args.bucket_url, os.environ)
     snapshot = snapshots.start(args.bucket_url, run.chain, snapshot_id, os.environ, base)
     print(f"run {run.id} ({run.kind}) reads runs {', '.join(run.chain)}")
-    statuses = run_jobs(jobs, client, snapshot)
-    failed = any(status != "built" for status in statuses.values())
-    if not args.no_verify:
-        # Imported here because verify.py imports this module.
-        from verify import verify_jobs
-
-        built = [job for job in build_order(jobs) if statuses[job.name] == "built"]
-        snapshot.verified = verify_jobs(built, client, snapshot)
-        failed |= not snapshot.verified
-    print(f"manifest_url={snapshots.save(snapshot)}")
-    if failed:
+    if not build_snapshot(jobs, client, snapshot, not args.no_verify, not args.rebuild):
         print(f"snapshot {snapshot.id} not published", file=sys.stderr)
         sys.exit(1)
     if not args.no_publish:
-        newer = snapshots.publish(snapshot)
-        if newer:
-            # Not a failure: this build is good, and newer data is already live.
-            print(f"snapshot {snapshot.id} not published: {newer} is newer", file=sys.stderr)
-        else:
-            print(f"published snapshot {snapshot.id}")
+        publish(snapshot)
 
 
 if __name__ == "__main__":

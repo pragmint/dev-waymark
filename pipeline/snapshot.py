@@ -326,6 +326,8 @@ class Snapshot:
 
     `extract` is the run it was built from and `runs` that run's chain, whose raw files it reads.
     `base` is the snapshot that was published when it started, which its diffs compare against.
+    `preview` names the job version a preview swapped in (orchestrate.py); a preview is never
+    published.
     """
 
     root: str
@@ -337,6 +339,7 @@ class Snapshot:
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     runs: list[str] = field(default_factory=list)
     base: "Snapshot | None" = field(default=None, repr=False)
+    preview: dict[str, str] | None = None
 
     def url(self, key: str) -> str:
         return join(self.root, key)
@@ -373,6 +376,7 @@ class Snapshot:
             "tables": self.tables,
             "status": self.status,
             "verified": self.verified,
+            "preview": self.preview,
         }
 
 
@@ -430,6 +434,8 @@ def publish(snapshot: Snapshot) -> str | None:
     The check and the write aren't atomic. Two builds finishing in the same moment can still race;
     runs that can't overlap that closely don't need more.
     """
+    if snapshot.preview:
+        raise ValueError(f"Snapshot {snapshot.id} is a preview, which is never published")
     latest = join(snapshot.root, LATEST)
     if exists(latest):
         current = load(snapshot.root, None, snapshot.env)
@@ -455,4 +461,5 @@ def load(root: str, snapshot_id: str | None, env: Mapping[str, str]) -> Snapshot
         manifest.get("verified"),
         env,
         manifest.get("runs", [manifest["extract"]]),
+        preview=manifest.get("preview"),
     )
