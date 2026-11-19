@@ -119,6 +119,30 @@ was built (the manifest records a hash of them): new SQL against old output woul
 that aren't the snapshot's. That job is reported as not checked and counts as an error; check out
 the job as it was to verify that snapshot.
 
+## Container jobs
+
+A job can be a container image in place of a query, for logic that needs real code and unit tests
+([CONTRACT.md](CONTRACT.md#container-jobs)). The runner stages its inputs as local Parquet and
+runs it with `docker` (or the command in `WAYMARK_DOCKER`), with no network. Its output gets the
+same checks and verification as a SQL job's.
+
+`containers/lead-time/` is a TypeScript example. It computes `lead_time_by_issue_type` with the
+same rows, `_sources` and `_fields` as the Kafka SQL job:
+
+```sh
+cd containers/lead-time && bun install && bun test && cd ../..
+containers/lead-time/build.sh /tmp/ts-jobs     # builds the image, writes a job.toml pinning it
+uv run python runner.py \
+  --client clients/apache-kafka.toml \
+  --bucket-url file:///tmp/waymark-bucket \
+  --run-id <run_id> \
+  --job-dir /tmp/ts-jobs
+```
+
+`--job-dir` adds a folder of jobs after the client's, replacing theirs by name, so the container
+job replaces the SQL one. `verify.py` takes the same `--job-dir`, so it checks the job the
+snapshot was built with.
+
 ## S3 and Azure
 
 Every script takes `s3://bucket/prefix` or `az://container/prefix` in place of `file://`, and

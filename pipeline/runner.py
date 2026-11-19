@@ -4,6 +4,7 @@ Reads the raw files of the run's chain (its last full run and every run since) a
 table once, to <bucket>/tables/<name>/<snapshot>.parquet, with its diff against the published
 snapshot beside it (the layout is in snapshot.py). Each job runs after the jobs it reads, in its
 own DuckDB connection that sees only its declared inputs, resolved to the snapshot's exact files.
+A container job gets those inputs staged as local Parquet and runs locked down (container.py).
 A table is written only if it passes the contract checks, and a failure skips everything
 downstream of it. Then verify.py
 checks each table's lineage by re-running its job on a sample of the same files. The manifest is
@@ -15,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import tomllib
@@ -26,7 +28,9 @@ from typing import Any, Mapping
 
 import duckdb
 
+import container
 import snapshot as snapshots
+from container import ContainerError
 from snapshot import RAW_PREFIX, Snapshot, sql_string
 
 JOBS_DIR = Path(__file__).parent / "jobs"
@@ -52,6 +56,7 @@ ROW_IDENTITY = frozenset({"_row_id", RAW_ROW_ID})
 COLUMNS_METADATA_KEY = "waymark_columns"
 CHANGE_KINDS = ("added", "changed", "removed")
 JSON_TYPES = {"VARCHAR", "JSON"}
+JOB_KINDS = ("sql", "container")
 
 
 class ContractError(Exception):
@@ -62,10 +67,15 @@ class ContractError(Exception):
 class Job:
     name: str
     inputs: tuple[str, ...]
+    # The query of a `sql` job; empty for a `container` job.
     sql: str
     description: str | None = None
-    # A hash of the job's files, recorded in the manifest beside each table it builds.
+    # A hash of the job's files, recorded in the manifest beside each table it builds. For a
+    # container job it covers job.toml, so it changes with the pinned image.
     version: str = ""
+    kind: str = "sql"
+    # A container job's image, pinned by digest.
+    image: str | None = None
 
 
 def is_raw(table: str) -> bool:
@@ -110,16 +120,28 @@ def load_job(directory: Path) -> Job:
     if not NAME_PATTERN.match(name):
         raise ValueError(f"Invalid job name: {name!r}")
     spec = tomllib.loads((directory / "job.toml").read_text())
-    if spec.get("kind", "sql") != "sql":
-        raise ValueError(f"{name}: only sql jobs are supported")
+    kind = spec.get("kind", "sql")
+    if kind not in JOB_KINDS:
+        raise ValueError(f"{name}: kind must be one of {', '.join(JOB_KINDS)}, got {kind!r}")
     inputs = tuple(spec["inputs"])
     for table in inputs:
         if not NAME_PATTERN.match(table.removeprefix(RAW_PREFIX)):
             raise ValueError(f"{name}: invalid input {table!r}")
     if "columns" in spec:
         raise ValueError(f"{name}: [columns] is gone; the query returns _fields instead")
+    version = job_version(directory)
+    if kind == "container":
+        if (directory / "query.sql").exists():
+            raise ValueError(f"{name}: a container job has no query.sql")
+        try:
+            image = container.check_image(spec.get("image"))
+        except ValueError as error:
+            raise ValueError(f"{name}: {error}") from error
+        return Job(name, inputs, "", spec.get("description"), version, kind, image)
+    if "image" in spec:
+        raise ValueError(f"{name}: image is only for container jobs")
     sql = (directory / "query.sql").read_text().strip().removesuffix(";")
-    return Job(name, inputs, sql, spec.get("description"), job_version(directory))
+    return Job(name, inputs, sql, spec.get("description"), version)
 
 
 def job_version(directory: Path) -> str:
@@ -127,6 +149,15 @@ def job_version(directory: Path) -> str:
     for path in sorted(p for p in directory.iterdir() if p.is_file()):
         digest.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
     return digest.hexdigest()[:16]
+
+
+def job_dirs(client: Mapping[str, Any], extra: list[Path]) -> list[Path]:
+    """The shared jobs, then the client's, then any extra folders, in order of precedence."""
+    for directory in extra:
+        if not directory.is_dir():
+            raise ValueError(f"No such job folder: {directory}")
+    shared = [JOBS_DIR, CLIENTS_DIR / client["client"] / "jobs"]
+    return [d for d in shared if d.is_dir()] + extra
 
 
 def load_jobs(directories: list[Path]) -> list[Job]:
@@ -161,27 +192,36 @@ def validate_jira_field(field: Mapping[str, str]) -> None:
         raise ValueError(f"Invalid value type: {field['value_type']!r}")
 
 
-def connect(
-    client: Mapping[str, Any], spill_dir: str | None = None, snapshot: Snapshot | None = None
-) -> duckdb.DuckDBPyConnection:
-    """A connection with the contract helpers and the client's parameters installed, able to
-    read the snapshot's storage."""
+def job_params(client: Mapping[str, Any]) -> dict[str, Any]:
+    """The client's parameters every job sees: SQL jobs as variables and `params` tables,
+    container jobs as `WAYMARK_PARAMS`."""
     mapping = client["mapping"]
     re.compile(mapping["ticket_key_pattern"])
     jira_fields = mapping.get("jira_fields", [])
     for field in jira_fields:
         validate_jira_field(field)
-
-    con = snapshot.connect() if snapshot else duckdb.connect()
-    if spill_dir:
-        con.execute(f"SET temp_directory = {sql_string(spill_dir)}")
-    variables = {
+    return {
         "client": client["client"],
         "jira_base_url": client["jira"]["base_url"].rstrip("/"),
         "ticket_key_pattern": mapping["ticket_key_pattern"],
+        "statuses": dict(mapping.get("statuses", {})),
+        "jira_fields": [
+            {name: field[name] for name in ("key", "path", "value_type")} for field in jira_fields
+        ],
     }
-    for name, value in variables.items():
-        con.execute(f"SET VARIABLE {name} = {sql_string(value)}")
+
+
+def connect(
+    client: Mapping[str, Any], spill_dir: str | None = None, snapshot: Snapshot | None = None
+) -> duckdb.DuckDBPyConnection:
+    """A connection with the contract helpers and the client's parameters installed, able to
+    read the snapshot's storage."""
+    params = job_params(client)
+    con = snapshot.connect() if snapshot else duckdb.connect()
+    if spill_dir:
+        con.execute(f"SET temp_directory = {sql_string(spill_dir)}")
+    for name in ("client", "jira_base_url", "ticket_key_pattern"):
+        con.execute(f"SET VARIABLE {name} = {sql_string(params[name])}")
     # md5 because DuckDB's hash() can change between versions; 53 bits to survive a JS number.
     con.execute(f"""
         CREATE MACRO stable_id(kind, key) AS cast(
@@ -193,11 +233,9 @@ def connect(
     con.execute("CREATE MACRO iso_utc(ts) AS strftime(ts AT TIME ZONE 'UTC', '%Y-%m-%dT%H:%M:%SZ')")
     con.execute("CREATE SCHEMA params")
     tables = {
-        "status_map (status VARCHAR, status_group VARCHAR)": list(
-            mapping.get("statuses", {}).items()
-        ),
+        "status_map (status VARCHAR, status_group VARCHAR)": list(params["statuses"].items()),
         "jira_fields (key VARCHAR, path VARCHAR, value_type VARCHAR)": [
-            (f["key"], f["path"], f["value_type"]) for f in jira_fields
+            (f["key"], f["path"], f["value_type"]) for f in params["jira_fields"]
         ],
     }
     for definition, rows in tables.items():
@@ -372,6 +410,41 @@ def describe_changes(changes: Mapping[str, Any] | None) -> str:
     return f"{counts} since {changes['base']}"
 
 
+def create_result(
+    con: duckdb.DuckDBPyConnection,
+    job: Job,
+    client: Mapping[str, Any],
+    work_dir: str,
+    changes: Mapping[str, str] | None = None,
+    table: str = "result",
+) -> None:
+    """Run the job on the inputs `con` sees, into a temp table. A container job gets an empty
+    folder under `work_dir` and the change files of its inputs in `changes`."""
+    if job.kind == "sql":
+        con.execute(f"CREATE TEMP TABLE {table} AS {job.sql}")
+        return
+    assert job.image is not None
+    work = Path(tempfile.mkdtemp(prefix="container-", dir=work_dir))
+    try:
+        output = container.run(con, job.image, job.inputs, job_params(client), work, changes)
+        source = f"read_parquet({sql_string(str(output))})"
+        # Replaced, because a replay builds its result once per set of inputs it tries.
+        con.execute(f"CREATE OR REPLACE TEMP TABLE {table} AS SELECT * FROM {source}")
+    finally:
+        # The staged inputs are copies, as large as the inputs themselves.
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def input_changes(job: Job, snapshot: Snapshot) -> dict[str, str]:
+    """The change file of each input this snapshot built and could compare with its base."""
+    files = {}
+    for table in job.inputs:
+        changes = snapshot.tables.get(table, {}).get("changes") if not is_raw(table) else None
+        if changes:
+            files[table] = snapshot.url(changes["file"])
+    return files
+
+
 def run_job(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> int:
     """Build one job's table into the snapshot and return its row count. Raises if it breaks
     the contract, before writing anything."""
@@ -382,7 +455,7 @@ def run_job(job: Job, client: Mapping[str, Any], snapshot: Snapshot) -> int:
         connect(client, spill_dir, snapshot) as con,
     ):
         register_inputs(con, job, snapshot)
-        con.execute(f"CREATE TEMP TABLE result AS {job.sql}")
+        create_result(con, job, client, spill_dir, input_changes(job, snapshot))
         errors = contract_errors(con, job.inputs)
         errors += [] if errors else field_errors(con, job.inputs)
         if errors:
@@ -423,7 +496,7 @@ def run_jobs(jobs: list[Job], client: Mapping[str, Any], snapshot: Snapshot) -> 
                 changes = describe_changes(snapshot.tables[job.name]["changes"])
                 print(f"{job.name}: {rows} rows ({changes})")
                 continue
-            except (duckdb.Error, ContractError) as error:
+            except (duckdb.Error, ContractError, ContainerError) as error:
                 statuses[job.name] = "failed"
                 print(f"{job.name}: failed: {error}", file=sys.stderr)
     return statuses
@@ -435,13 +508,19 @@ def main() -> None:
     parser.add_argument("--bucket-url", required=True, help="file://, s3:// or az:// base URL")
     parser.add_argument("--run-id", required=True, help="The extract run whose raw files to read")
     parser.add_argument("--snapshot-id", help="Defaults to the current UTC time")
+    parser.add_argument(
+        "--job-dir",
+        action="append",
+        type=Path,
+        default=[],
+        help="Another folder of jobs, read after the client's; its jobs replace theirs by name",
+    )
     parser.add_argument("--no-verify", action="store_true", help="Skip the lineage check")
     parser.add_argument("--no-publish", action="store_true", help="Don't move latest.json")
     args = parser.parse_args()
 
     client = tomllib.loads(args.client.read_text())
-    job_dirs = [JOBS_DIR, CLIENTS_DIR / client["client"] / "jobs"]
-    jobs = load_jobs([d for d in job_dirs if d.is_dir()])
+    jobs = load_jobs(job_dirs(client, args.job_dir))
     snapshot_id = args.snapshot_id or snapshots.new_snapshot_id(datetime.now(UTC))
     run = snapshots.load_run(args.bucket_url, args.run_id)
     base = snapshots.published(args.bucket_url, os.environ)

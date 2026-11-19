@@ -16,6 +16,7 @@ a `max()`, hides that dependency.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import math
@@ -23,6 +24,7 @@ import sys
 import tempfile
 import time
 import tomllib
+from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -36,15 +38,15 @@ import pyarrow.compute as pc
 
 import snapshot as snapshots
 from runner import (
-    CLIENTS_DIR,
     CONTRACT_COLUMNS,
-    JOBS_DIR,
     RAW_ROW_ID,
     Job,
     Ref,
     build_order,
     connect,
+    create_result,
     is_raw,
+    job_dirs,
     load_jobs,
     parse_ref,
     sql_string,
@@ -59,6 +61,8 @@ NARROW_LIMIT = 400
 # What a null JSON leaf becomes. Shaped like a date, so it changes a field read as text and one
 # cast to a timestamp alike.
 JSON_SEED = "2000-01-01T00:00:00.000+0000"
+# How many container outputs a replay keeps, keyed by its inputs.
+CONTAINER_CACHE_SIZE = 256
 
 Row = dict[str, Any]
 Selector = Callable[[str], bool]
@@ -245,16 +249,34 @@ def row_differences(actual: Row | None, expected: Row) -> list[str]:
 # ── Running a job on chosen inputs ────────────────────────────────────────────
 
 
+def fingerprint(data: pa.Table | str) -> str:
+    """Identifies an input's contents: a hash of the rows, or the expression that reads them."""
+    if isinstance(data, str):
+        return data
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, data.schema) as writer:
+        writer.write_table(data)
+    return hashlib.sha256(sink.getvalue().to_pybytes()).hexdigest()
+
+
 class Replay:
-    """One job's query, run against inputs swapped in one table at a time."""
+    """One job, run against inputs swapped in one table at a time.
+
+    A SQL job's query runs for the one row. A container job runs in full, and its output is
+    kept by its inputs' contents: perturbing a column that is null in every row, say, leaves
+    the inputs as they were, and doesn't start the container again."""
 
     def __init__(self, job: Job, client: Mapping[str, Any], spill_dir: str, snapshot: Snapshot):
         self.job = job
+        self.client = client
+        self.spill_dir = spill_dir
         self.con = connect(client, spill_dir, snapshot)
         self.con.execute("SET TimeZone = 'UTC'")
         if any(is_raw(t) for t in job.inputs):
             self.con.execute("CREATE SCHEMA raw")
         self.loaded: dict[str, pa.Table | str] = {}
+        self.outputs: OrderedDict[tuple[tuple[str, str], ...], dict[Any, Row]] = OrderedDict()
+        self.container_runs = 0
 
     def load(self, table: str, data: pa.Table | str) -> None:
         """Make `table` read `data`: rows in memory, or a `read_parquet(...)` expression."""
@@ -270,9 +292,27 @@ class Replay:
         self.loaded[table] = data
 
     def row(self, row_id: int) -> Row | None:
+        if self.job.kind == "container":
+            return self.container_rows().get(row_id)
         cursor = self.con.execute(f"SELECT * FROM (\n{self.job.sql}\n) WHERE _row_id = ?", [row_id])
         values = cursor.fetchone()
         return dict(zip([d[0] for d in cursor.description], values)) if values else None
+
+    def container_rows(self) -> dict[Any, Row]:
+        """Every row the container writes for the loaded inputs, by `_row_id`."""
+        key = tuple(sorted((table, fingerprint(data)) for table, data in self.loaded.items()))
+        if key in self.outputs:
+            self.outputs.move_to_end(key)
+            return self.outputs[key]
+        create_result(self.con, self.job, self.client, self.spill_dir, table="replay_result")
+        self.container_runs += 1
+        cursor = self.con.execute("SELECT * FROM replay_result")
+        names = [d[0] for d in cursor.description]
+        rows = {row["_row_id"]: row for row in (dict(zip(names, v)) for v in cursor.fetchall())}
+        self.outputs[key] = rows
+        if len(self.outputs) > CONTAINER_CACHE_SIZE:
+            self.outputs.popitem(last=False)
+        return rows
 
     def row_with(self, row_id: int, table: str, data: pa.Table) -> Row | None:
         """The row with one input swapped for `data`, leaving the other inputs as they were."""
@@ -617,12 +657,18 @@ def main() -> None:
     parser.add_argument("--bucket-url", required=True, help="file://, s3:// or az:// base URL")
     parser.add_argument("--snapshot-id", help="A snapshot runner.py saved; defaults to latest")
     parser.add_argument("--job", action="append", help="Only check this job; repeatable")
+    parser.add_argument(
+        "--job-dir",
+        action="append",
+        type=Path,
+        default=[],
+        help="Another folder of jobs, as the snapshot was built with (runner.py --job-dir)",
+    )
     parser.add_argument("--rows-per-branch", type=int, default=2)
     args = parser.parse_args()
 
     client = tomllib.loads(args.client.read_text())
-    job_dirs = [JOBS_DIR, CLIENTS_DIR / client["client"] / "jobs"]
-    jobs = build_order(load_jobs([d for d in job_dirs if d.is_dir()]))
+    jobs = build_order(load_jobs(job_dirs(client, args.job_dir)))
     snapshot = snapshots.load(args.bucket_url, args.snapshot_id, os.environ)
 
     if args.job:

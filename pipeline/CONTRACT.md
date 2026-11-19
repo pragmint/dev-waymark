@@ -2,7 +2,8 @@
 
 Every table a job writes follows this contract. It lets Waymark trace any row back to the raw
 records it came from, one hop at a time, without a separate lineage manifest. The contract is
-about the tables, not the language that builds them, but the runner only runs SQL jobs today.
+about the tables, not the language that builds them: a job is a SQL query or a container image
+(see [Container jobs](#container-jobs)).
 
 ## Required columns
 
@@ -69,6 +70,55 @@ SQL jobs run in DuckDB with these helpers:
 | `params.jira_fields`    | `(key, path, value_type)` from `[[mapping.jira_fields]]`        |
 
 A row's order in the output follows the query's `ORDER BY`.
+
+## Container jobs
+
+A job that needs real code, with its own unit tests, is a container image instead of a query. Its
+folder holds only `job.toml`:
+
+```toml
+description = "Hours from a ticket's first pull request opening to its last one merging."
+kind = "container"
+image = "ghcr.io/acme/lead-time@sha256:<64 hex digits>"
+inputs = ["entities", "ticket_change_links"]
+```
+
+- **The image is pinned by digest**, `<repository>@sha256:<digest>`, or by a local image id
+  (`sha256:<id>`) for a local build. A tag can move, so it is refused. The code lives in a normal
+  repository with its own CI; the job folder only pins what that CI built. The job's version
+  hash covers `job.toml`, so a new digest is a new version.
+- **Inputs are staged, not shared.** The runner copies each declared input, resolved through the
+  snapshot's manifest, to one Parquet file and mounts the folder read-only at `/waymark/in`. The
+  container runs with no network, a read-only filesystem apart from `/tmp`, and the runner's
+  user, so it can't read anything it didn't declare or reach the bucket.
+- **It is told where things are** in environment variables:
+
+  | Variable          | Holds                                                                               |
+  | ----------------- | ----------------------------------------------------------------------------------- |
+  | `WAYMARK_INPUTS`  | JSON: input table → Parquet path, such as `/waymark/in/entities.parquet`            |
+  | `WAYMARK_CHANGES` | JSON: input table → its change file, for inputs this snapshot diffed                |
+  | `WAYMARK_PARAMS`  | JSON: `client`, `jira_base_url`, `ticket_key_pattern`, `statuses` and `jira_fields` |
+  | `WAYMARK_OUTPUT`  | The path to write the output table to, as one Parquet file                          |
+
+  Raw inputs keep their `raw.<table>` names. A change file has a row per input `_row_id` that
+  was added, changed or removed since the base snapshot (see
+  [Snapshot layout](#snapshot-layout)). It is a hint for a job that can use it: the output is
+  still the whole table.
+
+- **The output follows the same contract** and gets the same checks, column map and diff as a SQL
+  job's. `_row_id`, `_sources` and `_fields` must have the types in
+  [Required columns](#required-columns), so write them with a Parquet writer that sets them
+  exactly. To get the `_row_id`s a SQL job's `stable_id` would, use its formula: the first 14
+  hex digits of `md5("<client>:<kind>:<key>")`, as an integer, masked to 53 bits.
+- **A non-zero exit, or no output file, fails the job**, and everything downstream of it is
+  skipped. The tail of its stderr is in the runner's log.
+- **Verification re-runs the container**, on the same small inputs it gives a SQL job. Each
+  replay runs the whole container, so a container job takes longer to verify (about 0.35 s per
+  run with Docker on a laptop); outputs are reused when a perturbation leaves the inputs as they
+  were.
+
+`containers/lead-time/` is an example: a TypeScript job, tested with `bun test`, that produces the
+same table as the SQL job `clients/apache-kafka/jobs/lead_time_by_issue_type`.
 
 ## Column lineage
 
