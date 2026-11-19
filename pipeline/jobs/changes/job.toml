@@ -1,2 +1,0 @@
-description = "One row per GitHub pull request: the latest raw version of each."
-inputs = ["raw.github_pulls"]

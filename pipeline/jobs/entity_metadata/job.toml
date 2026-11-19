@@ -1,2 +1,2 @@
 description = "The metadata Waymark filters and charts on: one row per entity, key and non-null value."
-inputs = ["tickets", "changes", "ticket_change_links"]
+inputs = ["entities", "ticket_change_links"]

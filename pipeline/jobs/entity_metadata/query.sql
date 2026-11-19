@@ -5,14 +5,14 @@ with ticket_rollups as (
   select
     links.ticket_id,
     count(*) as change_count,
-    min(changes.created_at) as first_change_at,
+    min(try_cast(changes.created_at as timestamptz)) as first_change_at,
     max(changes.merged_at) as last_merged_at,
     list_concat(
-      list(source_ref('changes', changes._row_id)),
+      list(source_ref('entities', changes._row_id)),
       list(source_ref('ticket_change_links', links._row_id))
     ) as change_refs
   from ticket_change_links as links
-  inner join changes on changes._row_id = links.change_id
+  inner join entities as changes on changes._row_id = links.change_id
   group by links.ticket_id
 ),
 
@@ -21,7 +21,7 @@ change_tickets as (
     change_id,
     string_agg(ticket_key, ',' order by ticket_key) as ticket_keys,
     list_concat(
-      list(source_ref('tickets', ticket_id)),
+      list(source_ref('entities', ticket_id)),
       list(source_ref('ticket_change_links', _row_id))
     ) as ticket_refs
   from ticket_change_links
@@ -32,46 +32,47 @@ ticket_values as (
   select
     tickets.*,
     rollups.* exclude (ticket_id),
-    [source_ref('tickets', tickets._row_id)] as own_refs,
+    [source_ref('entities', tickets._row_id)] as own_refs,
     list_concat(own_refs, rollups.change_refs) as rollup_refs
-  from tickets
+  from entities as tickets
   left join ticket_rollups as rollups on rollups.ticket_id = tickets._row_id
+  where tickets.type = 'ticket'
 ),
 
 change_values as (
   select
     changes.*,
     change_tickets.ticket_keys,
-    [source_ref('changes', changes._row_id)] as own_refs,
+    [source_ref('entities', changes._row_id)] as own_refs,
     list_concat(own_refs, change_tickets.ticket_refs) as rollup_refs
-  from changes
+  from entities as changes
   left join change_tickets on change_tickets.change_id = changes._row_id
+  where changes.type = 'change'
 ),
 
 ticket_rows as (
-  select 'tickets' as entity_table, _row_id as entity_id, created_at, updated_at, unnest([
-    {'key': 'summary', 'value': summary, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.summary']},
-    {'key': 'project', 'value': project, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.project']},
-    {'key': 'issue_type', 'value': issue_type, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.issue_type']},
-    {'key': 'status', 'value': status, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.status']},
-    {'key': 'status_group', 'value': status_group, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.status_group']},
-    {'key': 'priority', 'value': priority, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.priority']},
-    {'key': 'resolution', 'value': resolution, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.resolution']},
-    {'key': 'assignee', 'value': assignee, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.assignee']},
-    {'key': 'reporter', 'value': reporter, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.reporter']},
-    {'key': 'url', 'value': url, 'value_type': 'string', 'refs': own_refs, 'fields': ['tickets.url']},
-    {'key': 'updated_at', 'value': iso_utc(updated_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['tickets.updated_at']},
-    {'key': 'resolved_at', 'value': iso_utc(resolved_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['tickets.resolved_at']},
-    {'key': 'change_count', 'value': cast(change_count as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['changes._row_id', 'ticket_change_links._row_id']},
-    {'key': 'first_change_at', 'value': iso_utc(first_change_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['changes.created_at', 'ticket_change_links._row_id']},
-    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['changes.merged_at', 'ticket_change_links._row_id']}
+  select _row_id as entity_id, created_at, updated_at, unnest([
+    {'key': 'summary', 'value': summary, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.summary']},
+    {'key': 'project', 'value': project, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.project']},
+    {'key': 'issue_type', 'value': issue_type, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.issue_type']},
+    {'key': 'status', 'value': status, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.status']},
+    {'key': 'status_group', 'value': status_group, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.status_group']},
+    {'key': 'priority', 'value': priority, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.priority']},
+    {'key': 'resolution', 'value': resolution, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.resolution']},
+    {'key': 'assignee', 'value': assignee, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.assignee']},
+    {'key': 'reporter', 'value': reporter, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.reporter']},
+    {'key': 'url', 'value': url, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.url']},
+    {'key': 'updated_at', 'value': iso_utc(updated_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.updated_at']},
+    {'key': 'resolved_at', 'value': iso_utc(resolved_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.resolved_at']},
+    {'key': 'change_count', 'value': cast(change_count as varchar), 'value_type': 'number', 'refs': rollup_refs, 'fields': ['entities._row_id', 'ticket_change_links._row_id']},
+    {'key': 'first_change_at', 'value': iso_utc(first_change_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities.created_at', 'ticket_change_links._row_id']},
+    {'key': 'last_merged_at', 'value': iso_utc(last_merged_at), 'value_type': 'date', 'refs': rollup_refs, 'fields': ['entities.merged_at', 'ticket_change_links._row_id']}
   ]) as m
   from ticket_values
 ),
 
 custom_rows as (
   select
-    'tickets' as entity_table,
     entity_id,
     created_at,
     updated_at,
@@ -86,7 +87,7 @@ custom_rows as (
       'value_type': value_type,
       'refs': refs,
       -- A reference can't name one key of a map, so every custom value reads all of them.
-      'fields': ['tickets.custom_fields']
+      'fields': ['entities.custom_fields']
     } as m
   from (
     select
@@ -96,25 +97,26 @@ custom_rows as (
       field.key,
       field.value_type,
       map_extract_value(tickets.custom_fields, field.key) as text,
-      [source_ref('tickets', tickets._row_id)] as refs
-    from tickets
+      [source_ref('entities', tickets._row_id)] as refs
+    from entities as tickets
     cross join params.jira_fields as field
+    where tickets.type = 'ticket'
   )
 ),
 
 change_rows as (
-  select 'changes' as entity_table, _row_id as entity_id, created_at, updated_at, unnest([
-    {'key': 'title', 'value': title, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.title']},
-    {'key': 'repo', 'value': repo, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.repo']},
-    {'key': 'number', 'value': cast(number as varchar), 'value_type': 'number', 'refs': own_refs, 'fields': ['changes.number']},
-    {'key': 'branch', 'value': branch, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.branch']},
-    {'key': 'state', 'value': state, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.state']},
-    {'key': 'is_draft', 'value': cast(is_draft as varchar), 'value_type': 'boolean', 'refs': own_refs, 'fields': ['changes.is_draft']},
-    {'key': 'author', 'value': author, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.author']},
-    {'key': 'url', 'value': url, 'value_type': 'string', 'refs': own_refs, 'fields': ['changes.url']},
-    {'key': 'updated_at', 'value': iso_utc(updated_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['changes.updated_at']},
-    {'key': 'closed_at', 'value': iso_utc(closed_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['changes.closed_at']},
-    {'key': 'merged_at', 'value': iso_utc(merged_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['changes.merged_at']},
+  select _row_id as entity_id, created_at, updated_at, unnest([
+    {'key': 'title', 'value': title, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.title']},
+    {'key': 'repo', 'value': repo, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.repo']},
+    {'key': 'number', 'value': cast(number as varchar), 'value_type': 'number', 'refs': own_refs, 'fields': ['entities.number']},
+    {'key': 'branch', 'value': branch, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.branch']},
+    {'key': 'state', 'value': state, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.state']},
+    {'key': 'is_draft', 'value': cast(is_draft as varchar), 'value_type': 'boolean', 'refs': own_refs, 'fields': ['entities.is_draft']},
+    {'key': 'author', 'value': author, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.author']},
+    {'key': 'url', 'value': url, 'value_type': 'string', 'refs': own_refs, 'fields': ['entities.url']},
+    {'key': 'updated_at', 'value': iso_utc(updated_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.updated_at']},
+    {'key': 'closed_at', 'value': iso_utc(closed_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.closed_at']},
+    {'key': 'merged_at', 'value': iso_utc(merged_at), 'value_type': 'date', 'refs': own_refs, 'fields': ['entities.merged_at']},
     {'key': 'ticket_keys', 'value': ticket_keys, 'value_type': 'string', 'refs': rollup_refs, 'fields': ['ticket_change_links.ticket_key']}
   ]) as m
   from change_values
@@ -133,21 +135,21 @@ select
   stable_id('metadata', concat_ws(':', entity_id, m.key)) as _row_id,
   m.refs as _sources,
   map {
-    'id': [entity_table || '._row_id'],
-    'entity_id': [entity_table || '._row_id'],
+    'id': ['entities._row_id'],
+    'entity_id': ['entities._row_id'],
     'key': [],
     'value': m.fields,
     'value_type': [],
-    'created_at': [entity_table || '.created_at'],
-    'updated_at': [entity_table || if(updated_at is null, '.created_at', '.updated_at')]
+    'created_at': ['entities.created_at'],
+    'updated_at': [if(updated_at is null, 'entities.created_at', 'entities.updated_at')]
   } as _fields,
   stable_id('metadata', concat_ws(':', entity_id, m.key)) as id,
   entity_id,
   m.key,
   m.value,
   m.value_type,
-  iso_utc(created_at) as created_at,
-  iso_utc(coalesce(updated_at, created_at)) as updated_at
+  created_at,
+  coalesce(iso_utc(updated_at), created_at) as updated_at
 from all_rows
 where m.value is not null
 order by m.key, entity_id

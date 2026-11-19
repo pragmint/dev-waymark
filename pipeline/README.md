@@ -76,17 +76,28 @@ uv run python trace.py \
 ```
 
 Add `--field <column>` to trace one value instead of the whole row. It follows only the sources
-that column reads, using the row's `_fields` and then each table's column map, and ends with the raw fields the value comes from:
+that column reads, using the row's `_fields` and then each table's column map, and ends with the
+raw fields the value comes from:
 
 ```
 avg_lead_time_hours = 1520.1
-  computed from: changes.created_at, changes.merged_at
+  computed from: entities.created_at, entities.merged_at, ticket_change_links._row_id
 hop 0: lead_time_by_issue_type       1 rows  (_row_id 8767488532554951, ...)
-hop 1: changes                     596 rows  (_row_id 100161251620229, ...)
+hop 1: entities                    983 rows  (_row_id 100161251620229, ...)
+hop 1: ticket_change_links         602 rows  (_row_id 1013311773604307, ...)
+hop 2: entities                    983 rows  (_row_id 100161251620229, ...)
 hop 2: raw.github_pulls            596 rows  (_dlt_id +Bhct76HSdz/fA, ...)
+hop 2: raw.jira_issues             387 rows  (_dlt_id +5YaqEoUfFLz8Q, ...)
+hop 3: raw.github_pulls            596 rows  (_dlt_id +Bhct76HSdz/fA, ...)
+hop 3: raw.jira_issues             387 rows  (_dlt_id +5YaqEoUfFLz8Q, ...)
 raw field: raw.github_pulls.created_at  e.g. 2021-02-04 20:57:09+00:00, ...
 raw field: raw.github_pulls.merged_at  e.g. 2021-03-18 14:27:14+00:00, ...
+raw field: raw.jira_issues.fields:$.created  e.g. 2025-10-12T09:34:16.000+0000, ...
 ```
+
+Past the first hop a field follows each table's column map, the union over all its rows. Tickets
+and pull requests share `entities`, so `entities.created_at` maps to both raw `created` fields, and
+the last line is a superset: lead time reads only the pull requests' `created_at`.
 
 `trace.py` and `verify.py` read the published snapshot; add `--snapshot-id <id>` for another.
 `runner.py` already verifies; run `verify.py` on its own to check one job or more rows:

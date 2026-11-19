@@ -187,8 +187,8 @@ def test_a_failed_job_skips_everything_downstream(snap: Snapshot):
 
 def test_tickets_keep_the_latest_version_and_point_at_its_raw_row(built):
     rows = built.sql("""
-        SELECT ticket_key, status, status_group, url, _sources[1].row_id
-        FROM tickets ORDER BY ticket_key
+        SELECT name, status, status_group, url, _sources[1].row_id
+        FROM entities WHERE type = 'ticket' ORDER BY name
     """).fetchall()
     assert rows == [
         ("KAFKA-1", "Resolved", "To Do", "https://jira.example.org/browse/KAFKA-1", "j1-new"),
@@ -199,11 +199,8 @@ def test_tickets_keep_the_latest_version_and_point_at_its_raw_row(built):
 
 def test_every_current_raw_row_is_the_source_of_exactly_one_entity(built):
     refs = built.sql("""
-        SELECT s.row_id, count(*) FROM (
-          SELECT unnest(_sources) AS s FROM tickets
-          UNION ALL
-          SELECT unnest(_sources) FROM changes
-        ) GROUP BY 1 ORDER BY 1
+        SELECT s.row_id, count(*) FROM (SELECT unnest(_sources) AS s FROM entities)
+        GROUP BY 1 ORDER BY 1
     """).fetchall()
     assert refs == [(i, 1) for i in ["j1-new", "j2", "j3", "p10", "p11", "p12-new"]]
 
@@ -211,7 +208,7 @@ def test_every_current_raw_row_is_the_source_of_exactly_one_entity(built):
 def test_links_match_titles_and_underscored_branches_and_skip_unknown_tickets(built):
     links = built.sql("""
         SELECT changes.number, links.ticket_key
-        FROM ticket_change_links AS links JOIN changes ON changes._row_id = links.change_id
+        FROM ticket_change_links AS links JOIN entities AS changes ON changes._row_id = links.change_id
         ORDER BY 1, 2
     """).fetchall()
     assert links == [(10, "KAFKA-1"), (10, "KAFKA-2"), (12, "KAFKA-3")]
@@ -235,7 +232,7 @@ def test_a_rollup_is_sourced_from_the_rows_it_rolls_up(built):
           WHERE entities.name = 'KAFKA-1' AND key = 'change_count'
         )
     """).fetchone()
-    assert sources == ["changes", "ticket_change_links", "tickets"]
+    assert sources == ["entities", "entities", "ticket_change_links"]
 
 
 def test_trace_follows_a_metadata_value_back_to_raw(built, snap: Snapshot):
@@ -244,7 +241,7 @@ def test_trace_follows_a_metadata_value_back_to_raw(built, snap: Snapshot):
         WHERE entities.name = 'KAFKA-1' AND m.key = 'change_count'
     """).fetchone()
     hops = trace(snap, "entity_metadata", str(row_id))
-    assert set(hops[1]) == {"tickets", "changes", "ticket_change_links"}
+    assert set(hops[1]) == {"entities", "ticket_change_links"}
     assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
@@ -298,6 +295,7 @@ def test_field_errors_pass_fields_that_differ_by_row():
     assert field_errors(con, ("up",)) == []
 
 
+
 def test_every_table_carries_the_union_of_its_rows_fields(built, snap: Snapshot):
     for job in load_jobs([JOBS_DIR]):
         metadata = pq.read_metadata(snap.files(job.name)[0]).metadata
@@ -313,7 +311,7 @@ def test_every_table_carries_the_union_of_its_rows_fields(built, snap: Snapshot)
 def test_a_value_with_a_fallback_names_only_the_column_it_came_from(built):
     # KAFKA-2's status is mapped by the client; the others fall back to Jira's category.
     rows = dict(built.sql(
-        "SELECT ticket_key, _fields['status_group'] FROM tickets ORDER BY ticket_key"
+        "SELECT name, _fields['status_group'] FROM entities WHERE type = 'ticket' ORDER BY name"
     ).fetchall())  # fmt: skip
     assert rows == {
         "KAFKA-1": ["raw.jira_issues.fields:$.status.statusCategory.name"],
@@ -327,9 +325,9 @@ def test_a_link_names_the_texts_its_key_was_found_in(built):
         "SELECT ticket_key, _fields['ticket_key'] FROM ticket_change_links ORDER BY ticket_key"
     ).fetchall())  # fmt: skip
     assert rows == {
-        "KAFKA-1": ["tickets.ticket_key", "changes.title"],
-        "KAFKA-2": ["tickets.ticket_key", "changes.branch"],
-        "KAFKA-3": ["tickets.ticket_key", "changes.title"],
+        "KAFKA-1": ["entities.name", "entities.title"],
+        "KAFKA-2": ["entities.name", "entities.branch"],
+        "KAFKA-3": ["entities.name", "entities.title"],
     }
 
 
@@ -343,15 +341,15 @@ def metadata_row_id(built, entity_name: str, key: str) -> str:
 
 def test_trace_field_follows_only_the_tables_a_field_reads(built, snap: Snapshot):
     # change_count is sourced from the ticket, its changes and their links, but counts only the
-    # linked changes. The links lead back to the ticket only through the key that matched.
+    # linked changes and the links, so tracing it skips the ticket's own fields.
     tables = snap
     row_id = metadata_row_id(built, "KAFKA-1", "change_count")
     values = row_values(tables, "entity_metadata", row_id)
     field = trace_field(column_maps(tables), "entity_metadata", "value", values)
     assert field is not None
-    assert field.direct == ["changes._row_id", "ticket_change_links._row_id"]
+    assert field.direct == ["entities._row_id", "ticket_change_links._row_id"]
     hops = trace(tables, "entity_metadata", row_id, field.follow)
-    assert set(hops[1]) == {"changes", "ticket_change_links"}
+    assert set(hops[1]) == {"entities", "ticket_change_links"}
     assert hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
@@ -362,7 +360,7 @@ def test_trace_field_reaches_a_json_path_in_raw(built, snap: Snapshot):
     field = trace_field(column_maps(tables), "entity_metadata", "value", values)
     assert field is not None
     assert field.columns == {
-        "tickets": {"status"},
+        "entities": {"status"},
         "raw.jira_issues": {"fields:$.status.name"},
     }
     hops = trace(tables, "entity_metadata", row_id, field.follow)
@@ -373,7 +371,7 @@ def test_trace_field_reaches_a_json_path_in_raw(built, snap: Snapshot):
 
 
 def test_trace_field_returns_none_for_an_undeclared_field(built, snap: Snapshot):
-    assert trace_field(column_maps(snap), "tickets", "nope", {}) is None
+    assert trace_field(column_maps(snap), "entities", "nope", {}) is None
 
 
 def test_every_shared_job_passes_verification(tmp_path: Path):
@@ -399,7 +397,8 @@ def build(root: Path, runs: list[str], snapshot_id: str, base: Snapshot | None) 
 def tickets_by_key(snap: Snapshot) -> dict[str, tuple[str, str]]:
     with snap.connect() as con:
         rows = con.sql(f"""
-            SELECT ticket_key, status, _sources[1].row_id FROM {snap.source("tickets")}
+            SELECT name, status, _sources[1].row_id FROM {snap.source("entities")}
+            WHERE type = 'ticket'
         """).fetchall()
     return {key: (status, source) for key, status, source in rows}
 
@@ -424,8 +423,7 @@ def test_an_incremental_snapshot_reads_its_full_run_plus_the_changes_since(tmp_p
     assert tickets["KAFKA-2"] == ("Resolved", "j2-inc")
     assert tickets["KAFKA-3"] == ("Open", "j3")  # unchanged, still read from the full run
     assert set(tickets) == {"KAFKA-1", "KAFKA-2", "KAFKA-3", "KAFKA-4"}
-    assert counts(second, "tickets") == (1, 1, 0)
-    assert counts(second, "changes") == (0, 0, 0)
+    assert counts(second, "entities") == (1, 1, 0)  # no pull request changed
     assert verify_jobs(build_order(load_jobs([JOBS_DIR])), CLIENT, second, per_branch=1)
 
     # The next full run no longer has KAFKA-3: it was deleted, and drops out.
@@ -433,4 +431,4 @@ def test_an_incremental_snapshot_reads_its_full_run_plus_the_changes_since(tmp_p
     write_raw(tmp_path, "github_pulls", TYPED_PULLS, "full2")
     third = build(tmp_path, ["full2"], "s3", second)
     assert "KAFKA-3" not in tickets_by_key(third)
-    assert counts(third, "tickets") == (0, 1, 2)  # KAFKA-2 back to the full run's In Progress
+    assert counts(third, "entities") == (0, 1, 2)  # KAFKA-2 back to the full run's In Progress

@@ -318,6 +318,33 @@ old versions.
   - a retention rule that follows the manifests;
   - showing a snapshot's changes (`*.changes.parquet`) in Waymark.
 
+### Phase 3b: no layer between raw and entities (done, 2026-11-19)
+
+- `tickets` and `changes` are gone. `entities` reads `raw.jira_issues` and `raw.github_pulls`
+  itself: one row per issue and per PR, with Waymark's `id`, `name`, `type`, `created_at` and every
+  field the other jobs read. A ticket's PR columns are null, and the other way round, with `[]` in
+  `_fields`. `ticket_change_links`, `entity_metadata` and Kafka's `lead_time_by_issue_type` read
+  `entities` and filter on `type`. `_row_id`s are unchanged.
+- `created_at` stays ISO text for Waymark, so jobs that need a timestamp `try_cast` it. A plain
+  `cast` broke verify, whose perturbed text doesn't parse.
+- **Kafka (copy of the demo bucket, snapshot `20261119T000000Z`):** `ticket_change_links`,
+  `entity_metadata` and `lead_time_by_issue_type` are identical to `20261111T143608Z`, and so are
+  `entities`' Waymark columns. Build and verify take 53 s, with no errors.
+- **Field tracing got coarser past the first hop.** A table's column map is the union over its
+  rows, and tickets and PRs now share one, so `entities.created_at` maps to both raw `created`
+  fields. The Task lead time's field trace now also names `raw.jira_issues.fields:$.created`.
+  The rows it reaches are still right; only the raw-field list is a superset. **Accepted for now
+  (2026-11-19).**
+  - Following each row's own `_fields` at every hop would not fix this case: a lead-time row's
+    `_sources` hold ticket and PR rows of `entities` alike, and `_fields` names columns, not
+    rows. It would only tighten traces whose source rows are all one kind.
+  - **If Dave needs exact fields for aggregates:** let a reference name a subset of rows, e.g.
+    `entities[type=change].created_at`, so tracing follows only matching sources. That touches
+    the contract, `runner.py`'s reference checks, `verify.py`, `trace.py` and Waymark's lineage
+    code.
+- Waymark's lineage fixture (`src/db/source/lineageFixture.ts`) and its E2E test still model
+  `tickets`/`changes`. They test the generic hop walk, so they were left as they are.
+
 ### Phase 4: registry and orchestrator (1 day)
 
 - **Bucket layout:**
@@ -353,7 +380,7 @@ old versions.
 - **Jira's raw `fields` JSON is large:** 412 MB for 20k Kafka issues, up to 1.8 MB per issue.
   - Read every path in one `json_extract_string(fields, [paths])` call; separate calls ran out of
     memory and were about 17× slower.
-  - Never carry `fields` through a job; `tickets` keeps only the configured custom fields as a
+  - Never carry `fields` through a job; `entities` keeps only the configured custom fields as a
     map.
   - Never use a correlated subquery over `fields`: DuckDB decorrelates by grouping on the whole
     JSON value.

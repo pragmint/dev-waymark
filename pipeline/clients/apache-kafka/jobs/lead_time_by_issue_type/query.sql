@@ -2,29 +2,32 @@ with ticket_lead_times as (
   select
     tickets._row_id as ticket_id,
     tickets.issue_type,
-    date_diff('minute', min(changes.created_at), max(changes.merged_at)) / 60.0 as hours,
+    date_diff(
+      'minute', min(try_cast(changes.created_at as timestamptz)), max(changes.merged_at)
+    ) / 60.0 as hours,
     list_concat(
-      list(source_ref('changes', changes._row_id)),
+      list(source_ref('entities', changes._row_id)),
       list(source_ref('ticket_change_links', links._row_id))
     ) as change_refs
-  from tickets
+  from entities as tickets
   inner join ticket_change_links as links on links.ticket_id = tickets._row_id
-  inner join changes on changes._row_id = links.change_id
+  inner join entities as changes on changes._row_id = links.change_id
+  where tickets.type = 'ticket'
   group by tickets._row_id, tickets.issue_type
   having max(changes.merged_at) is not null
 )
 
 select
   stable_id('lead_time_by_issue_type', coalesce(issue_type, '')) as _row_id,
-  list_concat(list(source_ref('tickets', ticket_id)), flatten(list(change_refs))) as _sources,
+  list_concat(list(source_ref('entities', ticket_id)), flatten(list(change_refs))) as _sources,
   map {
-    'issue_type': ['tickets.issue_type'],
+    'issue_type': ['entities.issue_type'],
     -- Which changes count toward a ticket depends on its links; a ticket counts once one merged.
-    'tickets': ['tickets._row_id', 'ticket_change_links._row_id', 'changes.merged_at'],
+    'tickets': ['entities._row_id', 'ticket_change_links._row_id', 'entities.merged_at'],
     'avg_lead_time_hours':
-      ['changes.created_at', 'changes.merged_at', 'ticket_change_links._row_id'],
+      ['entities.created_at', 'entities.merged_at', 'ticket_change_links._row_id'],
     'median_lead_time_hours':
-      ['changes.created_at', 'changes.merged_at', 'ticket_change_links._row_id']
+      ['entities.created_at', 'entities.merged_at', 'ticket_change_links._row_id']
   } as _fields,
   issue_type,
   count(*) as tickets,

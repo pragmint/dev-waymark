@@ -43,14 +43,14 @@ row ids once and its column names once.
 A job is a folder named after the table it writes:
 
 ```
-jobs/tickets/
+jobs/entities/
   job.toml    # description and inputs
   query.sql   # one SELECT, returning _row_id, _sources and _fields
 ```
 
 ```toml
-description = "One row per Jira issue: the latest raw version of each."
-inputs = ["raw.jira_issues"]
+description = "One row per Jira issue and per pull request: the latest raw version of each."
+inputs = ["raw.jira_issues", "raw.github_pulls"]
 ```
 
 A job sees only its declared inputs: `raw.<table>` for raw data and the bare name for another
@@ -78,7 +78,7 @@ raw records behind it. Each job writes its own, in the query:
 
 ```sql
 map {
-  'ticket_key': ['raw.jira_issues.key'],
+  'name': ['raw.jira_issues.key'],
   'priority': ['raw.jira_issues.fields:$.priority.name']
 } as _fields
 ```
@@ -88,7 +88,7 @@ map {
 - **Every row maps every output column** except the three contract columns. `[]` marks a
   constant, such as a fixed label, that reads no input column.
 - **`_row_id` as a reference** means the row's identity rather than one of its values, as in a
-  count of tickets: `'tickets': ['tickets._row_id']`. Tracing follows all of that row's sources.
+  count of tickets: `'tickets': ['entities._row_id']`. Tracing follows all of that row's sources.
   For a raw input, `_dlt_id` plays the same role: `'issues': ['raw.jira_issues._dlt_id']`.
 - **A value that can come from more than one place names the one it came from in that row.**
   `coalesce(a, b)` gets `case when a is not null then [...a] else [...b] end`, and a row of
@@ -96,9 +96,9 @@ map {
 
   ```sql
   case key
-    when 'priority' then map {..., 'value': ['tickets.priority']}
-    when 'author' then map {..., 'value': ['changes.author']}
-    else map {..., 'value': ['tickets.custom_fields']}
+    when 'priority' then map {..., 'value': ['entities.priority']}
+    when 'author' then map {..., 'value': ['entities.author']}
+    else map {..., 'value': ['entities.custom_fields']}
   end as _fields
   ```
 
