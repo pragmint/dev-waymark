@@ -2,6 +2,9 @@
 // shell + JSON embeds; from DOMContentLoaded onward, the entire filter tree
 // view is driven by `state.current` and re-rendered on every change.
 
+import { parseFilterConfig } from './filterInputs';
+import { readJsonEmbed } from './jsonEmbed';
+import { followLink, linksNamed } from './links';
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 import { cloneTreeWithoutKey } from '../../schemas/filterTree';
 
@@ -33,16 +36,10 @@ type AvailableFilter = {
   distinctValues?: string[];
 };
 
-type FilterConfig = {
-  selectedPresetId: number | null;
-  selectedEntityType: string | null;
-  isDraft: boolean;
-};
-
 const state = {
   current: emptyTree(),
   available: [] as AvailableFilter[],
-  config: { selectedPresetId: null, selectedEntityType: null, isDraft: false } as FilterConfig,
+  config: parseFilterConfig(null),
   selected: new Set<string>(),
 };
 
@@ -85,20 +82,7 @@ function hydrate() {
   }
   const available = readJsonEmbed('filter-available');
   if (Array.isArray(available)) state.available = available as AvailableFilter[];
-  const config = readJsonEmbed('filter-config');
-  if (config && typeof config === 'object') {
-    state.config = { ...state.config, ...(config as FilterConfig) };
-  }
-}
-
-function readJsonEmbed(id: string): unknown {
-  const el = document.getElementById(id);
-  if (!el) return null;
-  try {
-    return JSON.parse(el.textContent ?? '');
-  } catch {
-    return null;
-  }
+  state.config = parseFilterConfig(readJsonEmbed('filter-config'));
 }
 
 function isFilterTree(v: unknown): v is FilterTree {
@@ -1042,37 +1026,24 @@ function handleDrop(draggedId: string, targetEl: HTMLElement) {
   }
 }
 
-function wireEntityTypeSelect() {
-  const select = document.querySelector<HTMLSelectElement>('[data-entity-type-select]');
+// Each select's options pair by index with server-rendered links (HiddenLinks
+// named after the select's id); changing the option follows its link.
+function wireNavigatingSelect(select: HTMLSelectElement | null) {
   if (!select) return;
-  const raw = select.dataset.baseUrlTemplate;
-  let template: { type: string; url: string }[] = [];
-  if (raw) {
-    try {
-      template = JSON.parse(raw);
-    } catch {
-      template = [];
-    }
-  }
+  const links = linksNamed(document, select.id);
   select.addEventListener('change', () => {
-    const t = template.find(x => x.type === select.value);
-    if (t) {
+    if (followLink(links?.[select.selectedIndex], location.origin)) {
       document.body.classList.add('page-nav-loading');
-      location.href = t.url;
     }
   });
 }
 
+function wireEntityTypeSelect() {
+  wireNavigatingSelect(document.querySelector<HTMLSelectElement>('[data-entity-type-select]'));
+}
+
 function wirePresetSelect() {
-  const presetSelect = document.querySelector<HTMLSelectElement>('[data-preset-select]');
-  if (!presetSelect) return;
-  presetSelect.addEventListener('change', () => {
-    const v = presetSelect.value;
-    if (v) {
-      document.body.classList.add('page-nav-loading');
-      location.href = v;
-    }
-  });
+  wireNavigatingSelect(document.querySelector<HTMLSelectElement>('[data-preset-select]'));
 }
 
 // Pagination links are plain server-rendered anchors (full page reload) — a

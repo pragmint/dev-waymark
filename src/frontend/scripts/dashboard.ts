@@ -1,3 +1,17 @@
+import {
+  DEFAULT_DATE_RANGE,
+  parseDashboardConfig,
+  parseDateRange,
+  parseDateRangeQuery,
+  parsePresetList,
+  parseTemplateList,
+  parseVizDashboardCounts,
+  parseVizIds,
+} from './dashboardInputs';
+import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
+import { readJsonEmbed } from './jsonEmbed';
+import { followLink, linksNamed, replaceLinks } from './links';
+
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
   new (canvas: HTMLCanvasElement, config: object): ChartInstance;
@@ -47,25 +61,13 @@ interface ChartConfig {
   options?: ChartOptions;
 }
 
-type DateRangePeriod = 'all' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
-
-interface DateRangeState {
-  period: DateRangePeriod;
-  offset: number;
-  customStart: string | null;
-  customEnd: string | null;
-  compare: boolean;
-  compareCustomStart: string | null;
-  compareCustomEnd: string | null;
-}
-
 interface DashboardState {
   dashboardId: number | null;
   savedVizIds: number[];
   currentVizIds: number[];
   originalName: string;
   vizDashboardCounts: Record<number, number>;
-  dateRange: DateRangeState;
+  dateRange: DateRange;
 }
 
 const state: DashboardState = {
@@ -74,38 +76,17 @@ const state: DashboardState = {
   currentVizIds: [],
   originalName: '',
   vizDashboardCounts: {},
-  dateRange: {
-    period: 'all',
-    offset: 0,
-    customStart: null,
-    customEnd: null,
-    compare: false,
-    compareCustomStart: null,
-    compareCustomEnd: null,
-  },
+  dateRange: DEFAULT_DATE_RANGE,
 };
 
 // ── Hydration ────────────────────────────────────────────────────────────────
 
-function readJsonEmbed<T>(id: string, fallback: T): T {
-  const el = document.getElementById(id);
-  if (!el?.textContent) return fallback;
-  try {
-    return JSON.parse(el.textContent) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 function hydrate(): void {
-  const config = readJsonEmbed<{ dashboardId: number | null }>('dashboard-config', {
-    dashboardId: null,
-  });
-  state.dashboardId = config.dashboardId;
-  state.savedVizIds = readJsonEmbed<number[]>('dashboard-saved-viz-ids', []);
+  state.dashboardId = parseDashboardConfig(readJsonEmbed('dashboard-config')).dashboardId;
+  state.savedVizIds = parseVizIds(readJsonEmbed('dashboard-saved-viz-ids'));
   state.currentVizIds = state.savedVizIds.slice();
-  state.vizDashboardCounts = readJsonEmbed<Record<number, number>>('viz-dashboard-counts', {});
-  state.dateRange = readJsonEmbed<DateRangeState>('date-range-config', state.dateRange);
+  state.vizDashboardCounts = parseVizDashboardCounts(readJsonEmbed('viz-dashboard-counts'));
+  state.dateRange = parseDateRange(readJsonEmbed('date-range-config'));
   if (state.dateRange.period === 'custom') {
     rememberedCustom = { start: state.dateRange.customStart, end: state.dateRange.customEnd };
     rememberedCompareCustom = {
@@ -120,28 +101,6 @@ function hydrate(): void {
 
 // ── Chart rendering ──────────────────────────────────────────────────────────
 
-function readPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
-  const raw = canvas.getAttribute('data-point-urls');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readSmoothingPointUrls(canvas: HTMLCanvasElement): (string | null)[] | null {
-  const raw = canvas.getAttribute('data-smoothing-point-urls');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as (string | null)[]) : null;
-  } catch {
-    return null;
-  }
-}
-
 function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
   const raw = canvas.getAttribute('data-smoothing-dataset-index');
   if (!raw) return null;
@@ -154,26 +113,25 @@ function readSmoothingDatasetIndex(canvas: HTMLCanvasElement): number | null {
 // from every bucket in that point's window, not just the point's own bucket.
 function attachPointNavigation(
   config: ChartConfig,
-  pointUrls: (string | null)[],
-  smoothingPointUrls: (string | null)[] | null,
+  pointLinks: HTMLAnchorElement[],
+  smoothingPointLinks: HTMLAnchorElement[] | null,
   smoothingDatasetIndex: number | null
 ): void {
-  const urlFor = (datasetIndex: number, index: number): string | undefined => {
-    if (datasetIndex === 0) return pointUrls[index] ?? undefined;
-    if (smoothingPointUrls && datasetIndex === smoothingDatasetIndex) {
-      return smoothingPointUrls[index] ?? undefined;
+  const linkFor = (datasetIndex: number, index: number): HTMLAnchorElement | undefined => {
+    if (datasetIndex === 0) return pointLinks[index];
+    if (smoothingPointLinks && datasetIndex === smoothingDatasetIndex) {
+      return smoothingPointLinks[index];
     }
     return undefined;
   };
   const isNavigable = (datasetIndex: number): boolean =>
-    datasetIndex === 0 || (smoothingPointUrls != null && datasetIndex === smoothingDatasetIndex);
+    datasetIndex === 0 || (smoothingPointLinks != null && datasetIndex === smoothingDatasetIndex);
 
   const options: ChartOptions = config.options ?? (config.options = {});
   options.onClick = (_event, elements) => {
     const hit = elements.find(e => isNavigable(e.datasetIndex));
     if (!hit) return;
-    const url = urlFor(hit.datasetIndex, hit.index);
-    if (url) window.location.href = url;
+    followLink(linkFor(hit.datasetIndex, hit.index), location.origin);
   };
   options.onHover = (event, elements) => {
     const target = event?.native?.target as HTMLElement | null;
@@ -214,12 +172,13 @@ function renderCardChart(canvas: HTMLCanvasElement): void {
   } catch {
     return;
   }
-  const pointUrls = readPointUrls(canvas);
-  if (pointUrls) {
+  const wrap = canvas.parentElement;
+  const pointLinks = wrap && linksNamed(wrap, 'points');
+  if (wrap && pointLinks) {
     attachPointNavigation(
       config,
-      pointUrls,
-      readSmoothingPointUrls(canvas),
+      pointLinks,
+      linksNamed(wrap, 'smoothing-points'),
       readSmoothingDatasetIndex(canvas)
     );
   }
@@ -380,9 +339,9 @@ function recomputeDirty(): void {
 function wireDashboardSelect(): void {
   const select = document.querySelector<HTMLSelectElement>('[data-dashboard-select]');
   if (!select) return;
+  const links = linksNamed(document, select.id);
   select.addEventListener('change', () => {
-    const url = select.value;
-    if (url) window.location.href = url;
+    followLink(links?.[select.selectedIndex], location.origin);
   });
 }
 
@@ -739,16 +698,6 @@ async function persistReorder(vizIds: number[], previous: number[]): Promise<voi
 
 // ── Create-viz modal ─────────────────────────────────────────────────────────
 
-interface PresetEntry {
-  id: number;
-  name: string;
-}
-interface TemplateEntry {
-  id: string;
-  name: string;
-  description: string;
-  chartType: string;
-}
 interface AvailableField {
   key: string;
   value_type: 'string' | 'number' | 'date' | 'boolean';
@@ -1192,7 +1141,7 @@ function sectionPlaceholder(text: string): HTMLElement {
 
 function renderDatasetSection(): HTMLElement {
   const section = sectionShell(1, 'Dataset');
-  const presets = readJsonEmbed<PresetEntry[]>('presets-list', []);
+  const presets = parsePresetList(readJsonEmbed('presets-list'));
   if (presets.length === 0) {
     section.appendChild(
       sectionPlaceholder('No datasets (presets) found. Create one on the Entities page first.')
@@ -1239,7 +1188,7 @@ async function onPresetChange(presetId: number): Promise<void> {
 
 function renderTemplateSection(): HTMLElement {
   const section = sectionShell(2, 'Template');
-  const templates = readJsonEmbed<TemplateEntry[]>('templates-list', []);
+  const templates = parseTemplateList(readJsonEmbed('templates-list'));
   const grid = document.createElement('div');
   grid.className = 'viz-modal-template-grid';
   for (const t of templates) {
@@ -1710,9 +1659,9 @@ function reloadDashboard(): void {
 // ── Date range stepper ───────────────────────────────────────────────────────
 
 // Mirrors dateRangeToQueryParts in src/domain/dateRange.ts — kept as a
-// client-side duplicate since this script is a standalone bundle with no
-// server-side imports.
-function buildRangeQueryParams(range: DateRangeState): string[] {
+// client-side duplicate since this script is a standalone bundle that only
+// imports types from server-side modules.
+function buildRangeQueryParams(range: DateRange): string[] {
   const params: string[] = [];
   if (range.period !== 'all') params.push(`range=${encodeURIComponent(range.period)}`);
   if (range.period !== 'all' && range.period !== 'custom' && range.offset !== 0) {
@@ -1731,7 +1680,7 @@ function buildRangeQueryParams(range: DateRangeState): string[] {
   return params;
 }
 
-function buildDashboardUrl(range: DateRangeState): string {
+function buildDashboardUrl(range: DateRange): string {
   const params: string[] = [];
   if (state.dashboardId != null) params.push(`dashboard=${state.dashboardId}`);
   params.push(...buildRangeQueryParams(range));
@@ -1742,7 +1691,7 @@ function isStepperPeriod(period: DateRangePeriod): boolean {
   return period === 'week' || period === 'month' || period === 'quarter' || period === 'year';
 }
 
-function syncCompareCheckboxUI(row: HTMLElement, range: DateRangeState): void {
+function syncCompareCheckboxUI(row: HTMLElement, range: DateRange): void {
   const compareLabel = row.querySelector<HTMLElement>('.date-range-compare');
   if (compareLabel) compareLabel.hidden = range.period === 'all';
   const compareCheckbox = row.querySelector<HTMLInputElement>('[data-date-range-compare]');
@@ -1765,7 +1714,7 @@ function syncCompareCheckboxUI(row: HTMLElement, range: DateRangeState): void {
   }
 }
 
-function syncDateRangeRowUI(range: DateRangeState): void {
+function syncDateRangeRowUI(range: DateRange): void {
   const row = document.querySelector<HTMLElement>('[data-date-range-row]');
   if (!row) return;
 
@@ -1873,8 +1822,11 @@ function setCanvasData(
   smoothingDatasetIndex: number | null
 ): void {
   canvas.setAttribute('data-config', JSON.stringify(chartJsConfig));
-  canvas.setAttribute('data-point-urls', JSON.stringify(pointUrls));
-  canvas.setAttribute('data-smoothing-point-urls', JSON.stringify(smoothingPointUrls));
+  const wrap = canvas.parentElement;
+  if (wrap) {
+    replaceLinks(wrap, 'points', pointUrls);
+    replaceLinks(wrap, 'smoothing-points', smoothingPointUrls);
+  }
   canvas.setAttribute('data-smoothing-dataset-index', JSON.stringify(smoothingDatasetIndex));
 }
 
@@ -2067,7 +2019,7 @@ let rememberedCompareCustom: { start: string | null; end: string | null } = {
   end: null,
 };
 
-async function applyRange(range: DateRangeState, opts: { pushHistory: boolean }): Promise<void> {
+async function applyRange(range: DateRange, opts: { pushHistory: boolean }): Promise<void> {
   state.dateRange = range;
   if (range.period === 'custom' && (range.customStart || range.customEnd)) {
     rememberedCustom = { start: range.customStart, end: range.customEnd };
@@ -2112,35 +2064,10 @@ async function fetchAndApplyRangeCards(apiUrl: string, seq: number): Promise<voi
   }
 }
 
-function buildDashboardCardsApiUrl(dashboardId: number, range: DateRangeState): string {
+function buildDashboardCardsApiUrl(dashboardId: number, range: DateRange): string {
   const params = buildRangeQueryParams(range);
   const query = params.length === 0 ? '' : `?${params.join('&')}`;
   return `/api/dashboards/${dashboardId}/cards${query}`;
-}
-
-function readRangeFromUrl(): DateRangeState {
-  const params = new URLSearchParams(window.location.search);
-  const rawPeriod = params.get('range');
-  const validPeriods: DateRangePeriod[] = ['all', 'week', 'month', 'quarter', 'year', 'custom'];
-  const period: DateRangePeriod = validPeriods.includes(rawPeriod as DateRangePeriod)
-    ? (rawPeriod as DateRangePeriod)
-    : 'all';
-  const offsetN = parseInt(params.get('offset') ?? '0', 10);
-  const offset = Number.isFinite(offsetN) ? offsetN : 0;
-  const rs = params.get('rs');
-  const re = params.get('re');
-  const ccs = params.get('ccs');
-  const cce = params.get('cce');
-  const isIsoDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-  return {
-    period,
-    offset,
-    customStart: isIsoDate(rs) ? rs : null,
-    customEnd: isIsoDate(re) ? re : null,
-    compare: params.get('cmp') === '1',
-    compareCustomStart: isIsoDate(ccs) ? ccs : null,
-    compareCustomEnd: isIsoDate(cce) ? cce : null,
-  };
 }
 
 function wireDateRange(): void {
@@ -2150,7 +2077,7 @@ function wireDateRange(): void {
   const periodSelect = row.querySelector<HTMLSelectElement>('[data-date-range-period]');
   periodSelect?.addEventListener('change', () => {
     const period = periodSelect.value as DateRangePeriod;
-    const next: DateRangeState = {
+    const next: DateRange = {
       period,
       offset: 0,
       customStart: period === 'custom' ? rememberedCustom.start : null,
@@ -2224,7 +2151,7 @@ function wireDateRange(): void {
   compareEndInput?.addEventListener('change', applyCompareCustom);
 
   window.addEventListener('popstate', () => {
-    void applyRange(readRangeFromUrl(), { pushHistory: false });
+    void applyRange(parseDateRangeQuery(window.location.search), { pushHistory: false });
   });
 }
 

@@ -13,6 +13,8 @@ import {
 } from '../../schemas/filterTree';
 import type { FilterLeaf, FilterNode } from '../../schemas/filterTree';
 import { buildEntityUrl, encodeTree } from '../../domain/filterUrl';
+import { HiddenLinks } from './HiddenLinks';
+import { JsonEmbed } from './JsonEmbed';
 
 export type PresetWithUrl = Preset & { url: string };
 
@@ -221,50 +223,19 @@ export const FilterBar: FC<FilterBarProps> = ({
   return (
     <div class="filter-bar" data-filter-bar>
       {/* JSON embeds — client hydration */}
-      <script
-        type="application/json"
-        id="filter-tree-initial"
-        // The script embed is parsed client-side as JSON during hydration —
-        // keep it as raw JSON. The URL/form encoders use the hex codec.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(visibleTree) }}
-      />
-      <script
-        type="application/json"
-        id="filter-available"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(availableFilters) }}
-      />
-      <script
-        type="application/json"
-        id="filter-selected-preset-tree"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(selectedPresetTree ?? null),
-        }}
-      />
-      <script
-        type="application/json"
-        id="filter-config"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            selectedPresetId,
-            selectedEntityType,
-            isDraft,
-          }),
-        }}
-      />
+      {/* Parsed client-side as JSON during hydration — keep it as JSON, not the
+          hex codec the URL/form encoders use. */}
+      <JsonEmbed id="filter-tree-initial" value={visibleTree} />
+      <JsonEmbed id="filter-available" value={availableFilters} />
+      <JsonEmbed id="filter-selected-preset-tree" value={selectedPresetTree ?? null} />
+      <JsonEmbed id="filter-config" value={{ selectedPresetId, selectedEntityType, isDraft }} />
 
       {/* Row: Type + Preset controls */}
       <div class="filter-meta-row">
         <label class="filter-widget-label" for="entity-type-select">
           Type
         </label>
-        <select
-          id="entity-type-select"
-          class="filter-select"
-          data-entity-type-select
-          data-base-url-template={JSON.stringify(
-            entityTypes.map(t => ({ type: t, url: urlForEntityType(activeTree, t) }))
-          )}
-        >
+        <select id="entity-type-select" class="filter-select" data-entity-type-select>
           {entityTypes.length === 0 && <option value="">(no entity types)</option>}
           {entityTypes.map(t => (
             <option value={t} selected={selectedEntityType === t}>
@@ -272,6 +243,14 @@ export const FilterBar: FC<FilterBarProps> = ({
             </option>
           ))}
         </select>
+        <HiddenLinks
+          name="entity-type-select"
+          hrefs={
+            entityTypes.length === 0
+              ? [null]
+              : entityTypes.map(t => urlForEntityType(activeTree, t))
+          }
+        />
 
         <div class="filter-meta-divider" aria-hidden="true" />
 
@@ -344,19 +323,20 @@ export const FilterBar: FC<FilterBarProps> = ({
             </a>
           </div>
         ) : (
-          <select
-            id="preset-combo-input"
-            class="filter-select"
-            data-preset-select
-            data-current-url={currentUrl}
-          >
-            <option value={bareTypeUrl}>None</option>
-            {presets.map(p => (
-              <option value={p.url} data-preset-id={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <>
+            <select id="preset-combo-input" class="filter-select" data-preset-select>
+              <option value="">None</option>
+              {presets.map(p => (
+                <option value={String(p.id)} data-preset-id={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <HiddenLinks
+              name="preset-combo-input"
+              hrefs={[bareTypeUrl, ...presets.map(p => p.url)]}
+            />
+          </>
         )}
 
         {selectedPreset && (

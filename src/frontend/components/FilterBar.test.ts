@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { computeVisibleFilterTree } from './FilterBar';
-import { collectLeaves, isLeaf, makeGroup, makeLeaf } from '../../schemas/filterTree';
+import { computeVisibleFilterTree, FilterBar } from './FilterBar';
+import { collectLeaves, emptyTree, isLeaf, makeGroup, makeLeaf } from '../../schemas/filterTree';
 
 describe('computeVisibleFilterTree', () => {
   it('strips a top-level entity_type leaf', () => {
@@ -71,4 +71,45 @@ describe('computeVisibleFilterTree', () => {
       }
     }
   });
+});
+
+// Scripts pair the i-th <option> of a navigating select with the i-th link in
+// the HiddenLinks container named after the select's id, so the counts must
+// always match.
+describe('FilterBar navigating selects', () => {
+  const render = (entityTypes: string[]) =>
+    String(
+      FilterBar({
+        activeTree: emptyTree(),
+        availableFilters: [],
+        entityTypes,
+        presets: [
+          { id: 1, name: 'One', url: '/entities?preset=1' },
+          { id: 2, name: 'Two', url: '/entities?preset=2' },
+        ],
+        selectedPresetId: null,
+        selectedPresetTree: null,
+        selectedEntityType: entityTypes[0] ?? null,
+        isDraft: false,
+      })
+    );
+
+  const count = (html: string, pattern: RegExp, tag: string) => {
+    const block = html.match(pattern)?.[0];
+    expect(block).toBeDefined();
+    return block!.split(`<${tag}`).length - 1;
+  };
+  const optionCount = (html: string, id: string) =>
+    count(html, new RegExp(`<select id="${id}"[\\s\\S]*?</select>`), 'option');
+  const linkCount = (html: string, id: string) =>
+    count(html, new RegExp(`<div hidden="" data-links="${id}">[\\s\\S]*?</div>`), 'a');
+
+  for (const entityTypes of [[], ['jira_ticket', 'github_pr']]) {
+    it(`pairs every option with a link (${entityTypes.length} entity types)`, () => {
+      const html = render(entityTypes);
+      for (const id of ['entity-type-select', 'preset-combo-input']) {
+        expect(linkCount(html, id)).toBe(optionCount(html, id));
+      }
+    });
+  }
 });
