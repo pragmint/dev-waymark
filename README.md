@@ -16,7 +16,7 @@ cp .env.example .env
 cp .env.e2e.example .env.e2e
 ```
 
-Make sure to have [nix package manager](https://nixos.org/download/) installed on your computer.
+Make sure to have [nix package manager](https://nixos.org/download/) installed on your computer. `devenv shell` provides bun; `bun install` refuses a bun older than `engines.bun` in `package.json`.
 
 Then run the relevant bun install commands.
 

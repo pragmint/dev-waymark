@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "engines": {
+    "bun": ">=1.4.4",
     "node": ">=23.6"
   },
   "scripts": {
+    "preinstall": "bun scripts/check-bun-version.ts",
     "dev": "bun scripts/dev.ts",
     "start": "bun scripts/start.ts",
     "b": "bun scripts/build.ts",
