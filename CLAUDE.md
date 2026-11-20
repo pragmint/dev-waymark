@@ -9,6 +9,7 @@
 - **`bun b:prod`** — Production build (bundles server + assets to `dist/`)
 - **`bun test`** — Run unit tests (Bun test runner, searches `./src`)
 - **`bun test:e2e`** — Run Playwright E2E tests (requires server on :3000)
+- **`bun check:pipeline`** — Pipeline tests (`uv run pytest`, container `bun test`) for staged `pipeline/` changes
 
 Unit tests live alongside source files as `*.test.ts`. Run a single file with `bun test path/to/file.test.ts`.
 
@@ -41,6 +42,10 @@ Templates (`src/schemas/visualizationTemplate.ts`, `src/domain/templateResolver.
 
 Any new visualization template must work across every `DateRangePeriod` (`all`, `week`, `month`, `quarter`, `year`, `custom`) via the shared `src/domain/dateRange.ts` mechanism — never reimplement range logic per-template.
 
+### Data pipeline
+
+`pipeline/` is a separate Python project (uv, inside `devenv shell`) that builds the source tables as Parquet snapshots with row-level lineage; Waymark reads them through the DuckDB adapter. Nothing in `src/` imports from it, nor it from `src/`. Run its tests from `pipeline/` with `uv run pytest`. Start at [pipeline/README.md](pipeline/README.md); every table it writes follows [pipeline/CONTRACT.md](pipeline/CONTRACT.md).
+
 ### Data sources
 
 Data is stored in a SQLite database (`dev-waymark.sqlite`) and accessed exclusively via `src/db/entityRepository.ts`.
@@ -48,7 +53,7 @@ Data is stored in a SQLite database (`dev-waymark.sqlite`) and accessed exclusiv
 ## Hooks
 
 - **Post-edit**: `bun check` runs after every Edit/Write. Edits are blocked on lint, format, or type errors. Run `bun fix` to auto-resolve.
-- **Pre-commit**: `bun check:commit` runs before every commit. If blocked, diagnose with `bun check:commit` directly — never use git commands to work around this.
+- **Pre-commit**: `bun check:commit` and `bun check:pipeline` run before every commit (install with `bun install-hooks`). If blocked, diagnose by running the failing script directly — never use git commands to work around this.
 
 ## Code style
 

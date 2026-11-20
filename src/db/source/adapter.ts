@@ -14,7 +14,7 @@ export type SqlScalar = string | number | null;
 
 // The full union of things the adapter may bind. `number[]` is only produced by
 // the Postgres inList() path (bound as a single array parameter via = ANY(?));
-// SQLite's inList() stringifies the ids and binds them as a single string.
+// SQLite's and DuckDB's inList() stringify the ids and bind them as a single string.
 export type SqlParam = SqlScalar | number[];
 
 export type InListFragment = { sql: string; params: SqlParam[] };
@@ -48,4 +48,17 @@ export interface SourceDataAdapter {
 
   /** Release any held connections/resources. */
   close(): Promise<void>;
+
+  /**
+   * Tables that follow the pipeline's row-lineage contract (pipeline/CONTRACT.md),
+   * raw ones named `raw.<table>`. Only adapters reading a pipeline run have them;
+   * the rest leave this undefined and Waymark hides lineage.
+   */
+  listLineageTables?(): string[];
+
+  /**
+   * Each lineage table's column map (pipeline/CONTRACT.md, "Column lineage") as JSON text,
+   * for the tables that carry one.
+   */
+  listColumnMaps?(): Record<string, string>;
 }

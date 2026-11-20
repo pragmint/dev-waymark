@@ -1,8 +1,22 @@
 { pkgs, ... }:
 
 {
-  # Runtime tools available inside `devenv shell`.
-  packages = [ pkgs.bun ];
+  # Runtime tools available inside `devenv shell`. `gh` supplies the pipeline's
+  # GITHUB_TOKEN; `duckdb` is for poking at the Parquet it writes.
+  packages = [ pkgs.bun pkgs.gh pkgs.duckdb ];
+
+  # The data pipeline in pipeline/. Entering the shell runs `uv sync` there, so
+  # its dependencies are installed and `uv run` / `python` use them.
+  languages.python = {
+    enable = true;
+    package = pkgs.python313;
+    directory = "./pipeline";
+    venv.enable = true;
+    uv = {
+      enable = true;
+      sync.enable = true;
+    };
+  };
 
   # One Postgres instance backs both `bun dev` and `bun test:e2e`. Isolation
   # between the two is by database name, not port — the app's ephemeral seed

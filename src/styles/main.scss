@@ -856,6 +856,197 @@ form {
   font-weight: 500;
 }
 
+// ── Lineage ───────────────────────────────────────────────────────────────────
+
+.lineage-action {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-primary);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+.lineage-table-name {
+  font-family: var(--font-mono);
+}
+
+.lineage-note {
+  color: var(--color-muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.entity-fields.lineage-fields {
+  grid-template-columns: minmax(140px, max-content) 1fr;
+
+  dd {
+    overflow-wrap: anywhere;
+  }
+}
+
+.lineage-parents h2,
+.lineage-hops h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.lineage-group {
+  margin-bottom: 28px;
+
+  h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+}
+
+.lineage-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.lineage-table td,
+.lineage-table th {
+  white-space: nowrap;
+}
+
+// Text columns wrap at word boundaries; short values (ids, numbers, states) stay on one line.
+.lineage-table td.lineage-cell--text {
+  white-space: normal;
+  min-width: 180px;
+  max-width: 320px;
+  overflow-wrap: break-word;
+}
+
+.lineage-more {
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 8px 0 0;
+}
+
+.lineage-json {
+  margin: 0;
+  padding: 14px;
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre;
+}
+
+.lineage-hops {
+  margin-bottom: 28px;
+}
+
+.lineage-hop-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+  }
+
+  li:last-child {
+    border-bottom: none;
+  }
+}
+
+.lineage-hop-depth {
+  min-width: 48px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.lineage-hop-table {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lineage-field-link {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.entity-fields .lineage-field--active {
+  background: var(--color-badge-bg);
+  font-weight: 600;
+}
+
+.lineage-field {
+  margin: -16px 0 28px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  font-size: 13px;
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+}
+
+.lineage-field-heading {
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+
+.lineage-field-refs {
+  margin: 0 0 10px;
+  padding-left: 18px;
+
+  li {
+    overflow-wrap: anywhere;
+  }
+}
+
+.lineage-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.lineage-table th.lineage-col--field {
+  color: var(--color-primary);
+}
+
+.lineage-table td.lineage-col--field {
+  background: var(--color-surface);
+  font-weight: 500;
+}
+
 // ── Entity detail ─────────────────────────────────────────────────────────────
 
 .entity-detail {
@@ -2215,4 +2406,31 @@ body.filter-dragging * {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   z-index: 1001;
+}
+
+// Lineage: long ids and wide raw records must not push the page sideways.
+@media (max-width: 720px) {
+  .lineage-table td.lineage-cell--text {
+    min-width: 160px;
+    max-width: 240px;
+  }
+
+  .page-header h1 code {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
+  .lineage-json {
+    max-height: 60vh;
+    font-size: 11px;
+  }
+
+  .lineage-hop-depth {
+    min-width: 0;
+  }
+
+  .entity-fields.lineage-fields {
+    grid-template-columns: 1fr;
+  }
 }

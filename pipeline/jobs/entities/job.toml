@@ -1,0 +1,2 @@
+description = "The entities Waymark lists, one per Jira issue and one per pull request: the latest raw version of each, with the fields the other jobs read."
+inputs = ["raw.jira_issues", "raw.github_pulls"]
