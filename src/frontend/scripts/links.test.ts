@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { followLink } from './links';
+import { followLink, wireSelectToLinks } from './links';
 
 const pageOrigin = 'https://waymark.example.com';
 
@@ -36,5 +36,41 @@ describe('followLink', () => {
   it('refuses a missing link', () => {
     expect(followLink(undefined, pageOrigin)).toBe(false);
     expect(followLink(null, pageOrigin)).toBe(false);
+  });
+});
+
+describe('wireSelectToLinks', () => {
+  function fakeSelect() {
+    const select = {
+      selectedIndex: 0,
+      onChange: () => {},
+      addEventListener: (_type: 'change', listener: () => void) => {
+        select.onChange = listener;
+      },
+    };
+    return select;
+  }
+
+  it('follows the link paired with the chosen option and reports it', () => {
+    const select = fakeSelect();
+    const links = [fakeLink(''), fakeLink(pageOrigin)];
+    let followed = 0;
+    wireSelectToLinks(select, links, pageOrigin, () => followed++);
+    select.selectedIndex = 1;
+    select.onChange();
+    expect(links[1].clicks).toBe(1);
+    expect(followed).toBe(1);
+  });
+
+  it('does nothing when the paired link is refused or missing', () => {
+    const select = fakeSelect();
+    const links = [fakeLink('null')];
+    let followed = 0;
+    wireSelectToLinks(select, links, pageOrigin, () => followed++);
+    select.onChange();
+    select.selectedIndex = 5;
+    select.onChange();
+    expect(links[0].clicks).toBe(0);
+    expect(followed).toBe(0);
   });
 });

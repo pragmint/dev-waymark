@@ -4,7 +4,7 @@
 
 import { parseFilterConfig } from './filterInputs';
 import { readJsonEmbed } from './jsonEmbed';
-import { followLink, linksNamed } from './links';
+import { linksNamed, wireSelectToLinks } from './links';
 import { encodeTreeHex } from '../../domain/filterTreeCodec';
 import { cloneTreeWithoutKey } from '../../schemas/filterTree';
 
@@ -1026,16 +1026,11 @@ function handleDrop(draggedId: string, targetEl: HTMLElement) {
   }
 }
 
-// Each select's options pair by index with server-rendered links (HiddenLinks
-// named after the select's id); changing the option follows its link.
 function wireNavigatingSelect(select: HTMLSelectElement | null) {
   if (!select) return;
-  const links = linksNamed(document, select.id);
-  select.addEventListener('change', () => {
-    if (followLink(links?.[select.selectedIndex], location.origin)) {
-      document.body.classList.add('page-nav-loading');
-    }
-  });
+  wireSelectToLinks(select, linksNamed(document, select.id), location.origin, () =>
+    document.body.classList.add('page-nav-loading')
+  );
 }
 
 function wireEntityTypeSelect() {

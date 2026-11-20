@@ -10,7 +10,7 @@ import {
 } from './dashboardInputs';
 import type { DateRange, DateRangePeriod } from '../../domain/dateRange';
 import { readJsonEmbed } from './jsonEmbed';
-import { followLink, linksNamed, replaceLinks } from './links';
+import { followLink, linksNamed, replaceLinks, wireSelectToLinks } from './links';
 
 // Chart.js is loaded from CDN as a global before this script runs.
 declare const Chart: {
@@ -339,10 +339,7 @@ function recomputeDirty(): void {
 function wireDashboardSelect(): void {
   const select = document.querySelector<HTMLSelectElement>('[data-dashboard-select]');
   if (!select) return;
-  const links = linksNamed(document, select.id);
-  select.addEventListener('change', () => {
-    followLink(links?.[select.selectedIndex], location.origin);
-  });
+  wireSelectToLinks(select, linksNamed(document, select.id), location.origin);
 }
 
 function wireDashboardCombobox(): void {

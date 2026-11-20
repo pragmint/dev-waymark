@@ -2,13 +2,28 @@
 // than copying text from the page into `location`. The browser parses each
 // href, and a link that isn't same-origin (`javascript:`, `data:`, another
 // host, or no href at all) is never followed.
-export function followLink(
-  link: Pick<HTMLAnchorElement, 'origin' | 'click'> | null | undefined,
-  pageOrigin: string
-): boolean {
+type FollowableLink = Pick<HTMLAnchorElement, 'origin' | 'click'>;
+
+export function followLink(link: FollowableLink | null | undefined, pageOrigin: string): boolean {
   if (!link || link.origin !== pageOrigin) return false;
   link.click();
   return true;
+}
+
+// A select whose options pair by index with server-rendered links (HiddenLinks
+// named after the select's id). Changing the option follows its link and then
+// calls `onFollow`.
+export function wireSelectToLinks(
+  select: Pick<HTMLSelectElement, 'selectedIndex'> & {
+    addEventListener(type: 'change', listener: () => void): void;
+  },
+  links: FollowableLink[] | null,
+  pageOrigin: string,
+  onFollow: () => void = () => {}
+): void {
+  select.addEventListener('change', () => {
+    if (followLink(links?.[select.selectedIndex], pageOrigin)) onFollow();
+  });
 }
 
 export function linksNamed(root: ParentNode, name: string): HTMLAnchorElement[] | null {
