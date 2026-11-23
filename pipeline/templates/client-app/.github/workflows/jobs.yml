@@ -1,0 +1,110 @@
+# The client's own jobs, in jobs/. A pull request that changes one previews it: the last extract
+# run is built with that job at the PR's version and verified, and the snapshot is saved but never
+# published. Merging to main promotes it: the same preview, then the version is made active if it
+# passed, and the next hourly pipeline run publishes it. Setup is in README.md.
+
+name: jobs
+
+on:
+  pull_request:
+    paths: ['jobs/**']
+  push:
+    branches: [main]
+    paths: ['jobs/**']
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'A job folder name to promote, or "all" (after the first full extract)'
+        default: all
+
+concurrency:
+  # One registry change at a time. Separate from the pipeline's group so a job change never
+  # displaces a queued scheduled run; a run reads the active versions once, when it starts.
+  group: jobs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # AWS OIDC; unused with static keys (R2, MinIO)
+
+jobs:
+  jobs:
+    # Off in the template repo, which has no client to run.
+    if: github.repository != 'pragmint/dev-waymark-client-template'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMMAND: ${{ github.event_name == 'pull_request' && 'preview' || 'promote' }}
+      CLIENT_TOML: ${{ github.workspace }}/clients/${{ vars.CLIENT }}.toml
+      BUCKET_URL: ${{ vars.BUCKET_URL }}
+      SHARED_URL: ${{ vars.SHARED_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # to diff against the base
+
+      - uses: ./.github/actions/setup-pipeline
+        with:
+          client: ${{ vars.CLIENT }}
+          bucket-url: ${{ vars.BUCKET_URL }}
+          shared-url: ${{ vars.SHARED_URL }}
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-endpoint-url: ${{ vars.AWS_ENDPOINT_URL }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Find the changed jobs
+        id: changed
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          ONLY: ${{ inputs.job }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] && [ "$ONLY" != all ]; then
+            names="$ONLY"
+          elif [ "$EVENT" = workflow_dispatch ] || [ "$PUSH_BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            names=$(ls jobs)
+          else
+            base=${PR_BASE:-$PUSH_BEFORE}
+            names=$(git diff --name-only "$base" HEAD -- jobs/ | cut -d/ -f2 | sort -u)
+          fi
+          found=()
+          for name in $names; do
+            if [ -f "jobs/$name/job.toml" ]; then
+              found+=("$name")
+            elif [ -n "$name" ] && [ "$name" != README.md ]; then
+              # The registry can't retire a job yet: its last version stays active.
+              echo "::warning::jobs/$name is gone, but its active version still runs. Retire it by hand."
+            fi
+          done
+          echo "Jobs to ${COMMAND}: ${found[*]:-none}"
+          echo "names=${found[*]}" >> "$GITHUB_OUTPUT"
+
+      # One job at a time, in name order. A preview swaps in one job against the active versions
+      # of the rest, so a PR that changes a job and another that reads its new columns fails the
+      # second preview; merge them in two PRs. On main, each promote sees the ones before it.
+      - name: ${{ env.COMMAND }}
+        if: steps.changed.outputs.names != ''
+        working-directory: waymark/pipeline
+        env:
+          NAMES: ${{ steps.changed.outputs.names }}
+        run: |
+          status=0
+          for name in $NAMES; do
+            echo "::group::$COMMAND $name"
+            if uv run python orchestrate.py \
+                --client "$CLIENT_TOML" \
+                --bucket-url "$BUCKET_URL" \
+                --shared-url "$SHARED_URL" \
+                "$COMMAND" "$name" "$GITHUB_WORKSPACE/jobs/$name"; then
+              result=passed
+            else
+              result=failed
+              status=1
+            fi
+            echo "::endgroup::"
+            echo "- \`$name\`: $COMMAND $result" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit $status

@@ -1,0 +1,28 @@
+# One client's sources and mappings. Rename this file to <client>.toml and set the repo variable
+# CLIENT to the same name. Every key is described in the pipeline README, "Client config".
+client = "example"
+
+[github]
+repos = ["example-org/example-repo"]
+
+[jira]
+# "server" is Jira Server/Data Center (REST v2); "cloud" is *.atlassian.net (REST v3).
+flavor = "cloud"
+base_url = "https://example.atlassian.net"
+# Order by a stable field so offset paging can't skip or repeat issues mid-run.
+jql = "project = EX ORDER BY key ASC"
+
+[mapping]
+# Uppercase, because PR text is uppercased before matching.
+ticket_key_pattern = "EX-[0-9]+"
+
+# Maps a Jira status to a status group. Unlisted statuses use Jira's own category.
+[mapping.statuses]
+# "In Review" = "In Progress"
+
+# Extra Jira fields to keep as entity metadata, one table per field. `path` is into the issue's
+# `fields` JSON.
+# [[mapping.jira_fields]]
+# key = "story_points"
+# path = "$.customfield_10016"
+# value_type = "number"
