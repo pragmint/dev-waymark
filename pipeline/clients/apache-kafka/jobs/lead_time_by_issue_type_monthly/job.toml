@@ -1,0 +1,3 @@
+description = "Lead time by issue type and month: how many tickets of each issue type had their last pull request merge that month, and their average and median hours from the first pull request opening. Each row is an entity in Waymark, dated the first of its month."
+inputs = ["entities[type=ticket]", "entity_metadata[entity_type=ticket]"]
+entity_type = "lead_time_by_issue_type_monthly"

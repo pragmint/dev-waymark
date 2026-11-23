@@ -1,0 +1,3 @@
+description = "One ticket per Jira issue: the latest raw version of each, with its fields and the client's custom fields as metadata."
+inputs = ["raw.jira_issues"]
+entity_type = "ticket"

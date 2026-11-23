@@ -1,0 +1,98 @@
+# Shared by pipeline.yml and jobs.yml: checks the repo's configuration, checks out the pipeline at
+# the commit in .waymark-ref into waymark/, installs it, and logs in to the bucket. Composite
+# actions can't read `vars` or `secrets`, so the workflows pass them in.
+
+name: setup-pipeline
+description: Check out and install the Waymark pipeline, and log in to the bucket
+
+inputs:
+  client: { required: true }
+  bucket-url: { required: true }
+  shared-url: { required: true }
+  aws-region: { required: true }
+  aws-role-arn: { required: false, default: '' }
+  aws-endpoint-url: { required: false, default: '' }
+  aws-access-key-id: { required: false, default: '' }
+  aws-secret-access-key: { required: false, default: '' }
+  source-github-token:
+    description: Only checked for, by workflows that extract
+    required: false
+    default: ''
+  needs-source-token: { required: false, default: 'false' }
+
+runs:
+  using: composite
+  steps:
+    - name: Check configuration
+      id: config
+      shell: bash
+      env:
+        CLIENT: ${{ inputs.client }}
+        BUCKET_URL: ${{ inputs.bucket-url }}
+        SHARED_URL: ${{ inputs.shared-url }}
+        AWS_REGION: ${{ inputs.aws-region }}
+        AWS_ROLE_ARN: ${{ inputs.aws-role-arn }}
+        HAS_SOURCE_TOKEN: ${{ inputs.source-github-token != '' && 'yes' || '' }}
+        NEEDS_SOURCE_TOKEN: ${{ inputs.needs-source-token }}
+        HAS_STATIC_KEYS: ${{ inputs.aws-access-key-id != '' && inputs.aws-secret-access-key != '' && 'yes' || '' }}
+      run: |
+        missing=()
+        WAYMARK_REF=$(tr -d '[:space:]' < .waymark-ref)
+        if ! [[ "$WAYMARK_REF" =~ ^[0-9a-f]{40}$ ]]; then
+          missing+=(".waymark-ref: a full commit SHA on main of pragmint/dev-waymark")
+        fi
+        for v in CLIENT BUCKET_URL SHARED_URL AWS_REGION; do
+          if [ -z "${!v}" ]; then missing+=("variable $v"); fi
+        done
+        if [ "$NEEDS_SOURCE_TOKEN" = true ] && [ -z "$HAS_SOURCE_TOKEN" ]; then
+          missing+=("secret SOURCE_GITHUB_TOKEN")
+        fi
+        # Either an AWS role (OIDC) or a static key pair (R2, MinIO, or S3 without OIDC).
+        if [ -z "$AWS_ROLE_ARN" ] && [ -z "$HAS_STATIC_KEYS" ]; then
+          missing+=("variable AWS_ROLE_ARN, or secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+        fi
+        if [ ${#missing[@]} -gt 0 ]; then
+          printf '::error::Not set: %s\n' "${missing[@]}"
+          exit 1
+        fi
+        echo "waymark-ref=$WAYMARK_REF" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/checkout@v4
+      with:
+        repository: pragmint/dev-waymark
+        ref: ${{ steps.config.outputs.waymark-ref }}
+        path: waymark
+        sparse-checkout: pipeline
+
+    - uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: waymark/pipeline/uv.lock
+
+    - shell: bash
+      working-directory: waymark/pipeline
+      run: uv sync --frozen
+
+    - name: Log in to AWS (OIDC)
+      if: inputs.aws-role-arn != ''
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+
+    # Written to GITHUB_ENV only when set: an empty AWS_* variable would shadow the OIDC login.
+    - name: Use a static key pair (R2, MinIO)
+      if: inputs.aws-role-arn == ''
+      shell: bash
+      env:
+        KEY_ID: ${{ inputs.aws-access-key-id }}
+        SECRET: ${{ inputs.aws-secret-access-key }}
+        ENDPOINT: ${{ inputs.aws-endpoint-url }}
+        REGION: ${{ inputs.aws-region }}
+      run: |
+        {
+          echo "AWS_ACCESS_KEY_ID=$KEY_ID"
+          echo "AWS_SECRET_ACCESS_KEY=$SECRET"
+          echo "AWS_REGION=$REGION"
+          if [ -n "$ENDPOINT" ]; then echo "AWS_ENDPOINT_URL=$ENDPOINT"; fi
+        } >> "$GITHUB_ENV"

@@ -1,0 +1,3 @@
+description = "The keys of the tickets each pull request mentions, comma-separated, added to the change as metadata."
+inputs = ["entities[type=ticket_change_link]", "entity_metadata[entity_type=ticket_change_link]"]
+adds_to = "change"

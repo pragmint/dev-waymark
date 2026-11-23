@@ -1,0 +1,8 @@
+description = "Each linked ticket's changes: how many, when the first opened and the last merged, and the lead time between them in hours, added to the ticket as metadata."
+inputs = [
+  "entities[type=ticket_change_link]",
+  "entity_metadata[entity_type=ticket_change_link]",
+  "entities[type=change]",
+  "entity_metadata[entity_type=change]",
+]
+adds_to = "ticket"

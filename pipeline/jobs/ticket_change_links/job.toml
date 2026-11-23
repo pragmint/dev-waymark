@@ -1,0 +1,3 @@
+description = "One link per ticket a pull request mentions in its title, branch or body."
+inputs = ["entities[type=ticket]", "entities[type=change]", "entity_metadata[entity_type=change]"]
+entity_type = "ticket_change_link"

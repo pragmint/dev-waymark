@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
-import { getEntityRepo } from '../db/source/index';
+import { getEntityRepo, getLineageRepo } from '../db/source/index';
+import { ENTITIES_TABLE, entityLineagePath } from '../domain/lineage';
 import { EntityDetailPage } from '../frontend/Pages/EntityDetailPage';
 
 export async function entityDetailHandler(c: Context) {
@@ -23,5 +24,8 @@ export async function entityDetailHandler(c: Context) {
     );
   }
 
-  return c.html(<EntityDetailPage entity={entity} />);
+  const lineageHref = getLineageRepo()?.hasTable(ENTITIES_TABLE)
+    ? entityLineagePath(entity.id)
+    : undefined;
+  return c.html(<EntityDetailPage entity={entity} lineageHref={lineageHref} />);
 }

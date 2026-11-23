@@ -1,0 +1,76 @@
+# Runs the Waymark pipeline for one client: an incremental extract every hour, a full extract
+# every Sunday. Each run extracts, builds the registry's active jobs, verifies and publishes.
+# Setup is in README.md.
+
+name: pipeline
+
+on:
+  schedule:
+    - cron: '17 * * * *' # hourly, incremental (off the busy top of the hour)
+    - cron: '43 6 * * 0' # Sundays 06:43 UTC, full, so deleted records drop out
+  workflow_dispatch:
+    inputs:
+      extract:
+        description: 'incremental, full, or none (build the last complete run without extracting)'
+        type: choice
+        options: [incremental, full, none]
+        default: incremental
+      break_lock:
+        description: 'Remove a lock left by a run that was killed, then run'
+        type: boolean
+        default: false
+
+concurrency:
+  # Never two runs against one bucket. Don't cancel: a run killed mid-extract leaves its lock.
+  group: pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # AWS OIDC; unused with static keys (R2, MinIO)
+
+jobs:
+  run:
+    # Off in the template repo, which has no client to run.
+    if: github.repository != 'pragmint/dev-waymark-client-template'
+    runs-on: ubuntu-latest # has Docker, for container jobs
+    timeout-minutes: 50 # finish before the next hourly run is due
+    env:
+      EXTRACT: ${{ github.event.schedule == '43 6 * * 0' && 'full' || inputs.extract || 'incremental' }}
+      CLIENT_TOML: ${{ github.workspace }}/clients/${{ vars.CLIENT }}.toml
+      BUCKET_URL: ${{ vars.BUCKET_URL }}
+      SHARED_URL: ${{ vars.SHARED_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-pipeline
+        with:
+          client: ${{ vars.CLIENT }}
+          bucket-url: ${{ vars.BUCKET_URL }}
+          shared-url: ${{ vars.SHARED_URL }}
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-endpoint-url: ${{ vars.AWS_ENDPOINT_URL }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          source-github-token: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          needs-source-token: true
+
+      - name: Break the extract lock
+        if: inputs.break_lock
+        working-directory: waymark/pipeline
+        run: uv run python extract.py --bucket-url "$BUCKET_URL" --break-lock
+
+      - name: Extract, build, verify, publish
+        working-directory: waymark/pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          echo "Extract: $EXTRACT"
+          uv run python orchestrate.py \
+            --client "$CLIENT_TOML" \
+            --bucket-url "$BUCKET_URL" \
+            --shared-url "$SHARED_URL" \
+            run --extract "$EXTRACT" --sources "$GITHUB_WORKSPACE/sources"

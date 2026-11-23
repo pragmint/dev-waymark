@@ -1,0 +1,3 @@
+description = "Lead time by issue type, from each ticket's metadata; each row is an entity. The SQL the TypeScript example must match: the client template's job of the same name."
+inputs = ["entities[type=ticket]", "entity_metadata[entity_type=ticket]"]
+entity_type = "lead_time_by_issue_type"

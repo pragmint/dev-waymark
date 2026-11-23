@@ -30,6 +30,8 @@ if (isProd) {
     outdir: './dist',
     target: 'bun',
     naming: 'server.js',
+    // Loads a platform-specific native binding at runtime, so it can't be bundled.
+    external: ['@duckdb/node-api'],
   });
 
   cpSync('public', 'dist/public', { recursive: true });

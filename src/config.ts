@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const SourceDbAdapterSchema = z.enum(['sqlite', 'postgres', 'redshift']);
+const SourceDbAdapterSchema = z.enum(['sqlite', 'postgres', 'redshift', 'duckdb']);
 const AppDbAdapterSchema = z.enum(['sqlite', 'postgres']);
 const SourceDbSeedSchema = z.enum(['none', 'golden', 'e2e']);
 

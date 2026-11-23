@@ -1,0 +1,3 @@
+description = "One change per GitHub pull request: the latest raw version of each, with its fields as metadata."
+inputs = ["raw.github_pulls"]
+entity_type = "change"

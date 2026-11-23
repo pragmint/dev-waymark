@@ -1,0 +1,230 @@
+import json
+import tempfile
+from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+
+import dlt
+from dlt.destinations import filesystem
+
+import extract as extract_module
+import snapshot as snapshots
+from extract import Source, adopt_run, extract, mark_raw_initialized, new_run_id, plan_run
+
+
+def test_new_run_id_uses_utc():
+    now = datetime(2026, 11, 2, 10, 30, 5, tzinfo=timezone(timedelta(hours=-5)))
+    assert new_run_id(now) == "20261102T153005Z"
+
+
+NOW = datetime(2026, 11, 11, 12, 0, 0, tzinfo=UTC)
+ENV = {"GITHUB_TOKEN": "t"}
+CLIENT = {"client": "acme"}
+
+
+def save(root: Path, run_id: str, started_at: str, chain: tuple[str, ...], **extra) -> None:
+    kind = "full" if len(chain) == 1 else "incremental"
+    snapshots.save_run(str(root), snapshots.Run(run_id, kind, started_at, chain, **extra))
+
+
+def test_a_full_run_starts_a_new_chain(tmp_path: Path):
+    run, cursor = plan_run(str(tmp_path), "r1", NOW, full=True, limited=False)
+    assert (run.kind, run.chain, run.started_at, cursor) == (
+        "full", ("r1",), "2026-11-11T12:00:00Z", None,
+    )  # fmt: skip
+
+
+def test_an_incremental_run_needs_a_run_to_continue_from(tmp_path: Path):
+    with pytest.raises(ValueError, match="--full"):
+        plan_run(str(tmp_path), "r1", NOW, full=False, limited=False)
+
+
+def test_an_incremental_run_extends_the_last_complete_runs_chain(tmp_path: Path):
+    save(tmp_path, "r1", "2026-11-09T00:00:00Z", ("r1",))
+    save(tmp_path, "r2", "2026-11-10T00:00:00Z", ("r1", "r2"))
+    save(tmp_path, "smoke", "2026-11-10T06:00:00Z", ("smoke",), limited=True)
+    run, cursor = plan_run(str(tmp_path), "r3", NOW, full=False, limited=False)
+    assert run.kind == "incremental"
+    assert run.chain == ("r1", "r2", "r3")
+    assert cursor == datetime(2026, 11, 10, tzinfo=UTC)
+
+
+def test_a_run_cant_continue_from_one_that_started_after_it(tmp_path: Path):
+    save(tmp_path, "r1", "2026-11-12T00:00:00Z", ("r1",))
+    with pytest.raises(ValueError, match="started at or after"):
+        plan_run(str(tmp_path), "r2", NOW, full=False, limited=False)
+
+
+class FakeSource(str):
+    def add_limit(self, _pages: int) -> "FakeSource":
+        return self
+
+
+class FakePipeline:
+    """Stands in for dlt: records the configs it was asked to load, and can fail on one."""
+
+    def __init__(self, fail_on: str | None = None) -> None:
+        self.fail_on = fail_on
+        self.loaded: list[str] = []
+        self.last_trace = SimpleNamespace(last_normalize_info="")
+        self.config = SimpleNamespace(restore_from_destination=True)
+
+    def run(self, source: Any, **_kwargs: Any) -> None:
+        if source == self.fail_on:
+            raise RuntimeError(f"{source} failed")
+        self.loaded.append(source)
+
+
+def fake_source(name: str, overlap: timedelta, seen: dict[str, Any]) -> Source:
+    """A source module that records the `since` it was given."""
+
+    def source(_client: Any, _env: Any, since: str | None) -> FakeSource:
+        seen.setdefault("since", []).append((name, since))
+        return FakeSource(name)
+
+    return Source(name, lambda cursor: (cursor - overlap).strftime("%Y-%m-%d %H:%M"), source)
+
+
+@pytest.fixture
+def fake_dlt(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    seen: dict[str, Any] = {"pipeline": FakePipeline()}
+    seen["sources"] = [
+        fake_source("github", timedelta(hours=1), seen),
+        fake_source("jira", timedelta(days=1), seen),
+    ]
+    monkeypatch.setattr(extract_module.dlt, "pipeline", lambda **_kwargs: seen["pipeline"])
+    return seen
+
+
+def test_an_extract_records_its_run_after_every_source_loaded(tmp_path: Path, fake_dlt):
+    root = str(tmp_path)
+    sources = fake_dlt["sources"]
+    yesterday = NOW - timedelta(days=1)
+    full = extract(CLIENT, root, "r1", ENV, sources, full=True, started_at=yesterday)
+    assert full.since == {} and snapshots.load_run(root, "r1") == full
+    run = extract(CLIENT, root, "r2", ENV, sources, started_at=NOW)
+    assert fake_dlt["pipeline"].loaded == ["github", "jira", "github", "jira"]
+    since = {"github": "2026-11-10 11:00", "jira": "2026-11-09 12:00"}
+    assert run.since == since
+    assert fake_dlt["since"][2:] == list(since.items())
+    assert snapshots.load_run(root, "r2").chain == ("r1", "r2")
+    # dlt's own cursor, restored from the bucket, would override the run record's.
+    assert fake_dlt["pipeline"].config.restore_from_destination is False
+
+
+def test_a_failed_extract_records_nothing(tmp_path: Path, fake_dlt):
+    fake_dlt["pipeline"] = FakePipeline(fail_on="jira")
+    with pytest.raises(RuntimeError):
+        extract(CLIENT, str(tmp_path), "r1", ENV, fake_dlt["sources"], full=True, started_at=NOW)
+    assert snapshots.last_run(str(tmp_path)) is None
+
+
+def test_a_smoke_test_run_is_recorded_as_limited(tmp_path: Path, fake_dlt):
+    sources = fake_dlt["sources"]
+    extract(CLIENT, str(tmp_path), "r1", ENV, sources, max_pages=1, full=True, started_at=NOW)
+    assert snapshots.load_run(str(tmp_path), "r1").limited
+    assert snapshots.last_run(str(tmp_path)) is None
+
+
+def test_an_extract_fails_while_another_holds_the_lock(tmp_path: Path, fake_dlt):
+    root = str(tmp_path)
+    with snapshots.extract_lock(root, "r1"):
+        with pytest.raises(snapshots.LockHeld, match="run r1 on .* --break-lock"):
+            extract(CLIENT, root, "r2", ENV, fake_dlt["sources"], full=True, started_at=NOW)
+    assert fake_dlt["pipeline"].loaded == []
+    assert snapshots.last_run(root) is None
+
+
+def test_an_extract_releases_the_lock_when_it_finishes_or_fails(tmp_path: Path, fake_dlt):
+    root = str(tmp_path)
+    sources = fake_dlt["sources"]
+    extract(CLIENT, root, "r1", ENV, sources, full=True, started_at=NOW - timedelta(days=1))
+    assert snapshots.lock_holder(root) is None
+    fake_dlt["pipeline"] = FakePipeline(fail_on="jira")
+    with pytest.raises(RuntimeError):
+        extract(CLIENT, root, "r2", ENV, fake_dlt["sources"], started_at=NOW)
+    assert snapshots.lock_holder(root) is None
+
+
+def test_a_broken_lock_is_not_released_by_its_old_holder(tmp_path: Path):
+    root = str(tmp_path)
+    old, new = snapshots.extract_lock(root, "r1"), snapshots.extract_lock(root, "r2")
+    old.__enter__()
+    assert snapshots.break_lock(root)["run"] == "r1"
+    new.__enter__()
+    old.__exit__(None, None, None)  # r1 finishing late must leave r2's lock alone
+    assert snapshots.lock_holder(root)["run"] == "r2"
+    new.__exit__(None, None, None)
+    assert snapshots.lock_holder(root) is None
+    assert snapshots.break_lock(root) is None
+
+
+def test_a_held_lock_has_no_run_record_name(tmp_path: Path):
+    """The lock lives beside the run records, and must never be read as one."""
+    root = str(tmp_path)
+    snapshots.save_run(root, snapshots.Run("r1", "full", "2026-11-10T00:00:00Z", ("r1",)))
+    with snapshots.extract_lock(root, "r2"):
+        assert snapshots.last_run(root).id == "r1"
+
+
+def test_adopting_an_old_run_records_it_as_full_from_its_id(tmp_path: Path):
+    directory = tmp_path / "raw" / "jira_issues"
+    directory.mkdir(parents=True)
+    pq.write_table(pa.table({"id": [1]}), directory / "20261102T000000Z.1.0.parquet")
+    run = adopt_run(str(tmp_path), "20261102T000000Z")
+    assert (run.kind, run.started_at) == ("full", "2026-11-02T00:00:00Z")
+    with pytest.raises(ValueError, match="already has a record"):
+        adopt_run(str(tmp_path), "20261102T000000Z")
+    with pytest.raises(ValueError, match="No raw files"):
+        adopt_run(str(tmp_path), "20261101T000000Z")
+    with pytest.raises(ValueError, match="isn't a UTC time"):
+        adopt_run(str(tmp_path), "legacy")
+
+
+def copied_in_raw(root: Path) -> None:
+    """A bucket whose raw was copied in by hand rather than extracted: no dlt `init` marker."""
+    directory = root / "raw" / "jira_issues"
+    directory.mkdir(parents=True)
+    pq.write_table(pa.table({"id": [1]}), directory / "20261102T000000Z.1.0.parquet")
+
+
+def load_with_dlt(root: Path) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="copied_in",
+        pipelines_dir=tempfile.mkdtemp(prefix="waymark-dlt-test-"),
+        destination=filesystem(bucket_url=f"file://{root}", layout=extract_module.RAW_LAYOUT,
+                               extra_placeholders={"run_id": "20261111T000000Z"}),
+        dataset_name="raw",
+    )
+    pipeline.config.restore_from_destination = False
+    pipeline.run([{"id": 2}], table_name="jira_issues", loader_file_format="parquet")
+
+
+def test_dlt_cant_load_into_raw_copied_in_without_its_marker(tmp_path: Path):
+    copied_in_raw(tmp_path)
+    with pytest.raises(Exception, match="File exists"):
+        load_with_dlt(tmp_path)
+
+
+def test_marking_raw_initialized_lets_dlt_load_into_copied_in_raw(tmp_path: Path):
+    copied_in_raw(tmp_path)
+    assert mark_raw_initialized(str(tmp_path))
+    marker = json.loads((tmp_path / "raw" / "init").read_text())
+    assert marker == {"initial_version": 2, "current_version": 2}
+    load_with_dlt(tmp_path)
+    files = sorted(path.name for path in (tmp_path / "raw" / "jira_issues").glob("*.parquet"))
+    assert [name.split(".")[0] for name in files] == ["20261102T000000Z", "20261111T000000Z"]
+
+
+def test_raw_is_marked_only_when_it_exists_without_a_marker(tmp_path: Path):
+    assert not mark_raw_initialized(str(tmp_path))
+    assert not (tmp_path / "raw").exists()
+    copied_in_raw(tmp_path)
+    (tmp_path / "raw" / "init").write_text("")
+    assert not mark_raw_initialized(f"file://{tmp_path}")
+    assert (tmp_path / "raw" / "init").read_text() == ""
