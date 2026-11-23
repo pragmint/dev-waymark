@@ -1,68 +1,65 @@
-// Hours from a ticket's first pull request opening to its last one merging, by issue type: the
-// same table as the SQL job in reference/lead_time_by_issue_type, in TypeScript.
+// Lead time by issue type, from each ticket's metadata: the same entities as the SQL job in
+// reference/lead_time_by_issue_type, in TypeScript.
 import { type Fields, type SourceRef, sourceRef, stableId } from './contract';
 
-export const TABLE = 'lead_time_by_issue_type';
+export const ENTITY_TYPE = 'lead_time_by_issue_type';
 
-/** The columns of an `entities` row this job reads. */
-export type Entity = {
+/** The columns of an `entity_metadata` row this job reads. */
+export type MetadataRow = {
   _row_id: bigint;
-  type: string | null;
-  issue_type: string | null;
-  /** `YYYY-MM-DDTHH:MM:SSZ` text, as `iso_utc` writes it. */
-  created_at: string | null;
-  /** Microseconds since the epoch. */
-  merged_at: bigint | null;
+  /** Null only when verify perturbs it; such rows still group together, as SQL's `group by`. */
+  entity_id: bigint | null;
+  key: string | null;
+  value: string | null;
 };
-
-export type Link = { _row_id: bigint; ticket_id: bigint | null; change_id: bigint | null };
 
 export type LeadTimeRow = {
   _row_id: bigint;
   _sources: SourceRef[];
   _fields: Fields;
+  name: string;
+  /** `YYYY-MM-DDTHH:MM:SSZ` text, as `iso_utc` writes it. */
+  created_at: string;
   issue_type: string | null;
   tickets: bigint;
   avg_lead_time_hours: number | null;
   median_lead_time_hours: number | null;
 };
 
-// Which changes count toward a ticket depends on its links; a ticket counts once one merged.
-const LEAD_TIME_REFS = [
-  'entities[type=change].created_at',
-  'entities[type=change].merged_at',
-  'ticket_change_links._row_id',
-];
+// Which tickets count depends on their issue type and having a lead time. Each reference names a
+// ticket's metadata value as `entities.<key>`, and `_sources` cites the ticket itself.
+const TICKET_REFS = ['entities.issue_type', 'entities.last_merged_at', 'entities.lead_time_hours'];
 export const FIELDS: Fields = {
+  name: ['entities.issue_type'],
+  // An entity needs a date; an issue type's is its most recent merge.
+  created_at: TICKET_REFS,
   issue_type: ['entities.issue_type'],
-  tickets: [
-    'entities[type=ticket]._row_id',
-    'ticket_change_links._row_id',
-    'entities[type=change].merged_at',
-  ],
-  avg_lead_time_hours: LEAD_TIME_REFS,
-  median_lead_time_hours: LEAD_TIME_REFS,
+  tickets: TICKET_REFS,
+  avg_lead_time_hours: TICKET_REFS,
+  median_lead_time_hours: TICKET_REFS,
 };
 
+const KEYS = new Set(['issue_type', 'lead_time_hours', 'last_merged_at']);
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
-const MICROS_PER_MINUTE = 60_000_000n;
+const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
-/** `iso_utc` text as microseconds, or null for anything else, like SQL's `try_cast`. */
-export function parseIsoUtc(text: string | null): bigint | null {
+/** `iso_utc` text as milliseconds, or null for anything else, like SQL's `try_cast`. */
+export function parseIsoUtc(text: string | null): number | null {
   if (text === null || !ISO_UTC.test(text)) {
     return null;
   }
   const millis = Date.parse(text);
-  return Number.isNaN(millis) ? null : BigInt(millis) * 1000n;
+  return Number.isNaN(millis) ? null : millis;
 }
 
-/** Whole minute boundaries crossed between two instants, as SQL's `date_diff('minute', a, b)`. */
-export function minutesBetween(from: bigint, to: bigint): bigint {
-  const floorMinute = (micros: bigint) => {
-    const minute = micros / MICROS_PER_MINUTE;
-    return micros < 0n && micros % MICROS_PER_MINUTE !== 0n ? minute - 1n : minute;
-  };
-  return floorMinute(to) - floorMinute(from);
+/** Milliseconds as `iso_utc` text. */
+export function isoUtc(millis: number): string {
+  return new Date(millis).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** A number written as text, or null for anything else, like SQL's `try_cast(... as double)`. */
+export function parseNumber(text: string | null): number | null {
+  return text !== null && NUMBER.test(text) ? Number(text) : null;
 }
 
 /** Rounded half away from zero, as SQL's `round(x, digits)`. */
@@ -94,62 +91,53 @@ function average(values: number[]): number | null {
   return sum / values.length;
 }
 
-const earlier = (a: bigint | null, b: bigint | null) =>
-  a === null || (b !== null && b < a) ? b : a;
-const later = (a: bigint | null, b: bigint | null) => (a === null || (b !== null && b > a) ? b : a);
-
-type TicketTimes = {
-  ticket: Entity;
-  firstCreated: bigint | null;
-  lastMerged: bigint | null;
+type Ticket = {
+  issueType: string | null;
+  hours: number | null;
+  lastMerged: number | null;
   sources: SourceRef[];
 };
 
-/** Each linked ticket with its changes' first opening and last merge, and the rows behind them. */
-function ticketTimes(entities: Entity[], links: Link[]): TicketTimes[] {
-  const byId = new Map(entities.map(entity => [entity._row_id, entity]));
-  const perTicket = new Map<bigint, TicketTimes>();
-  for (const link of links) {
-    const ticket = link.ticket_id === null ? undefined : byId.get(link.ticket_id);
-    const change = link.change_id === null ? undefined : byId.get(link.change_id);
-    if (ticket?.type !== 'ticket' || change === undefined) {
+/** Each ticket's issue type, lead time and last merge, gathered from its metadata rows. */
+function tickets(metadata: MetadataRow[]): Ticket[] {
+  const perTicket = new Map<bigint | null, Ticket>();
+  for (const row of metadata) {
+    if (row.key === null || !KEYS.has(row.key)) {
       continue;
     }
-    const times = perTicket.get(ticket._row_id) ?? {
-      ticket,
-      firstCreated: null,
+    const ticket = perTicket.get(row.entity_id) ?? {
+      issueType: null,
+      hours: null,
       lastMerged: null,
       sources: [],
     };
-    times.firstCreated = earlier(times.firstCreated, parseIsoUtc(change.created_at));
-    times.lastMerged = later(times.lastMerged, change.merged_at);
-    times.sources.push(
-      sourceRef('entities', change._row_id),
-      sourceRef('ticket_change_links', link._row_id)
-    );
-    perTicket.set(ticket._row_id, times);
+    if (row.key === 'issue_type') {
+      ticket.issueType = row.value;
+    } else if (row.key === 'lead_time_hours') {
+      ticket.hours = parseNumber(row.value);
+    } else {
+      ticket.lastMerged = parseIsoUtc(row.value);
+    }
+    if (ticket.sources.length === 0 && row.entity_id !== null) {
+      ticket.sources.push(sourceRef('entities', row.entity_id));
+    }
+    perTicket.set(row.entity_id, ticket);
   }
-  return [...perTicket.values()];
+  return [...perTicket.values()].filter(t => t.hours !== null && t.lastMerged !== null);
 }
 
-function hours(times: TicketTimes): number | null {
-  if (times.firstCreated === null || times.lastMerged === null) {
-    return null;
-  }
-  return Number(minutesBetween(times.firstCreated, times.lastMerged)) / 60;
-}
-
-function summarize(client: string, issueType: string | null, group: TicketTimes[]): LeadTimeRow {
-  const known = group.map(hours).filter((value): value is number => value !== null);
-  const avg = average(known);
-  const middle = median(known);
+function summarize(client: string, issueType: string | null, group: Ticket[]): LeadTimeRow {
+  const hours = group.map(ticket => ticket.hours ?? 0);
+  const avg = average(hours);
+  const middle = median(hours);
   return {
-    _row_id: stableId(client, TABLE, issueType ?? ''),
-    _sources: [
-      ...group.map(times => sourceRef('entities', times.ticket._row_id)),
-      ...group.flatMap(times => times.sources),
-    ],
+    _row_id: stableId(client, ENTITY_TYPE, issueType ?? ''),
+    _sources: group
+      .flatMap(ticket => ticket.sources)
+      .sort((a, b) => Number(BigInt(a.row_id) - BigInt(b.row_id))),
     _fields: FIELDS,
+    name: issueType ?? 'No issue type',
+    created_at: isoUtc(Math.max(...group.map(ticket => ticket.lastMerged ?? 0))),
     issue_type: issueType,
     tickets: BigInt(group.length),
     avg_lead_time_hours: avg === null ? null : roundTo(avg, 1),
@@ -157,16 +145,13 @@ function summarize(client: string, issueType: string | null, group: TicketTimes[
   };
 }
 
-/** One row per issue type, over the tickets with at least one merged pull request. */
-export function leadTimeByIssueType(client: string, entities: Entity[], links: Link[]) {
-  const groups = new Map<string | null, TicketTimes[]>();
-  for (const times of ticketTimes(entities, links)) {
-    if (times.lastMerged === null) {
-      continue;
-    }
-    const group = groups.get(times.ticket.issue_type) ?? [];
-    group.push(times);
-    groups.set(times.ticket.issue_type, group);
+/** One entity per issue type, over the tickets with a lead time, dated by its latest merge. */
+export function leadTimeByIssueType(client: string, metadata: MetadataRow[]): LeadTimeRow[] {
+  const groups = new Map<string | null, Ticket[]>();
+  for (const ticket of tickets(metadata)) {
+    const group = groups.get(ticket.issueType) ?? [];
+    group.push(ticket);
+    groups.set(ticket.issueType, group);
   }
   const rows = [...groups].map(([issueType, group]) => summarize(client, issueType, group));
   return rows.sort(

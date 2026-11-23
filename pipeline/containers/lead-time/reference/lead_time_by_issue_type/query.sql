@@ -1,48 +1,51 @@
-with ticket_lead_times as (
+-- Each ticket's issue type, lead time and last merge, from its metadata.
+with tickets as (
   select
-    tickets._row_id as ticket_id,
-    tickets.issue_type,
-    date_diff(
-      'minute', min(try_cast(changes.created_at as timestamptz)), max(changes.merged_at)
-    ) / 60.0 as hours,
-    list_concat(
-      list(source_ref('entities', changes._row_id)),
-      list(source_ref('ticket_change_links', links._row_id))
-    ) as change_refs
-  from entities as tickets
-  inner join ticket_change_links as links on links.ticket_id = tickets._row_id
-  inner join entities as changes on changes._row_id = links.change_id
-  where tickets.type = 'ticket'
-  group by tickets._row_id, tickets.issue_type
-  having max(changes.merged_at) is not null
+    entity_id,
+    max(value) filter (key = 'issue_type') as issue_type,
+    try_cast(max(value) filter (key = 'lead_time_hours') as double) as hours,
+    try_cast(max(value) filter (key = 'last_merged_at') as timestamptz) as last_merged_at
+  from entity_metadata
+  where key in ('issue_type', 'lead_time_hours', 'last_merged_at')
+  group by entity_id
+  having hours is not null and last_merged_at is not null
 )
 
 select
   stable_id('lead_time_by_issue_type', coalesce(issue_type, '')) as _row_id,
-  list_concat(list(source_ref('entities', ticket_id)), flatten(list(change_refs))) as _sources,
+  list(source_ref('entities', entity_id) order by entity_id) as _sources,
   map {
+    'name': ['entities.issue_type'],
+    -- An entity needs a date; an issue type's is its most recent merge.
+    'created_at': [
+      'entities.issue_type',
+      'entities.last_merged_at',
+      'entities.lead_time_hours'
+    ],
     'issue_type': ['entities.issue_type'],
-    -- Which changes count toward a ticket depends on its links; a ticket counts once one merged.
+    -- Which tickets count depends on their issue type and having a lead time.
     'tickets': [
-      'entities[type=ticket]._row_id',
-      'ticket_change_links._row_id',
-      'entities[type=change].merged_at'
+      'entities.issue_type',
+      'entities.last_merged_at',
+      'entities.lead_time_hours'
     ],
     'avg_lead_time_hours': [
-      'entities[type=change].created_at',
-      'entities[type=change].merged_at',
-      'ticket_change_links._row_id'
+      'entities.issue_type',
+      'entities.last_merged_at',
+      'entities.lead_time_hours'
     ],
     'median_lead_time_hours': [
-      'entities[type=change].created_at',
-      'entities[type=change].merged_at',
-      'ticket_change_links._row_id'
+      'entities.issue_type',
+      'entities.last_merged_at',
+      'entities.lead_time_hours'
     ]
   } as _fields,
+  coalesce(issue_type, 'No issue type') as name,
+  iso_utc(max(last_merged_at)) as created_at,
   issue_type,
   count(*) as tickets,
   round(avg(hours), 1) as avg_lead_time_hours,
   round(median(hours), 1) as median_lead_time_hours
-from ticket_lead_times
+from tickets
 group by issue_type
-order by tickets desc
+order by tickets desc, issue_type

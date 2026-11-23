@@ -1,11 +1,24 @@
 import { ColumnMapSchema } from '../schemas/lineage';
 import type { ColumnMap, ColumnRef, Hop } from '../schemas/lineage';
-import { DERIVED_ID_COLUMN, FIELDS_COLUMN, MAX_HOPS, RAW_ID_COLUMN, isRawTable } from './lineage';
+import {
+  DERIVED_ID_COLUMN,
+  ENTITIES_TABLE,
+  FIELDS_COLUMN,
+  MAX_HOPS,
+  METADATA_TABLE,
+  METADATA_VALUE_COLUMN,
+  RAW_ID_COLUMN,
+  isMetadataKey,
+  isRawTable,
+} from './lineage';
 
 // Field-level lineage = which input columns feed each output column (a row's `_fields`, or its
-// table's column map) combined with each row's `_sources` (which input rows). Tracing a field
-// carries, for every row it reaches, the columns of that row the field needs, and follows only
-// the sources those columns' references name: a filtered reference only its matching rows.
+// table's column map where a row declares nothing) combined with each row's `_sources` (which
+// input rows). Tracing a field carries, for every row it reaches, the columns of that row the
+// field needs, and follows only the sources that row's references for them name: a filtered
+// reference only its matching rows. An entity needed for one of its metadata values, named
+// `entities.<key>`, follows the metadata row that holds that value instead, within the same hop,
+// so a hop only ever shows entities and raw rows.
 
 const REF_PATTERN =
   /^((?:raw\.)?[a-z][a-z0-9_]*)(?:\[([A-Za-z_][A-Za-z0-9_]*)=([^[\]]+)\])?\.([A-Za-z_][A-Za-z0-9_]*)(?::(\$(?:\.[A-Za-z0-9_]+)+))?$/;
@@ -86,15 +99,22 @@ function addUnique(target: Record<string, string[]>, key: string, values: string
 /** One `_sources` entry of one row. */
 export type RowSource = { rowId: string; table: string; row_id: string };
 
+/** The metadata row that holds one entity's value for one key. */
+export type MetadataRowRef = { entityId: string; key: string; rowId: string };
+
 export type FieldFetchers = {
   /** Each given row's `_sources`, one entry per source. */
   rowSources(table: string, rowIds: string[]): Promise<RowSource[]>;
+  /** Each given row's own `_fields`, by row id; a row without valid ones is left out. */
+  rowFields(table: string, rowIds: string[]): Promise<Record<string, ColumnMap>>;
   /** One column's value as text in each given row, for testing a filtered reference. */
   columnValues(
     table: string,
     column: string,
     rowIds: string[]
   ): Promise<Record<string, string | null>>;
+  /** The metadata row holding each given entity's value for each given key, where it has one. */
+  metadataRows(entityIds: string[], keys: string[]): Promise<MetadataRowRef[]>;
 };
 
 export type FieldWalk = {
@@ -224,6 +244,71 @@ function collectRefs(
   return pending;
 }
 
+/**
+ * `frontier` with each metadata key an entity is needed for swapped for the metadata row that
+ * holds it, needed for its value. An entity without a value for the key has nothing to follow.
+ * The same swap as `through_metadata` in pipeline/trace.py.
+ */
+async function throughMetadata(frontier: Frontier, fetchers: FieldFetchers): Promise<Frontier> {
+  const entities = frontier.get(ENTITIES_TABLE);
+  const wanted = entities ? metadataNeeds(entities) : new Map<string, Set<string>>();
+  if (!entities || wanted.size === 0) return frontier;
+  const allKeys = [...new Set([...wanted.values()].flatMap(keys => [...keys]))].sort();
+  const found = await fetchers.metadataRows([...wanted.keys()].sort(), allKeys);
+
+  const swapped: Frontier = new Map([...frontier].filter(([table]) => table !== ENTITIES_TABLE));
+  for (const { entityId, key, rowId } of found) {
+    if (!wanted.get(entityId)?.has(key)) continue;
+    addNeeds(swapped, METADATA_TABLE, rowId, new Set([METADATA_VALUE_COLUMN]));
+  }
+  const own = ownNeeds(entities, wanted);
+  if (own.size > 0) swapped.set(ENTITIES_TABLE, own);
+  return swapped;
+}
+
+/** The metadata keys each entity is needed for, for the entities needed for any. */
+function metadataNeeds(entities: Map<string, Needs>): Map<string, Set<string>> {
+  const wanted = new Map<string, Set<string>>();
+  for (const [rowId, needs] of entities) {
+    const keys = needs === null ? [] : [...needs].filter(isMetadataKey);
+    if (keys.length > 0) wanted.set(rowId, new Set(keys));
+  }
+  return wanted;
+}
+
+/** What each entity is still needed for once its metadata keys are swapped out. */
+function ownNeeds(
+  entities: Map<string, Needs>,
+  wanted: Map<string, Set<string>>
+): Map<string, Needs> {
+  const own = new Map<string, Needs>();
+  for (const [rowId, needs] of entities) {
+    const keys = wanted.get(rowId);
+    const rest = keys ? [...(needs ?? [])].filter(label => !keys.has(label)) : null;
+    if (!keys) own.set(rowId, needs);
+    else if (rest && rest.length > 0) own.set(rowId, new Set(rest));
+  }
+  return own;
+}
+
+/**
+ * Where tracing one metadata value of an entity starts: what the metadata row that holds it
+ * reads. Null when the entity has no value for `key`.
+ */
+export async function traceEntityValue(
+  entityId: string,
+  key: string,
+  fetchers: FieldFetchers
+): Promise<FieldTrace | null> {
+  if (!isMetadataKey(key)) return null;
+  const [found] = await fetchers.metadataRows([entityId], [key]);
+  if (!found) return null;
+  const refs = (await fetchers.rowFields(METADATA_TABLE, [found.rowId]))[found.rowId]?.[
+    METADATA_VALUE_COLUMN
+  ];
+  return refs ? { field: key, direct: parseRefs(refs), own: {} } : null;
+}
+
 /** The sources one hop up from every derived row in `frontier`, each with what it's needed for. */
 async function step(
   frontier: Frontier,
@@ -232,10 +317,15 @@ async function step(
   columns: Record<string, string[]>
 ): Promise<Frontier> {
   const reached: Frontier = new Map();
-  for (const [table, rows] of frontier) {
+  for (const [table, rows] of await throughMetadata(frontier, fetchers)) {
     if (isRawTable(table)) continue;
     const parents = groupParents(await fetchers.rowSources(table, [...rows.keys()]));
-    const pending = collectRefs(table, rows, parents, refsOf, reached);
+    // Each row's own `_fields` say what its columns read; its table's map is the fallback.
+    const needing = [...rows].filter(([, needs]) => needs !== null).map(([rowId]) => rowId);
+    const fields = needing.length > 0 ? await fetchers.rowFields(table, needing) : {};
+    const refsOfRow: RefsOf = (atTable, atRow, column) =>
+      fields[atRow]?.[column] ?? refsOf(atTable, atRow, column);
+    const pending = collectRefs(table, rows, parents, refsOfRow, reached);
     const values = await filterValues(pending, fetchers);
     for (const entry of pending) {
       const read = readRows(entry, values);
@@ -271,10 +361,10 @@ export type WalkOptions = {
 };
 
 /**
- * Trace one field of one row to the rows and columns it reads, hop by hop. The row's own
- * `_fields` give the first hop exactly; past it, each table's column map is the union over its
- * rows, so a row there follows every column the map lists for what it's needed for, but only
- * among its own sources. The same walk as `trace` in pipeline/trace.py.
+ * Trace one field of one row to the rows and columns it reads, hop by hop. Every row reached
+ * follows its own `_fields` for the columns it's needed for, among its own sources; only a row
+ * that declares nothing for a column falls back to its table's column map, the union over its
+ * rows. The same walk as `trace` in pipeline/trace.py.
  */
 export async function walkField(
   table: string,

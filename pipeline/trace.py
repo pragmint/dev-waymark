@@ -2,10 +2,14 @@
 
 Follows `_sources` one hop at a time, as CONTRACT.md describes, and prints the rows reached at
 each hop. The last hop is raw data. With --field, follows only what that one field reads: each
-row reached carries the columns of it the field needs, from the starting row's own `_fields` and
-then each table's column map (the union of its rows' `_fields`). A row follows only the sources
-those columns' references name, and a filtered reference only its matching rows. It prints the
-raw fields the value comes from.
+row reached carries the columns of it the field needs, and follows only the sources its own
+`_fields` name for those columns (its table's column map, the union of every row's, only where a
+row declares nothing). A filtered reference follows only its matching rows. It prints the raw
+fields the value comes from.
+
+Lineage names entities, never metadata rows: an entity needed for a metadata key, as
+`entities.merged_at`, follows that one value's metadata row within the same hop. So --field on an
+entity can name any of its metadata keys.
 """
 
 import argparse
@@ -20,6 +24,9 @@ import duckdb
 import snapshot as snapshots
 from runner import (
     COLUMNS_METADATA_KEY,
+    ENTITIES,
+    ENTITY_TABLE_COLUMNS,
+    METADATA,
     RAW_ROW_ID,
     Ref,
     is_raw,
@@ -74,6 +81,20 @@ def row_sources(
     return sources
 
 
+def row_fields(
+    con: duckdb.DuckDBPyConnection, snapshot: Snapshot, table: str, row_ids: set[str]
+) -> dict[str, dict[str, list[str]]]:
+    """Each row's own `_fields`: what each of its columns reads, in that row."""
+    if not row_ids:
+        return {}
+    rows = con.execute(
+        f"SELECT cast(_row_id AS VARCHAR), _fields FROM {snapshot.source(table)} "
+        "WHERE cast(_row_id AS VARCHAR) IN (SELECT unnest(?))",
+        [sorted(row_ids)],
+    ).fetchall()
+    return {row_id: dict(fields or {}) for row_id, fields in rows}
+
+
 def filter_values(
     con: duckdb.DuckDBPyConnection, snapshot: Snapshot, wanted: Mapping[tuple[str, str], set[str]]
 ) -> dict[tuple[str, str], dict[str, str | None]]:
@@ -90,6 +111,59 @@ def filter_values(
     return values
 
 
+def metadata_rows(
+    con: duckdb.DuckDBPyConnection, snapshot: Snapshot, wanted: Mapping[str, set[str]]
+) -> dict[tuple[str, str], str]:
+    """The metadata row that holds each (entity id, key) asked for, where the entity has one."""
+    if not wanted:
+        return {}
+    keys = sorted({key for keys in wanted.values() for key in keys})
+    rows = con.execute(
+        f"""
+        SELECT cast(entity_id AS VARCHAR), "key", cast(_row_id AS VARCHAR)
+        FROM {snapshot.source(METADATA)}
+        WHERE cast(entity_id AS VARCHAR) IN (SELECT unnest(?)) AND "key" IN (SELECT unnest(?))
+        """,
+        [sorted(wanted), keys],
+    ).fetchall()
+    return {(entity_id, key): row_id for entity_id, key, row_id in rows if key in wanted[entity_id]}
+
+
+def through_metadata(
+    con: duckdb.DuckDBPyConnection, snapshot: Snapshot, frontier: Frontier
+) -> Frontier:
+    """`frontier` with each metadata key an entity is needed for swapped for the metadata row
+    that holds it, needed for its value: lineage names the entity, and the value's own row says
+    what it was built from. The swap happens within a hop, so a hop never shows a metadata row."""
+    entities = frontier.get(ENTITIES, {})
+    wanted = {
+        row_id: {label for label in needs if label not in ENTITY_TABLE_COLUMNS}
+        for row_id, needs in entities.items()
+        if needs is not None
+    }
+    wanted = {row_id: keys for row_id, keys in wanted.items() if keys}
+    if not wanted:
+        return frontier
+    found = metadata_rows(con, snapshot, wanted)
+    swapped: Frontier = {t: dict(rows) for t, rows in frontier.items() if t != ENTITIES}
+    own: dict[str, Needs] = {}
+    for row_id, needs in entities.items():
+        if row_id not in wanted:
+            own[row_id] = needs
+            continue
+        assert needs is not None
+        rest = needs - wanted[row_id]
+        if rest:
+            own[row_id] = rest
+        for key in wanted[row_id]:
+            # An entity without the key has no value for it, so nothing to follow.
+            if (row_id, key) in found:
+                swapped.setdefault(METADATA, {})[found[(row_id, key)]] = frozenset({"value"})
+    if own:
+        swapped[ENTITIES] = own
+    return swapped
+
+
 def step(
     con: duckdb.DuckDBPyConnection,
     snapshot: Snapshot,
@@ -100,6 +174,7 @@ def step(
     """The sources one hop up from every derived row in `frontier`, each with what it's needed for.
     Records each column label reached in `columns`."""
     reached: Frontier = {}
+    frontier = through_metadata(con, snapshot, frontier)
 
     def add(table: str, row_id: str, needs: Needs) -> None:
         rows = reached.setdefault(table, {})
@@ -113,6 +188,7 @@ def step(
         if is_raw(table):
             continue
         sources = row_sources(con, snapshot, table, set(rows))
+        fields = row_fields(con, snapshot, table, {r for r, needs in rows.items() if needs})
         # Each reference a row's needs make, with the source rows it may read.
         pending: list[tuple[Ref, set[str]]] = []
         for row_id, needs in rows.items():
@@ -123,7 +199,10 @@ def step(
                         add(source_table, source_id, None)
                 continue
             for label in needs:
-                refs = refs_of(table, row_id, label.partition(":")[0])
+                column = label.partition(":")[0]
+                refs = fields.get(row_id, {}).get(column)
+                if refs is None:
+                    refs = refs_of(table, row_id, column)
                 if refs is None:
                     # Nothing says what this column reads, so it may read any source.
                     for source_table, ids in parents.items():
@@ -167,12 +246,14 @@ def trace(
     if field is not None:
         own = row_values(snapshot, table, row_id).get("_fields") or {}
         direct = own.get(field, maps.get(table, {}).get(field))
+        if direct is None and table == ENTITIES:
+            direct = metadata_refs(snapshot, row_id, field)
         if direct is None:
             return None
         start = frozenset({field})
 
     def refs_of(at_table: str, at_row: str, column: str) -> list[str] | None:
-        # Only the starting row's own _fields are read; past it, each table's column map.
+        # A row that declares nothing for the column falls back to its table's column map.
         if (at_table, at_row) == (table, row_id) and column in own:
             return own[column]
         return maps.get(at_table, {}).get(column)
@@ -206,19 +287,44 @@ def trace(
 
 
 def column_maps(snapshot: Snapshot) -> dict[str, Any]:
-    """Each built table's column map, read from its Parquet metadata, for tables that have one."""
-    maps = {}
+    """Each entity table's column map: the union of its parts' maps, read from their Parquet
+    metadata. Each part is one job's, so a column reads whatever any job's values of it read."""
+    maps: dict[str, dict[str, list[str]]] = {}
     with snapshot.connect() as con:
         for table in sorted(t for t in snapshot.tables if not is_raw(t)):
-            # A table's files share one job's output, so the first file's map is the table's.
-            row = con.execute(
-                f"SELECT decode(value) FROM parquet_kv_metadata({sql_string(snapshot.files(table)[0])}) "
-                "WHERE decode(key) = ?",
-                [COLUMNS_METADATA_KEY],
-            ).fetchone()
-            if row:
-                maps[table] = json.loads(row[0])
+            merged: dict[str, set[str]] = {}
+            for url in snapshot.files(table):
+                row = con.execute(
+                    f"SELECT decode(value) FROM parquet_kv_metadata({sql_string(url)}) "
+                    "WHERE decode(key) = ?",
+                    [COLUMNS_METADATA_KEY],
+                ).fetchone()
+                for column, refs in json.loads(row[0]).items() if row else ():
+                    merged.setdefault(column, set()).update(refs)
+            if merged:
+                maps[table] = {column: sorted(refs) for column, refs in sorted(merged.items())}
     return maps
+
+
+def metadata_refs(snapshot: Snapshot, entity_id: str, key: str) -> list[str] | None:
+    """What an entity's metadata value for `key` reads, or None if it has no such value."""
+    with snapshot.connect() as con:
+        row = con.execute(
+            f"SELECT map_extract_value(_fields, 'value') FROM {snapshot.source(METADATA)} "
+            'WHERE cast(entity_id AS VARCHAR) = ? AND "key" = ?',
+            [entity_id, key],
+        ).fetchone()
+    return list(row[0]) if row and row[0] is not None else None
+
+
+def metadata_value(snapshot: Snapshot, entity_id: str, key: str) -> str | None:
+    with snapshot.connect() as con:
+        row = con.execute(
+            f"SELECT value FROM {snapshot.source(METADATA)} "
+            'WHERE cast(entity_id AS VARCHAR) = ? AND "key" = ?',
+            [entity_id, key],
+        ).fetchone()
+    return row[0] if row else None
 
 
 def row_values(snapshot: Snapshot, table: str, row_id: str) -> dict[str, Any]:
@@ -266,6 +372,8 @@ def main() -> None:
         parser.error(f"{args.table} has no column lineage for {args.field!r}")
     if args.field:
         value = row_values(snapshot, args.table, args.row_id).get(args.field)
+        if value is None and args.table == ENTITIES:
+            value = metadata_value(snapshot, args.row_id, args.field)
         print(f"{args.field} = {value!r}")
         print(f"  computed from: {', '.join(result.direct or []) or '(a constant)'}")
 

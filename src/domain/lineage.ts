@@ -176,6 +176,25 @@ export function hopToSourceRefs(hop: Hop): SourceRef[] {
 // Pipeline entities use their `_row_id` as their Waymark entity id, so an
 // entity and its lineage row link to each other.
 export const ENTITIES_TABLE = 'entities';
+// Lineage names entities, never their metadata rows: an entity's metadata value is
+// `entities.<key>`, as if it were a column of the entity, and is traced through the one metadata
+// row that holds it (pipeline/CONTRACT.md, "Column lineage").
+export const METADATA_TABLE = 'entity_metadata';
+/** The columns of `entities`; any other label on an entity is a metadata key. */
+export const ENTITY_COLUMNS: readonly string[] = [
+  DERIVED_ID_COLUMN,
+  'id',
+  'type',
+  'name',
+  'created_at',
+];
+/** What a metadata row's `_fields` calls the value it holds. */
+export const METADATA_VALUE_COLUMN = 'value';
+
+/** True when `label` on an entity names one of its metadata values. */
+export function isMetadataKey(label: string): boolean {
+  return !ENTITY_COLUMNS.includes(label) && !label.includes(':');
+}
 
 export function entityLineagePath(entityId: number): string {
   return lineagePath(ENTITIES_TABLE, String(entityId));

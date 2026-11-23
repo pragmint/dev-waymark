@@ -16,9 +16,11 @@ export const LatestSnapshotSchema = z.object({
 export type LatestSnapshot = z.infer<typeof LatestSnapshotSchema>;
 
 // `snapshots/<id>.json`: every table's exact files, `raw.<table>` for raw. Waymark needs only
-// the files; the rest (row counts, job versions, verification) is for the pipeline.
+// the files; the rest (row counts, job versions, verification) is for the pipeline. Version 2
+// lists only raw tables and the entity tables, each the parts its jobs wrote; version 1 had a
+// table per job. Both list files alike.
 export const SnapshotManifestSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   snapshot: z.string(),
   extract: z.string(),
   tables: z.record(z.string(), z.object({ files: z.array(FileKeySchema).min(1) })),

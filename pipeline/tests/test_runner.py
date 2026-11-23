@@ -107,35 +107,49 @@ def built(snap: Snapshot):
     statuses = run_jobs(load_jobs([JOBS_DIR]), CLIENT, snap)
     assert set(statuses.values()) == {"built"}
     con = connect(CLIENT)
-    for name in statuses:
-        con.execute(f"CREATE VIEW {name} AS SELECT * FROM {snap.source(name)}")
+    for table in ("entities", "entity_metadata"):
+        con.execute(f"CREATE VIEW {table} AS SELECT * FROM {snap.source(table)}")
     return con
 
 
-def job(name, inputs=(), sql="select 1"):
-    return Job(name, tuple(inputs), sql)
+def job(name, inputs=(), sql="select 1", makes=None, adds_to=None):
+    return Job(name, tuple(inputs), sql, entity_type=makes or (None if adds_to else name),
+               adds_to=adds_to)  # fmt: skip
 
 
-def test_build_order_puts_inputs_first():
-    jobs = [job("c", ["b"]), job("b", ["a"]), job("a", ["raw.x"])]
+def metadata(built, entity_name: str) -> dict[str, str]:
+    """One entity's metadata, key → value."""
+    return dict(built.execute(
+        "SELECT m.key, m.value FROM entity_metadata AS m JOIN entities ON entities.id = m.entity_id"
+        " WHERE entities.name = ?",
+        [entity_name],
+    ).fetchall())  # fmt: skip
+
+
+def test_build_order_puts_the_jobs_that_make_a_type_first():
+    jobs = [
+        job("c", ["entities[type=b]"]),
+        job("b", ["entities[type=a]"]),
+        job("a", ["raw.x"]),
+    ]
     assert [j.name for j in build_order(jobs)] == ["a", "b", "c"]
 
 
 def test_build_order_rejects_a_cycle():
     with pytest.raises(ValueError, match="cycle"):
-        build_order([job("a", ["b"]), job("b", ["a"])])
+        build_order([job("a", ["entities[type=b]"]), job("b", ["entities[type=a]"])])
 
 
-def test_build_order_rejects_an_unknown_input():
-    with pytest.raises(ValueError, match="unknown inputs"):
-        build_order([job("a", ["missing"])])
+def test_build_order_rejects_a_type_no_job_makes():
+    with pytest.raises(ValueError, match="no job makes entity type missing"):
+        build_order([job("a", ["entities[type=missing]"])])
 
 
 def test_a_client_job_replaces_a_shared_job_with_the_same_name(tmp_path: Path):
     for root, sql in [("shared", "select 'shared'"), ("client", "select 'client'")]:
         directory = tmp_path / root / "tickets"
         directory.mkdir(parents=True)
-        (directory / "job.toml").write_text('inputs = ["raw.jira_issues"]')
+        (directory / "job.toml").write_text('inputs = ["raw.jira_issues"]\nentity_type = "ticket"')
         (directory / "query.sql").write_text(sql)
     jobs = load_jobs([tmp_path / "shared", tmp_path / "client"])
     assert [(j.name, j.sql) for j in jobs] == [("tickets", "select 'client'")]
@@ -172,58 +186,73 @@ def test_contract_errors_pass_a_valid_table():
     assert contract_errors(con, ("up",)) == []
 
 
-def test_run_job_refuses_to_write_a_table_that_breaks_the_contract(snap: Snapshot):
+def test_run_job_refuses_to_write_parts_that_break_the_contract(snap: Snapshot):
     bad = job("bad", ["raw.jira_issues"], "select 1::bigint as _row_id")
     with pytest.raises(ContractError):
-        run_job(bad, CLIENT, snap)
-    assert not Path(snap.url(snap.output_key("bad"))).exists()
-    assert "bad" not in snap.tables
+        run_job(bad, CLIENT, snap, {"raw.jira_issues": []}, {})
+    assert not Path(snap.url("tables")).exists()
+    assert "bad" not in snap.jobs
 
 
 def test_a_failed_job_skips_everything_downstream(snap: Snapshot):
-    jobs = [job("broken", ["raw.jira_issues"], "select nope"), job("after", ["broken"])]
+    jobs = [
+        job("broken", ["raw.jira_issues"], "select nope"),
+        job("after", ["entities[type=broken]"]),
+    ]
     statuses = run_jobs(jobs, CLIENT, snap)
     assert statuses == {"broken": "failed", "after": "skipped"}
     assert not Path(snap.url("tables")).exists()
 
 
+def test_every_job_writes_only_parts_of_the_entity_tables(built, snap: Snapshot):
+    assert {t for t in snap.tables if not is_raw(t)} == {"entities", "entity_metadata"}
+    for name, entry in snap.jobs.items():
+        assert entry["files"]["entity_metadata"] == f"tables/entity_metadata/s1.{name}.parquet"
+    types = built.sql("SELECT DISTINCT type FROM entities ORDER BY 1").fetchall()
+    assert types == [("change",), ("ticket",), ("ticket_change_link",)]
+
+
 def test_tickets_keep_the_latest_version_and_point_at_its_raw_row(built):
     rows = built.sql("""
-        SELECT name, status, status_group, url, _sources[1].row_id
-        FROM entities WHERE type = 'ticket' ORDER BY name
+        SELECT name, _sources[1].row_id FROM entities WHERE type = 'ticket' ORDER BY name
     """).fetchall()
-    assert rows == [
-        ("KAFKA-1", "Resolved", "To Do", "https://jira.example.org/browse/KAFKA-1", "j1-new"),
-        ("KAFKA-2", "In Progress", "Doing", "https://jira.example.org/browse/KAFKA-2", "j2"),
-        ("KAFKA-3", "Open", "To Do", "https://jira.example.org/browse/KAFKA-3", "j3"),
-    ]
+    assert rows == [("KAFKA-1", "j1-new"), ("KAFKA-2", "j2"), ("KAFKA-3", "j3")]
+    expected = {
+        "KAFKA-1": ("Resolved", "To Do"),
+        "KAFKA-2": ("In Progress", "Doing"),
+        "KAFKA-3": ("Open", "To Do"),
+    }
+    for name, (status, group) in expected.items():
+        values = metadata(built, name)
+        assert (values["status"], values["status_group"]) == (status, group)
+        assert values["url"] == f"https://jira.example.org/browse/{name}"
 
 
 def test_every_current_raw_row_is_the_source_of_exactly_one_entity(built):
     refs = built.sql("""
         SELECT s.row_id, count(*) FROM (SELECT unnest(_sources) AS s FROM entities)
-        GROUP BY 1 ORDER BY 1
+        WHERE s.table LIKE 'raw.%' GROUP BY 1 ORDER BY 1
     """).fetchall()
     assert refs == [(i, 1) for i in ["j1-new", "j2", "j3", "p10", "p11", "p12-new"]]
 
 
 def test_links_match_titles_and_underscored_branches_and_skip_unknown_tickets(built):
-    links = built.sql("""
-        SELECT changes.number, links.ticket_key
-        FROM ticket_change_links AS links JOIN entities AS changes ON changes._row_id = links.change_id
-        ORDER BY 1, 2
-    """).fetchall()
-    assert links == [(10, "KAFKA-1"), (10, "KAFKA-2"), (12, "KAFKA-3")]
+    links = built.sql(
+        "SELECT name FROM entities WHERE type = 'ticket_change_link' ORDER BY name"
+    ).fetchall()
+    assert links == [
+        ("KAFKA-1 in apache/kafka#10",),
+        ("KAFKA-2 in apache/kafka#10",),
+        ("KAFKA-3 in apache/kafka#12",),
+    ]
 
 
 def test_metadata_includes_custom_fields_and_rollups(built):
-    values = dict(built.sql("""
-        SELECT key, value FROM entity_metadata JOIN entities ON entities.id = entity_id
-        WHERE entities.name = 'KAFKA-1'
-    """).fetchall())
+    values = metadata(built, "KAFKA-1")
     assert values["votes"] == "3.0"
     assert values["change_count"] == "1"
     assert values["last_merged_at"] == "2026-01-04T00:00:00Z"
+    assert metadata(built, "apache/kafka#10")["ticket_keys"] == "KAFKA-1,KAFKA-2"
 
 
 def test_lead_time_runs_from_the_first_change_opening_to_the_last_merging(built):
@@ -233,6 +262,18 @@ def test_lead_time_runs_from_the_first_change_opening_to_the_last_merging(built)
     """).fetchall())
     # KAFKA-3's only change hasn't merged, so it has no lead time yet.
     assert values == {"KAFKA-1": "48.0", "KAFKA-2": "48.0"}
+
+
+def test_metadata_added_to_an_entity_is_dated_like_it(built):
+    (created_at,) = built.sql(
+        "SELECT created_at FROM entities WHERE name = 'KAFKA-1'"
+    ).fetchone()
+    dates = built.sql("""
+        SELECT DISTINCT m.created_at, m.updated_at FROM entity_metadata AS m
+        JOIN entities ON entities.id = m.entity_id
+        WHERE entities.name = 'KAFKA-1' AND m.key IN ('change_count', 'lead_time_hours')
+    """).fetchall()
+    assert dates == [(created_at, created_at)]
 
 
 def test_lead_time_traces_to_the_changes_raw_timestamps(built, snap: Snapshot):
@@ -245,24 +286,23 @@ def test_lead_time_traces_to_the_changes_raw_timestamps(built, snap: Snapshot):
 
 def test_a_rollup_is_sourced_from_the_rows_it_rolls_up(built):
     (sources,) = built.sql("""
-        SELECT list_sort(list(s.table)) FROM (
+        SELECT list_sort(list(cited.type)) FROM (
           SELECT unnest(m._sources) AS s FROM entity_metadata AS m
           JOIN entities ON entities.id = m.entity_id
           WHERE entities.name = 'KAFKA-1' AND key = 'change_count'
-        )
+        ) JOIN entities AS cited ON cast(cited._row_id AS VARCHAR) = s.row_id
     """).fetchone()
-    assert sources == ["entities", "entities", "ticket_change_links"]
+    # The link and the change it names: entities, never their metadata rows.
+    assert sources == ["change", "ticket_change_link"]
 
 
 def test_trace_follows_a_metadata_value_back_to_raw(built, snap: Snapshot):
-    (row_id,) = built.sql("""
-        SELECT m._row_id FROM entity_metadata AS m JOIN entities ON entities.id = m.entity_id
-        WHERE entities.name = 'KAFKA-1' AND m.key = 'change_count'
-    """).fetchone()
-    result = trace(snap, "entity_metadata", str(row_id))
+    row_id = metadata_row_id(built, "KAFKA-1", "change_count")
+    result = trace(snap, "entity_metadata", row_id)
     assert result is not None
-    assert set(result.hops[1]) == {"entities", "ticket_change_links"}
-    assert result.hops[-1] == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
+    assert all("entity_metadata" not in hop for hop in result.hops[1:])
+    raw = {t: ids for hop in result.hops for t, ids in hop.items() if is_raw(t)}
+    assert raw == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
 def test_parse_ref_splits_table_column_and_json_path():
@@ -286,7 +326,9 @@ def test_parse_ref_reads_a_row_filter():
 
 
 def test_load_job_rejects_a_column_map_in_job_toml(tmp_path: Path):
-    (tmp_path / "job.toml").write_text('inputs = ["up"]\n[columns]\nx = ["up.y"]')
+    (tmp_path / "job.toml").write_text(
+        'inputs = ["raw.up"]\nentity_type = "x"\n[columns]\nx = ["raw.up.y"]'
+    )
     (tmp_path / "query.sql").write_text("select 1")
     with pytest.raises(ValueError, match="returns _fields instead"):
         load_job(tmp_path)
@@ -337,23 +379,27 @@ def test_field_errors_pass_a_filter_on_a_text_column():
     assert field_errors(con, ("up",)) == []
 
 
-def test_every_table_carries_the_union_of_its_rows_fields(built, snap: Snapshot):
-    for job in load_jobs([JOBS_DIR]):
-        metadata = pq.read_metadata(snap.files(job.name)[0]).metadata
-        stored = json.loads(metadata[COLUMNS_METADATA_KEY.encode()])
-        rows = built.sql(f"SELECT DISTINCT _fields FROM {job.name}").fetchall()
-        union: dict[str, set[str]] = {}
-        for (fields,) in rows:
-            for column, refs in fields.items():
-                union.setdefault(column, set()).update(refs)
-        assert stored == {column: sorted(refs) for column, refs in union.items()}
+def test_every_part_carries_the_union_of_its_rows_fields(built, snap: Snapshot):
+    for name, entry in snap.jobs.items():
+        for table, key in entry["files"].items():
+            stored = json.loads(pq.read_metadata(snap.url(key)).metadata[COLUMNS_METADATA_KEY.encode()])
+            rows = built.sql(
+                f"SELECT DISTINCT _fields FROM read_parquet('{snap.url(key)}')"
+            ).fetchall()
+            union: dict[str, set[str]] = {}
+            for (fields,) in rows:
+                for column, refs in fields.items():
+                    union.setdefault(column, set()).update(refs)
+            assert stored == {column: sorted(refs) for column, refs in union.items()}, (name, table)
 
 
 def test_a_value_with_a_fallback_names_only_the_column_it_came_from(built):
     # KAFKA-2's status is mapped by the client; the others fall back to Jira's category.
-    rows = dict(built.sql(
-        "SELECT name, _fields['status_group'] FROM entities WHERE type = 'ticket' ORDER BY name"
-    ).fetchall())  # fmt: skip
+    rows = dict(built.sql("""
+        SELECT entities.name, m._fields['value'] FROM entity_metadata AS m
+        JOIN entities ON entities.id = m.entity_id
+        WHERE m.key = 'status_group' ORDER BY 1
+    """).fetchall())  # fmt: skip
     assert rows == {
         "KAFKA-1": ["raw.jira_issues.fields:$.status.statusCategory.name"],
         "KAFKA-2": ["raw.jira_issues.fields:$.status.name"],
@@ -362,14 +408,16 @@ def test_a_value_with_a_fallback_names_only_the_column_it_came_from(built):
 
 
 def test_a_link_names_the_texts_its_key_was_found_in(built):
-    rows = dict(built.sql(
-        "SELECT ticket_key, _fields['ticket_key'] FROM ticket_change_links ORDER BY ticket_key"
-    ).fetchall())  # fmt: skip
-    assert rows == {
-        "KAFKA-1": ["entities.name", "entities.title"],
-        "KAFKA-2": ["entities.name", "entities.branch"],
-        "KAFKA-3": ["entities.name", "entities.title"],
+    rows = dict(built.sql("""
+        SELECT m.value, m._fields['value'] FROM entity_metadata AS m
+        WHERE m.entity_type = 'ticket_change_link' AND m.key = 'ticket_key' ORDER BY 1
+    """).fetchall())  # fmt: skip
+    found_in = {
+        "KAFKA-1": "entities[type=change].title",
+        "KAFKA-2": "entities[type=change].branch",
+        "KAFKA-3": "entities[type=change].title",
     }
+    assert rows == {key: ["entities[type=ticket].name", text] for key, text in found_in.items()}
 
 
 def metadata_row_id(built, entity_name: str, key: str) -> str:
@@ -386,22 +434,48 @@ def change_entity_ids(built) -> set[str]:
 
 
 def test_a_filtered_reference_follows_only_the_rows_it_matches(built, snap: Snapshot):
-    # change_count counts the ticket's linked changes: its own row is a source, but not counted.
+    # change_count counts the ticket's links: the change's merged_at is a source, not counted.
     row_id = metadata_row_id(built, "KAFKA-1", "change_count")
     result = trace(snap, "entity_metadata", row_id, "value")
     assert result is not None
-    assert result.direct == ["entities[type=change]._row_id", "ticket_change_links._row_id"]
-    assert result.hops[1]["entities"] <= change_entity_ids(built)
-    assert set(result.hops[1]) == {"entities", "ticket_change_links"}
-    # A link's identity depends on the ticket it names, so the ticket is reached through it.
+    assert result.direct == [
+        "entities[type=ticket_change_link].ticket_id",
+        "entities[type=ticket_change_link].change_id",
+        "entities[type=change]._row_id",
+    ]
+    assert set(result.hops[1]) == {"entities"}
+    assert change_entity_ids(built) & result.hops[1]["entities"]
+    # The change's merged_at is a value of a row it reached, but not one it reads.
+    assert "merged_at" not in result.columns["entities"]
+    assert set(result.columns["entities"]) == {"ticket_id", "change_id", "_row_id"}
     raw = {t: ids for hop in result.hops for t, ids in hop.items() if is_raw(t)}
     assert raw == {"raw.jira_issues": {"j1-new"}, "raw.github_pulls": {"p10"}}
 
 
+def test_an_entitys_metadata_value_traces_from_the_entity(built, snap: Snapshot):
+    # Traced from the ticket itself: every hop names entities, never a metadata row.
+    (ticket,) = built.sql("SELECT _row_id FROM entities WHERE name = 'KAFKA-1'").fetchone()
+    result = trace(snap, "entities", str(ticket), "lead_time_hours")
+    assert result is not None
+    assert result.direct == [
+        "entities[type=ticket_change_link].ticket_id",
+        "entities[type=ticket_change_link].change_id",
+        "entities[type=change].created_at",
+        "entities[type=change].merged_at",
+    ]
+    assert all(set(hop) <= {"entities", "raw.jira_issues", "raw.github_pulls"} for hop in result.hops)
+    raw_fields = {t: set(labels) for t, labels in result.columns.items() if is_raw(t)}
+    assert raw_fields == {"raw.github_pulls": {"created_at", "merged_at"}}
+
+
+def test_an_entity_without_a_value_for_a_key_has_no_lineage_for_it(built, snap: Snapshot):
+    (ticket,) = built.sql("SELECT _row_id FROM entities WHERE name = 'KAFKA-3'").fetchone()
+    assert trace(snap, "entities", str(ticket), "lead_time_hours") is None
+
+
 def test_a_field_reaches_only_the_raw_fields_of_the_rows_it_reads(built, snap: Snapshot):
-    # entities.created_at reads either raw created field, but first_change_at reads only the
-    # changes' rows, so the trace names only the pull request's. The ticket is still reached as a
-    # whole row, through the link, without making its created field part of the value.
+    # first_change_at reads the change's created_at; the link reaches the ticket only as a whole
+    # row, without making its created field part of the value.
     row_id = metadata_row_id(built, "KAFKA-1", "first_change_at")
     result = trace(snap, "entity_metadata", row_id, "value")
     assert result is not None
@@ -410,15 +484,15 @@ def test_a_field_reaches_only_the_raw_fields_of_the_rows_it_reads(built, snap: S
     assert result.columns["raw.github_pulls"]["created_at"] == {"p10"}
 
 
-def test_trace_field_reaches_a_json_path_in_raw(built, snap: Snapshot):
+def test_a_value_traces_straight_to_raw_with_no_table_between(built, snap: Snapshot):
     row_id = metadata_row_id(built, "KAFKA-1", "status")
     values = row_values(snap, "entity_metadata", row_id)
     result = trace(snap, "entity_metadata", row_id, "value")
     assert result is not None
     assert {t: set(labels) for t, labels in result.columns.items()} == {
-        "entities": {"status"},
         "raw.jira_issues": {"fields:$.status.name"},
     }
+    assert result.hops == [{"entity_metadata": {row_id}}, {"raw.jira_issues": {"j1-new"}}]
     raw_ids = result.columns["raw.jira_issues"]["fields:$.status.name"]
     assert raw_values(snap, "raw.jira_issues", "fields:$.status.name", raw_ids) == [
         values["value"]
@@ -453,14 +527,16 @@ def build(root: Path, runs: list[str], snapshot_id: str, base: Snapshot | None) 
 def tickets_by_key(snap: Snapshot) -> dict[str, tuple[str, str]]:
     with snap.connect() as con:
         rows = con.sql(f"""
-            SELECT name, status, _sources[1].row_id FROM {snap.source("entities")}
-            WHERE type = 'ticket'
+            SELECT e.name, m.value, e._sources[1].row_id
+            FROM {snap.source("entities")} AS e
+            JOIN {snap.source("entity_metadata")} AS m ON m.entity_id = e.id AND m.key = 'status'
+            WHERE e.type = 'ticket'
         """).fetchall()
     return {key: (status, source) for key, status, source in rows}
 
 
-def counts(snap: Snapshot, table: str) -> tuple[int, int, int]:
-    changes = snap.tables[table]["changes"]
+def counts(snap: Snapshot, job: str) -> tuple[int, int, int]:
+    changes = snap.jobs[job]["changes"]
     return changes["added"], changes["changed"], changes["removed"]
 
 
@@ -479,7 +555,8 @@ def test_an_incremental_snapshot_reads_its_full_run_plus_the_changes_since(tmp_p
     assert tickets["KAFKA-2"] == ("Resolved", "j2-inc")
     assert tickets["KAFKA-3"] == ("Open", "j3")  # unchanged, still read from the full run
     assert set(tickets) == {"KAFKA-1", "KAFKA-2", "KAFKA-3", "KAFKA-4"}
-    assert counts(second, "entities") == (1, 1, 0)  # no pull request changed
+    assert counts(second, "tickets") == (1, 1, 0)
+    assert counts(second, "changes") == (0, 0, 0)  # no pull request changed
     assert verify_jobs(build_order(load_jobs([JOBS_DIR])), CLIENT, second, per_branch=1)
 
     # The next full run no longer has KAFKA-3: it was deleted, and drops out.
@@ -487,4 +564,4 @@ def test_an_incremental_snapshot_reads_its_full_run_plus_the_changes_since(tmp_p
     write_raw(tmp_path, "github_pulls", TYPED_PULLS, "full2")
     third = build(tmp_path, ["full2"], "s3", second)
     assert "KAFKA-3" not in tickets_by_key(third)
-    assert counts(third, "entities") == (0, 1, 2)  # KAFKA-2 back to the full run's In Progress
+    assert counts(third, "tickets") == (0, 1, 2)  # KAFKA-2 back to the full run's In Progress

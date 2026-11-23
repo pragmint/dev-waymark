@@ -16,6 +16,14 @@ For a sample of each table's rows, a few per distinct `_fields`:
   with the same `_sources`. Only when there's none, or no single one, has it gone, as a filter or
   a join drops it.
 
+A row cites entities, never metadata rows, so a replay reads the metadata of each entity it
+cites, and changes it one key at a time, as if each key were a column of the entity: a value that
+changes with it must name `entities.<key>`.
+
+A job's output is checked as what it became: an entity's name and created_at, and each metadata
+value as the text and value type it was written with. The replay goes through the same
+conversion (`runner.metadata_select`), so a row reads as the entity it wrote.
+
 It's a test, not a proof. A change the query absorbs, such as a value that isn't the largest in
 a `max()`, hides that dependency.
 """
@@ -45,15 +53,21 @@ import registry
 import snapshot as snapshots
 from runner import (
     CONTRACT_COLUMNS,
+    ENTITIES,
+    ENTITY_COLUMNS,
+    METADATA,
+    EXTRA_METADATA,
     RAW_ROW_ID,
     Job,
     Ref,
     build_order,
     connect,
     create_result,
+    input_sources,
     is_raw,
     job_dirs,
     load_jobs,
+    metadata_select,
     parse_ref,
     sql_string,
 )
@@ -62,6 +76,10 @@ from snapshot import Snapshot
 KINDS = ("shift", "replace", "null")
 # Identity columns join rows to their sources; changing them tests the join, not the lineage.
 UNPERTURBED = {*CONTRACT_COLUMNS, RAW_ROW_ID}
+# The columns of a metadata row that are its value, changed together for `entities.<key>`.
+METADATA_VALUE = ("value", "value_type")
+# A metadata row's copies of its entity's columns, and the column of `entities` each answers to.
+METADATA_ALIASES = {"entity_type": "type", "created_at": "created_at", "updated_at": "created_at"}
 # The most JSON subtrees one narrowing tries before reporting what it has.
 NARROW_LIMIT = 400
 # What a null JSON leaf becomes. Shaped like a date, so it changes a field read as text and one
@@ -239,17 +257,55 @@ def source_set(row: Row) -> set[tuple[str, str]]:
     return {(s["table"], s["row_id"]) for s in row["_sources"]}
 
 
+def outputs(row: Row) -> set[str]:
+    return {column for column in row if column not in CONTRACT_COLUMNS}
+
+
 def row_differences(actual: Row | None, expected: Row) -> list[str]:
+    """How a replayed row differs from the stored one: its values (a value the stored row lacks
+    is null), its `_sources`, and the references of each value the stored row has."""
     if actual is None:
         return ["the row is missing"]
-    differences = [
+    differences = sorted(
         column
-        for column in expected
-        if column != "_sources" and not same(actual.get(column), expected[column])
-    ]
+        for column in outputs(actual) | outputs(expected)
+        if not same(actual.get(column), expected.get(column))
+    )
     if source_set(actual) != source_set(expected):
         differences.append("_sources")
+    stored_fields, fields = expected["_fields"], actual["_fields"]
+    extra = fields.get(EXTRA_METADATA) or []
+    if any(sorted(refs) != sorted(fields.get(column, extra)) for column, refs in stored_fields.items()):
+        differences.append("_fields")
     return differences
+
+
+def as_views(con: duckdb.DuckDBPyConnection, job: Job, table: str) -> list[Row]:
+    """Each row of a job's output as the entity values it becomes: name and created_at for a type
+    it makes, and each metadata value as (value type, text), under its key. `_fields` is the
+    row's own: a `_metadata` key reads what that column does. Rows are numbered first, since
+    a change can leave two of them with one `_row_id`, or none."""
+    con.execute(
+        f"CREATE OR REPLACE TEMP TABLE view_rows AS SELECT row_number() OVER () AS _n, * FROM {table}"
+    )
+    entity = ", name, created_at" if job.entity_type else ""
+    cursor = con.execute(f"SELECT _n, _row_id, _sources, _fields{entity} FROM view_rows ORDER BY _n")
+    names = [d[0] for d in cursor.description]
+    rows: dict[int, Row] = {}
+    for values in cursor.fetchall():
+        row = dict(zip(names[1:], values[1:]))
+        row["_fields"] = dict(row["_fields"] or {})
+        rows[values[0]] = row
+    con.execute(
+        "CREATE OR REPLACE TEMP TABLE view_numbered AS "
+        "SELECT * EXCLUDE (_n) REPLACE (_n AS _row_id) FROM view_rows"
+    )
+    extra = con.execute(
+        f'SELECT entity_id, "key", value_type, value FROM ({metadata_select(con, job, "view_numbered")})'
+    ).fetchall()
+    for n, key, value_type, value in extra:
+        rows[n][key] = (value_type, value)
+    return list(rows.values())
 
 
 # ── Running a job on chosen inputs ────────────────────────────────────────────
@@ -298,20 +354,22 @@ class Replay:
         self.loaded[table] = data
 
     def rows(self) -> list[Row]:
-        """Every row the job writes for the loaded inputs. A change can give two rows one
-        `_row_id`, so they aren't keyed by it."""
+        """Every row the job writes for the loaded inputs, as entity values (`as_views`). A
+        change can give two rows one `_row_id`, so they aren't keyed by it."""
         if self.job.kind == "container":
             return self.container_rows()
-        cursor = self.con.execute(f"SELECT * FROM (\n{self.job.sql}\n)")
-        names = [d[0] for d in cursor.description]
-        return [dict(zip(names, v)) for v in cursor.fetchall()]
+        self.con.execute(f"CREATE OR REPLACE TEMP TABLE replay_out AS SELECT * FROM (\n{self.job.sql}\n)")
+        return as_views(self.con, self.job, "replay_out")
 
     def row(self, row_id: int) -> Row | None:
         if self.job.kind == "container":
             return next((r for r in self.container_rows() if r["_row_id"] == row_id), None)
-        cursor = self.con.execute(f"SELECT * FROM (\n{self.job.sql}\n) WHERE _row_id = ?", [row_id])
-        values = cursor.fetchone()
-        return dict(zip([d[0] for d in cursor.description], values)) if values else None
+        self.con.execute(
+            "CREATE OR REPLACE TEMP TABLE replay_out AS "
+            f"SELECT * FROM (\n{self.job.sql}\n) WHERE _row_id = {int(row_id)}"
+        )
+        views = as_views(self.con, self.job, "replay_out")
+        return views[0] if len(views) == 1 else None
 
     def container_rows(self) -> list[Row]:
         """Every row the container writes for the loaded inputs."""
@@ -321,9 +379,7 @@ class Replay:
             return self.outputs[key]
         create_result(self.con, self.job, self.client, self.spill_dir, table="replay_result")
         self.container_runs += 1
-        cursor = self.con.execute("SELECT * FROM replay_result")
-        names = [d[0] for d in cursor.description]
-        rows = [dict(zip(names, v)) for v in cursor.fetchall()]
+        rows = as_views(self.con, self.job, "replay_result")
         self.outputs[key] = rows
         if len(self.outputs) > CONTAINER_CACHE_SIZE:
             self.outputs.popitem(last=False)
@@ -350,11 +406,18 @@ def id_column(table: str) -> str:
     return RAW_ROW_ID if is_raw(table) else "_row_id"
 
 
-def load_sources(snapshot: Snapshot, table: str, row_ids: set[str]) -> pa.Table:
+def row_key(table: str) -> str:
+    """The column that ties an input's rows to the `_sources` that cite them. A row cites an
+    entity, never its metadata rows, so it reads all of that entity's metadata."""
+    return "entity_id" if table == METADATA else id_column(table)
+
+
+def load_sources(snapshot: Snapshot, table: str, source: str, row_ids: set[str]) -> pa.Table:
+    """The rows of one input, as the job's query reads it, that the given ids cite."""
     with snapshot.connect() as con:
         return con.execute(
-            f"SELECT * FROM {snapshot.source(table)} "
-            f"WHERE cast({id_column(table)} AS VARCHAR) IN (SELECT unnest(?))",
+            f"SELECT * FROM ({source}) "
+            f"WHERE cast({row_key(table)} AS VARCHAR) IN (SELECT unnest(?))",
             [sorted(row_ids)],
         ).to_arrow_table()
 
@@ -368,18 +431,26 @@ def only_rows(table: pa.Table, id_name: str, row_ids: set[str]) -> pa.Table:
 
 
 class RowCheck:
-    def __init__(self, replay: Replay, snapshot: Snapshot, stored: Row, inputs: dict[str, pa.Table]):
+    def __init__(
+        self,
+        replay: Replay,
+        stored: Row,
+        inputs: dict[str, pa.Table],
+        sources: Mapping[str, str],
+    ):
         self.replay = replay
-        self.snapshot = snapshot
         self.stored = stored
         self.row_id = stored["_row_id"]
         self.inputs = inputs
-        self.outputs = [c for c in stored if c not in CONTRACT_COLUMNS]
+        # Each input in full, as the job read it.
+        self.sources = sources
+        self.outputs: list[str] = []
         self.baseline: Row = {}
         # The ids of every row the replay writes before any change, to tell a renamed row apart.
         self.baseline_ids: set[Any] = set()
-        # What this row says each of its values is computed from.
-        self.refs: dict[str, list[str]] = dict(stored.get("_fields") or {})
+        # What this row says each of its values is computed from: the replay's own `_fields`,
+        # once it reproduced the stored row, since a null value stored nothing to read them from.
+        self.refs: dict[str, list[str]] = {}
 
     def run(self) -> list[Finding]:
         for table, rows in self.inputs.items():
@@ -390,16 +461,25 @@ class RowCheck:
             return [Finding("error", "replay", None, self.replay_failure(differences))]
         self.baseline = baseline
         self.baseline_ids = {row["_row_id"] for row in self.replay.rows()}
+        self.refs = dict(baseline["_fields"])
+        self.outputs = sorted(outputs(baseline) | outputs(self.stored))
         return self.perturb()
+
+    def refs_of(self, output: str) -> list[str]:
+        """The references of one output column."""
+        return self.refs.get(output, [])
 
     def replay_failure(self, differences: list[str]) -> str:
         detail = f"not reproduced from its _sources ({', '.join(differences)})"
         culprits = []
         for table in sorted(self.inputs):
-            self.replay.load(table, self.snapshot.source(table))
+            self.replay.load(table, f"({self.sources[table]})")
             if not row_differences(self.replay.row(self.row_id), self.stored):
                 culprits.append(table)
             self.replay.load(table, self.inputs[table])
+        # A row cites an entity to read its metadata, so missing metadata is a missing entity.
+        culprits = [f"{t} (the metadata of entities it doesn't cite)" if t == METADATA else t
+                    for t in culprits]  # fmt: skip
         if culprits:
             return f"{detail}; reproduced with all of {' or '.join(culprits)}, so it reads rows it doesn't list"
         return f"{detail}; no single input table in full reproduces it"
@@ -416,8 +496,10 @@ class RowCheck:
             row, lost_id = self.replay.row_with(self.row_id, table, perturbed(kind), self.renamed)
             vanished |= lost_id
             if row is not None:
-                changed |= {o for o in self.outputs if not same(row[o], self.baseline[o])}
-        return changed, vanished
+                compared = set(self.outputs) | outputs(row)
+                changed |= {o for o in compared if not same(row.get(o), self.baseline.get(o))}
+        # A key the query names at run time is one of `_metadata`'s, whatever the change made it.
+        return {o if o in self.refs else EXTRA_METADATA for o in changed}, vanished
 
     def renamed(self) -> Row | None:
         """The row under a new `_row_id`: the one new row built from the same input rows, and
@@ -457,7 +539,7 @@ class RowCheck:
         rows = self.inputs[table]
         undeclared = [True] * rows.num_rows
         paths, filters = [], []
-        for ref in map(parse_ref, self.refs.get(output, [])):
+        for ref in map(parse_ref, self.refs_of(output)):
             if ref.table != table:
                 continue
             if ref.is_identity or (ref.column == column and ref.path is None):
@@ -503,6 +585,9 @@ class RowCheck:
         for table, rows in sorted(self.inputs.items()):
             if rows.num_rows == 0:
                 continue
+            if table == METADATA:
+                findings += self.perturb_metadata(effects)
+                continue
             for column in rows.column_names:
                 if column in UNPERTURBED:
                     continue
@@ -515,6 +600,86 @@ class RowCheck:
                 for output in sorted(effect[0]):
                     findings.extend(self.undeclared(output, table, column, documents))
         return findings + self.unused(effects)
+
+    # ── Metadata values ──────────────────────────────────────────────────────
+    # A job cites the entity and names its metadata value as `entities.<key>`, so each key of
+    # the metadata it read is changed on its own, value and value type together, as if it were a
+    # column of the entity. A metadata row's copies of its entity's columns answer to those
+    # columns. What ties a value to its entity (entity_id, key, the row's own id) isn't changed.
+
+    def metadata_mask(self, key: str | None, entity_ids: set[str] | None = None) -> list[bool]:
+        """The metadata rows of the given entities (all of them by default) that hold `key`, or
+        any key when it's None."""
+        rows = self.inputs[METADATA]
+        keys = rows["key"].to_pylist()
+        owners = [str(e) for e in rows["entity_id"].to_pylist()]
+        return [
+            (key is None or k == key) and (entity_ids is None or e in entity_ids)
+            for k, e in zip(keys, owners)
+        ]
+
+    def metadata_changed(
+        self, key: str | None, columns: tuple[str, ...], entity_ids: set[str] | None = None
+    ) -> tuple[set[str], bool]:
+        mask = self.metadata_mask(key, entity_ids)
+        changed: set[str] = set()
+        vanished = False
+        for column in columns:
+            if column in self.inputs[METADATA].column_names:
+                effect = self.scalar_changed(METADATA, column, mask)
+                changed |= effect[0]
+                vanished |= effect[1]
+        return changed, vanished
+
+    def matched_entities(self, ref: Ref) -> set[str]:
+        """The entities a reference to `entities` reads: those its filter matches."""
+        rows = self.inputs.get(ENTITIES)
+        if rows is None:
+            return set()
+        ids = [str(i) for i in rows["_row_id"].to_pylist()]
+        return {i for i, m in zip(ids, matching(rows, ref)) if m}
+
+    def is_metadata_ref(self, ref: Ref) -> bool:
+        entities = self.inputs.get(ENTITIES)
+        columns = entities.column_names if entities is not None else []
+        return ref.table == ENTITIES and ref.column not in columns and not ref.is_identity
+
+    def perturb_metadata(self, effects: dict) -> list[Finding]:
+        findings = []
+        # (name it answers to, key it holds or None for any, metadata columns changed)
+        targets = [
+            (key, key, METADATA_VALUE)
+            for key in sorted({k for k in self.inputs[METADATA]["key"].to_pylist() if k})
+        ] + [(alias, None, (column,)) for column, alias in METADATA_ALIASES.items()]
+        for name, key, columns in targets:
+            changed, vanished = self.metadata_changed(key, columns)
+            before = effects.get((ENTITIES, name), (set(), False))
+            effects[(ENTITIES, name)] = (before[0] | changed, before[1] or vanished)
+            for output in sorted(changed):
+                findings.extend(self.undeclared_metadata(output, name, key, columns))
+        return findings
+
+    def undeclared_metadata(
+        self, output: str, name: str, key: str | None, columns: tuple[str, ...]
+    ) -> list[Finding]:
+        """A finding if `output` changes with metadata of an entity it doesn't declare reading
+        `entities.<name>` of."""
+        mask = self.metadata_mask(key)
+        owners = {str(e) for e, m in zip(self.inputs[METADATA]["entity_id"].to_pylist(), mask) if m}
+        filters = []
+        for ref in map(parse_ref, self.refs_of(output)):
+            if ref.table != ENTITIES or ref.column != name:
+                continue
+            if ref.where is None:
+                return []
+            filters.append(f"{ENTITIES}[{ref.where[0]}={ref.where[1]}]")
+            owners -= self.matched_entities(ref)
+        if not owners:
+            return []
+        if filters and output not in self.metadata_changed(key, columns, owners)[0]:
+            return []
+        outside = f" outside {', '.join(filters)}" if filters else ""
+        return [Finding("error", "undeclared", output, f"changes with {ENTITIES}.{name}{outside}")]
 
     def undeclared(
         self, output: str, table: str, column: str, documents: list[Any] | None
@@ -563,7 +728,12 @@ class RowCheck:
                 if ref.is_identity or (table, column) not in effects:
                     continue
                 changed, vanished = effects[(table, column)]
-                if ref.where is not None:
+                if self.is_metadata_ref(ref) and ref.where is not None:
+                    entity_ids = self.matched_entities(ref)
+                    if not any(self.metadata_mask(column, entity_ids)):
+                        continue
+                    changed, vanished = self.metadata_changed(column, METADATA_VALUE, entity_ids)
+                elif ref.where is not None:
                     only = matching(self.inputs[table], ref)
                     if not any(only):
                         # This row has no source the filter matches; other rows may.
@@ -591,37 +761,88 @@ class RowCheck:
 # ── Checking a job ────────────────────────────────────────────────────────────
 
 
-def sample_rows(snapshot: Snapshot, job: Job, per_branch: int) -> list[Row]:
-    """A few rows per distinct `_fields`, picked by a hash of `_row_id` so runs agree. Rows that
+def part_source(snapshot: Snapshot, job: Job, table: str) -> str | None:
+    key = snapshot.part(job.name, table)
+    return snapshots.read_parquet([snapshot.url(key)]) if key else None
+
+
+def sample_ids(snapshot: Snapshot, job: Job, per_branch: int) -> list[Any]:
+    """A few entities for each distinct `_fields` of each metadata key, and of the entities the
+    job made, picked by a hash of the entity id so runs agree and branches share rows. Values that
     read different columns took different branches of the query, so each branch gets checked."""
+    branches = [
+        f"SELECT entity_id, \"key\" || cast(_fields AS VARCHAR) AS branch "
+        f"FROM {part_source(snapshot, job, 'entity_metadata')}"
+    ]
+    made = part_source(snapshot, job, "entities")
+    if made:
+        branches.append(f"SELECT _row_id, cast(_fields AS VARCHAR) FROM {made}")
     with snapshot.connect() as con:
-        con.execute("SET TimeZone = 'UTC'")
-        cursor = con.execute(f"""
-            SELECT * EXCLUDE (_rank) FROM (
-              SELECT *, row_number() OVER (
-                PARTITION BY md5(cast(_fields AS VARCHAR))
-                ORDER BY md5(cast(_row_id AS VARCHAR))
+        ids = con.execute(f"""
+            SELECT DISTINCT entity_id FROM (
+              SELECT entity_id, row_number() OVER (
+                PARTITION BY md5(branch) ORDER BY md5(cast(entity_id AS VARCHAR))
               ) AS _rank
-              FROM {snapshot.source(job.name)}
+              FROM ({' UNION ALL '.join(branches)})
             )
             WHERE _rank <= {int(per_branch)}
-            ORDER BY _row_id
-        """)
-        names = [d[0] for d in cursor.description]
-        return [dict(zip(names, values)) for values in cursor.fetchall()]
+            ORDER BY entity_id
+        """).fetchall()
+    return [entity_id for (entity_id,) in ids]
+
+
+def stored_rows(snapshot: Snapshot, job: Job, ids: list[Any]) -> list[Row]:
+    """The entities' values as the job's parts store them, shaped like `as_views`."""
+    rows: dict[Any, Row] = {}
+    with snapshot.connect() as con:
+        con.execute("SET TimeZone = 'UTC'")
+        made = part_source(snapshot, job, "entities")
+        if made:
+            cursor = con.execute(
+                f"SELECT _row_id, _sources, _fields, name, created_at FROM {made} "
+                "WHERE _row_id IN (SELECT unnest(?))",
+                [ids],
+            )
+            for row_id, sources, fields, name, created_at in cursor.fetchall():
+                fields = dict(fields)
+                rows[row_id] = {
+                    "_row_id": row_id,
+                    "_sources": sources,
+                    "_fields": {c: fields[c] for c in ENTITY_COLUMNS},
+                    "name": name,
+                    "created_at": created_at,
+                }
+        cursor = con.execute(
+            f'SELECT entity_id, _sources, _fields, "key", value_type, value '
+            f"FROM {part_source(snapshot, job, 'entity_metadata')} "
+            "WHERE entity_id IN (SELECT unnest(?))",
+            [ids],
+        )
+        for entity_id, sources, fields, key, value_type, value in cursor.fetchall():
+            row = rows.setdefault(
+                entity_id, {"_row_id": entity_id, "_sources": sources, "_fields": {}}
+            )
+            row[key] = (value_type, value)
+            row["_fields"][key] = dict(fields)["value"]
+    return [rows[row_id] for row_id in ids if row_id in rows]
 
 
 def verify_job(
     job: Job, client: Mapping[str, Any], snapshot: Snapshot, per_branch: int
 ) -> tuple[int, dict[Finding, list[int]]]:
-    """Check a sample of one job's rows. Returns how many rows it checked and what it found,
-    with the rows each finding came from."""
-    rows = sample_rows(snapshot, job, per_branch)
-    wanted: dict[str, set[str]] = {table: set() for table in job.inputs}
+    """Check a sample of one job's entities. Returns how many it checked and what it found, with
+    the entities each finding came from."""
+    rows = stored_rows(snapshot, job, sample_ids(snapshot, job, per_branch))
+    sources = input_sources(job, snapshot.jobs[job.name]["read"], snapshot)
+    wanted: dict[str, set[str]] = {table: set() for table in sources}
     for row in rows:
         for table, row_id in source_set(row):
             wanted.setdefault(table, set()).add(row_id)
-    loaded = {table: load_sources(snapshot, table, ids) for table, ids in wanted.items()}
+    if METADATA in wanted:
+        wanted[METADATA] = set(wanted.get(ENTITIES, set()))
+    loaded = {
+        table: load_sources(snapshot, table, sources[table], ids) for table, ids in wanted.items()
+    }
 
     found: dict[Finding, list[int]] = {}
     with tempfile.TemporaryDirectory(prefix="waymark-verify-") as spill_dir:
@@ -629,11 +850,14 @@ def verify_job(
         try:
             for row in rows:
                 ids = source_set(row)
+                cited = {t: {i for s, i in ids if s == t} for t in loaded}
+                if METADATA in cited:
+                    cited[METADATA] = cited.get(ENTITIES, set())
                 inputs = {
-                    table: only_rows(data, id_column(table), {i for t, i in ids if t == table})
+                    table: only_rows(data, row_key(table), cited[table])
                     for table, data in loaded.items()
                 }
-                for finding in RowCheck(replay, snapshot, row, inputs).run():
+                for finding in RowCheck(replay, row, inputs, sources).run():
                     found.setdefault(finding, []).append(row["_row_id"])
         finally:
             replay.close()
@@ -643,7 +867,7 @@ def verify_job(
 def report(job: Job, checked: int, found: dict[Finding, list[int]], seconds: float) -> None:
     errors = sum(1 for f in found if f.level == "error")
     status = f"{errors} errors" if errors else "ok"
-    print(f"{job.name}: {checked} rows checked in {seconds:.1f}s, {status}")
+    print(f"{job.name}: {checked} entities checked in {seconds:.1f}s, {status}")
     for finding, row_ids in sorted(found.items(), key=lambda item: (item[0].level, item[0].check)):
         where = f"{finding.column}: " if finding.column else ""
         rows = f"{len(row_ids)} rows, e.g. _row_id {row_ids[0]}"
@@ -652,9 +876,9 @@ def report(job: Job, checked: int, found: dict[Finding, list[int]], seconds: flo
 
 def version_mismatch(job: Job, snapshot: Snapshot) -> str | None:
     """Why the job's current files can't check this snapshot's table, or None if they can."""
-    entry = snapshot.tables.get(job.name)
+    entry = snapshot.jobs.get(job.name)
     if entry is None:
-        return f"snapshot {snapshot.id} has no {job.name} table"
+        return f"snapshot {snapshot.id} has nothing from {job.name}"
     built_with = entry.get("job")
     if built_with != job.version:
         return (
@@ -723,12 +947,8 @@ def main() -> None:
 
 
 def built_jobs(snapshot: Snapshot, found: registry.Registries) -> list[Job]:
-    """The job version that built each of the snapshot's tables, from the registries."""
-    return [
-        found.job(name, entry["job"])
-        for name, entry in snapshot.tables.items()
-        if not name.startswith(snapshots.RAW_PREFIX)
-    ]
+    """The job version that wrote each of the snapshot's parts, from the registries."""
+    return [found.job(name, entry["job"]) for name, entry in snapshot.jobs.items()]
 
 
 if __name__ == "__main__":

@@ -17,7 +17,9 @@ COPY = Job(
     "copy",
     ("raw.items",),
     "select stable_id('item', id) as _row_id, [source_ref('raw.items', _dlt_id)] as _sources, "
-    "map {'name': ['raw.items.name']} as _fields, name from raw.items",
+    "map {'name': ['raw.items.name'], 'created_at': []} as _fields, name, "
+    "'2026-01-01T00:00:00Z' as created_at from raw.items",
+    entity_type="item",
 )
 
 
@@ -54,7 +56,7 @@ def test_a_later_run_does_not_change_a_saved_snapshot(tmp_path: Path):
     write_raw(tmp_path, "items", "r2", ["changed"])
     loaded = snapshots.load(str(tmp_path), "s1", {})
     assert names(loaded, "raw.items") == ["a", "b"]
-    assert names(loaded, "copy") == ["a", "b"]
+    assert names(loaded, "entities") == ["a", "b"]
 
 
 def test_tables_are_written_once_per_snapshot(tmp_path: Path):
@@ -64,8 +66,11 @@ def test_tables_are_written_once_per_snapshot(tmp_path: Path):
     snapshots.save(first)
     second = snapshots.start(str(tmp_path), ["r1"], "s2", {})
     run_jobs([COPY], CLIENT, second)
-    assert first.tables["copy"]["files"] == ["tables/copy/s1.parquet"]
-    assert second.tables["copy"]["files"] == ["tables/copy/s2.parquet"]
+    assert first.jobs["copy"]["files"] == {
+        "entities": "tables/entities/s1.copy.parquet",
+        "entity_metadata": "tables/entity_metadata/s1.copy.parquet",
+    }
+    assert second.tables["entities"]["files"] == ["tables/entities/s2.copy.parquet"]
     with pytest.raises(ValueError, match="already exists"):
         snapshots.start(str(tmp_path), ["r1"], "s1", {})
 
@@ -79,7 +84,7 @@ def test_load_without_an_id_reads_the_published_snapshot(tmp_path: Path):
     snapshots.publish(snapshots.load(str(tmp_path), "s1", {}))
     loaded = snapshots.load(str(tmp_path), None, {})
     assert loaded.id == "s1"
-    assert loaded.tables["copy"]["rows"] == 1
+    assert loaded.jobs["copy"]["rows"] == 1
     assert loaded.status == {"copy": "built"}
 
 
@@ -210,27 +215,27 @@ def test_a_snapshot_reads_every_run_in_its_chain(tmp_path: Path):
 
 def changes(snap: snapshots.Snapshot, table: str) -> dict[int, str]:
     with snap.connect() as con:
-        key = snap.tables[table]["changes"]["file"]
+        key = snap.jobs[table]["changes"]["file"]
         rows = con.sql(f"SELECT _row_id, change FROM read_parquet('{snap.url(key)}')").fetchall()
     return dict(rows)
 
 
-def test_each_table_records_its_changes_since_the_base(tmp_path: Path):
+def test_each_job_records_its_changes_since_the_base(tmp_path: Path):
     write_raw(tmp_path, "items", "r1", ["a", "b", "c"])  # ids 0, 1, 2
     first = snapshots.start(str(tmp_path), ["r1"], "s1", {})
     run_jobs([COPY], CLIENT, first)
-    assert first.tables["copy"]["changes"] is None  # nothing to compare with
+    assert first.jobs["copy"]["changes"] is None  # nothing to compare with
     snapshots.save(first)
 
     # Fetched again: 0 is unchanged but has a new _dlt_id, 1 changed, 2 is gone and 3 is new.
     write_raw(tmp_path, "items", "r2", ["a", "B", "d"], ids=[0, 1, 3])
     second = snapshots.start(str(tmp_path), ["r2"], "s2", {}, base=first)
     run_jobs([COPY], CLIENT, second)
-    entry = second.tables["copy"]["changes"]
+    entry = second.jobs["copy"]["changes"]
     assert {k: entry[k] for k in ("base", "added", "changed", "removed")} == {
         "base": "s1", "added": 1, "changed": 1, "removed": 1,
     }  # fmt: skip
-    ids = {name: row_id for row_id, name in rows(second, "copy") + rows(first, "copy")}
+    ids = {name: row_id for row_id, name in rows(second, "entities") + rows(first, "entities")}
     assert changes(second, "copy") == {ids["B"]: "changed", ids["c"]: "removed", ids["d"]: "added"}
     snapshots.save(second)
     with open(tmp_path / "snapshots" / "s2.json") as file:
@@ -240,3 +245,14 @@ def test_each_table_records_its_changes_since_the_base(tmp_path: Path):
 def rows(snap: snapshots.Snapshot, table: str) -> list[tuple[int, str]]:
     with snap.connect() as con:
         return con.sql(f"SELECT _row_id, name FROM {snap.source(table)}").fetchall()
+
+
+def test_a_published_snapshot_from_an_older_pipeline_is_no_base(tmp_path: Path, capsys):
+    write_raw(tmp_path, "items", "r1", ["a"])
+    (tmp_path / "snapshots").mkdir()
+    (tmp_path / "snapshots" / "old.json").write_text(json.dumps({"version": 1}))
+    (tmp_path / "latest.json").write_text(
+        json.dumps({"snapshot": "old", "manifest": "snapshots/old.json"})
+    )
+    assert snapshots.published(str(tmp_path), {}) is None
+    assert "building without a base" in capsys.readouterr().err

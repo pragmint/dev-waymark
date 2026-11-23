@@ -1,15 +1,17 @@
 # Waymark pipeline
 
 Extracts GitHub and Jira into raw Parquet with [dlt](https://dlthub.com/docs), then builds the
-tables Waymark reads with jobs that follow the [table contract](CONTRACT.md): every row records the
-rows it was built from, so any value traces back to raw records. Each build is a snapshot whose
-manifest lists the exact files of every table, and `latest.json` names the published one (layout
-in [CONTRACT.md](CONTRACT.md#snapshot-layout)):
+entities Waymark reads with jobs that follow the [table contract](CONTRACT.md). Every job writes
+entities, or metadata on existing ones, and every row records the rows it was built from, so any
+value traces back to raw records. Raw data aside, there are only the two tables Waymark reads,
+`entities` and `entity_metadata`, and each job writes its own part of them. Each build is a
+snapshot whose manifest lists the exact files of every table, and `latest.json` names the
+published one (layout in [CONTRACT.md](CONTRACT.md#snapshot-layout)):
 
 - `<bucket>/raw/<table>/<run_id>.*.parquet`: append-only, one set of files per extract run
 - `<bucket>/runs/<run_id>.json`: a finished run, and the runs a snapshot of it reads
-- `<bucket>/tables/<name>/<snapshot_id>.parquet`: written once per snapshot, with
-  `<snapshot_id>.changes.parquet` beside it
+- `<bucket>/tables/<entities|entity_metadata>/<snapshot_id>.<job>.parquet`: one job's part,
+  written once per snapshot, with its diff in `<bucket>/changes/<job>/<snapshot_id>.parquet`
 - `<bucket>/snapshots/<snapshot_id>.json` and `<bucket>/latest.json`
 
 This README is in three parts: a [quick start](#quick-start), a [reference](#reference) for the
@@ -53,8 +55,8 @@ GITHUB_TOKEN=$(gh auth token) uv run python extract.py \
 
 It ends by printing the run's id, `run_id=20261119T165653Z` for example.
 
-**2. Build a snapshot.** This runs every job, verifies each table's lineage and publishes the
-snapshot, in about 35 seconds:
+**2. Build a snapshot.** This runs every job, verifies each job's lineage and publishes the
+snapshot, in about 5 seconds:
 
 ```sh
 uv run python runner.py \
@@ -62,12 +64,15 @@ uv run python runner.py \
 ```
 
 ```
-entities: 200 rows (no base to compare)
+changes: 100 rows (no base to compare)
+tickets: 100 rows (no base to compare)
 ticket_change_links: 0 rows (no base to compare)
-entity_metadata: 2171 rows (no base to compare)
-entities: 4 rows checked in 2.7s, ok
+change_ticket_keys: 0 rows (no base to compare)
+ticket_lead_time: 0 rows (no base to compare)
+changes: 2 entities checked in 1.4s, ok
+tickets: 5 entities checked in 3.5s, ok
 ...
-published snapshot 20261119T165702Z
+published snapshot 20261123T200650Z
 ```
 
 One page fetches the oldest 100 Kafka tickets and the newest 100 pull requests, so nothing links
@@ -76,66 +81,78 @@ them and no ticket has a `lead_time_hours` yet. Leave out `--max-pages` for the 
 **3. Trace a value.** Pick a ticket, then trace its summary back to the raw Jira record:
 
 ```sh
-duckdb -c "select _row_id, summary from '/tmp/waymark-bucket/tables/entities/*.parquet'
-  where type = 'ticket' limit 3"
+duckdb -c "select id, name from '/tmp/waymark-bucket/tables/entities/*.tickets.parquet'
+  order by name limit 3"
 
-uv run python trace.py \
-  --bucket-url $BUCKET --table entities --row-id <_row_id> --field summary
+uv run python trace.py --bucket-url $BUCKET --table entities --row-id <id> --field summary
 ```
 
 ```
-summary = 'SocketServer.scala refers to Handler-specific variables'
+summary = 'The log4j appender still uses the SyncProducer API'
   computed from: raw.jira_issues.fields:$.summary
-hop 0: entities                      1 rows  (_row_id 19533901743043, ...)
-hop 1: raw.jira_issues               1 rows  (_dlt_id j/lKuuqoG8uwhw, ...)
-raw field: raw.jira_issues.fields:$.summary  e.g. SocketServer.scala refers to Handler-specific variables
+hop 0: entities                      1 rows  (_row_id 3276073428148143, ...)
+hop 1: raw.jira_issues               1 rows  (_dlt_id 6fSbgH/tOIFD0A, ...)
+raw field: raw.jira_issues.fields:$.summary  e.g. The log4j appender still uses the SyncProducer API
 ```
 
-**4. Add a job.** A job is a folder named after the table it writes, holding `job.toml` and
-`query.sql` ([CONTRACT.md](CONTRACT.md#jobs) has the rules). Try one in a scratch folder:
+Nothing sits between the ticket and the raw record: the `tickets` job wrote the summary as the
+ticket's metadata, with the lineage of the row it computed. Lineage only ever names entities and
+raw records; a metadata value is followed through its entity.
+
+**4. Add a job.** A job is a folder holding `job.toml` and `query.sql`
+([CONTRACT.md](CONTRACT.md#jobs) has the rules). Every job writes entities: `entity_type` makes
+a new type of them, one per row, and `adds_to` adds metadata to an existing type's entities. Try
+one in a scratch folder, which makes an entity per status group:
 
 ```sh
 mkdir -p /tmp/my-jobs/tickets_by_status_group
 cat > /tmp/my-jobs/tickets_by_status_group/job.toml <<'EOF'
 description = "How many tickets are in each status group."
-inputs = ["entities"]
+inputs = ["entities[type=ticket]", "entity_metadata[entity_type=ticket]"]
+entity_type = "status_group"
 EOF
 cat > /tmp/my-jobs/tickets_by_status_group/query.sql <<'EOF'
 select
-  stable_id('tickets_by_status_group', coalesce(status_group, '')) as _row_id,
-  list(source_ref('entities', _row_id)) as _sources,
+  stable_id('tickets_by_status_group', value) as _row_id,
+  list(source_ref('entities', entity_id) order by entity_id) as _sources,
   map {
-    'status_group': ['entities.status_group'],
+    'name': ['entities.status_group'],
+    'created_at': ['entities.created_at'],
     'tickets': ['entities._row_id']
   } as _fields,
-  status_group,
+  value as name,
+  min(created_at) as created_at,
   count(*) as tickets
-from entities
-where type = 'ticket'
-group by status_group
-order by status_group
+from entity_metadata
+where key = 'status_group'
+group by value
+order by value
 EOF
 uv run python runner.py \
   --client clients/apache-kafka.toml --bucket-url $BUCKET --run-id <run_id> \
   --job-dir /tmp/my-jobs
 ```
 
-Each row lists the `entities` rows it counts in `_sources`, and in `_fields` the columns each
-value reads: `status_group` reads `entities.status_group`, and `tickets` counts rows, so it names
-their identity. The runner orders jobs by their inputs and checks the output against the contract.
-To keep a job, move its folder into `clients/<client>/jobs/`, or into `jobs/` for every client.
+Each row needs a text `name` and an `iso_utc` `created_at`, and its other columns become the
+entity's metadata. It lists the tickets it counts in `_sources`, and in `_fields` the columns each
+value reads: the name reads each ticket's `status_group` value, named `entities.status_group` as if
+it were a column of the ticket, and `tickets` counts tickets, so it names their identity. It reads
+the tickets' metadata but cites the tickets, so it reads `entities[type=ticket]` too. A job names
+the types it reads and runs after the jobs that write them. The runner checks
+the output against the contract and writes it as the job's part of both tables. To keep a job,
+move its folder into `clients/<client>/jobs/`, or into `jobs/` for every client.
 
-**5. See verify catch a mistake.** Add `max(resolved_at) as latest_resolved_at` to the select and
-declare it as reading nothing, `'latest_resolved_at': []`. Build again with `--no-publish`. The
-runner exits 1:
+**5. See verify catch a mistake.** Add `max(length(value)) as name_length` to the select and
+declare it as reading nothing, `'name_length': []`. Build again with `--no-publish`. The runner
+exits 1:
 
 ```
-tickets_by_status_group: 1 rows checked in 0.2s, 1 errors
-  error   undeclared latest_resolved_at: changes with entities.resolved_at  (1 rows, ...)
+tickets_by_status_group: 1 entities checked in 0.2s, 1 errors
+  error   undeclared name_length: changes with entities.status_group  (1 rows, ...)
 ```
 
-Verify re-ran the job with `entities.resolved_at` changed, saw `latest_resolved_at` change, and
-found no reference to that column in `_fields`.
+Verify re-ran the job with the tickets' `status_group` values changed, saw `name_length` change,
+and found no reference to them in `_fields`.
 
 **6. View it in Waymark.** From the repo root, then open an entity and follow its lineage links.
 On a fresh clone, run `bun install` and `bun b` once first:
@@ -170,13 +187,13 @@ Run each from this directory with `uv run python <script>`. Every `--bucket-url`
 Each command takes `--client`, `--bucket-url` (the client's root) and `--shared-url` (the shared
 registry, optional) before it, and exits non-zero if a build or verify fails.
 
-| Command               | Meaning                                                                                                                |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `run`                 | Extract, build every active job, verify, publish. Reuses each table that would come out the same as the published one. |
-| `run --extract full`  | The same with a full extract; `--extract none` builds the last complete run (or `--run-id`) without extracting.        |
-| `run --rebuild`       | Build every table, reusing nothing.                                                                                    |
-| `preview JOB VERSION` | Build the last run with one job at another version. Saved, never published. `VERSION` can be a job folder to push.     |
-| `promote JOB VERSION` | A preview, then make the version active if it passed. `--shared` promotes in the shared registry.                      |
+| Command               | Meaning                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `run`                 | Extract, build every active job, verify, publish. Reuses each job whose parts would come out the same as the published ones. |
+| `run --extract full`  | The same with a full extract; `--extract none` builds the last complete run (or `--run-id`) without extracting.              |
+| `run --rebuild`       | Build every job, reusing nothing.                                                                                            |
+| `preview JOB VERSION` | Build the last run with one job at another version. Saved, never published. `VERSION` can be a job folder to push.           |
+| `promote JOB VERSION` | A preview, then make the version active if it passed. `--shared` promotes in the shared registry.                            |
 
 **`registry.py`** keeps job versions in a bucket. `--bucket-url` is the registry's root: a
 client's bucket, or the shared registry.
@@ -200,7 +217,7 @@ job fails to build or verify.
 | `--job-dir DIR` |                  | Another folder of jobs, replacing the client's by name. Repeatable. |
 | `--no-verify`   | off              | Skip the lineage check.                                             |
 | `--no-publish`  | off              | Save the snapshot but leave `latest.json` alone.                    |
-| `--rebuild`     | off              | Build every table, reusing nothing from the published snapshot.     |
+| `--rebuild`     | off              | Run every job, reusing nothing from the published snapshot.         |
 
 **`verify.py`** re-checks the lineage of a snapshot that `runner.py` built. It exits non-zero on
 any error; warnings don't fail it.
@@ -212,9 +229,9 @@ any error; warnings don't fail it.
 | `--snapshot-id`       | published | Snapshot to check.                                                  |
 | `--job NAME`          | all jobs  | Check only this job. Repeatable.                                    |
 | `--job-dir DIR`       |           | The same extra job folders the snapshot was built with.             |
-| `--registry`          | off       | Check each table with the version that built it, from the registry. |
+| `--registry`          | off       | Check each job with the version that ran it, from the registry.     |
 | `--shared-url URL`    |           | With `--registry`, the shared registry too.                         |
-| `--rows-per-branch N` | 2         | Rows to check per distinct `_fields` in each table.                 |
+| `--rows-per-branch N` | 2         | Entities to check per distinct `_fields` of each value a job wrote. |
 
 **`trace.py`** prints the rows, hop by hop, that a row or one of its values was built from.
 
@@ -302,7 +319,8 @@ uv run python runner.py \
 ```
 
 This runs the shared jobs in `jobs/` and the client's own in `clients/<client>/jobs/`, each after
-the jobs it reads, then checks each table's lineage with `verify.py` (below), on the same files.
+the jobs whose entities it reads, then checks each job's lineage with `verify.py` (below), on the
+same files.
 It saves the manifest either way and moves `latest.json` to it only if every job built and
 verified; otherwise it exits non-zero. It also leaves `latest.json` alone if the published
 snapshot is newer (a later extract, or the same extract built later), so a slow build that
@@ -310,43 +328,31 @@ finishes after a newer one can't point Waymark back at older data. `--no-verify`
 `--no-publish` leaves `latest.json` alone and `--snapshot-id` names the snapshot (default: the
 current UTC time). Run the tests with `uv run pytest`.
 
-Each table is also compared with the snapshot that was published when the build started: the
-runner prints `N added, N changed, N removed` per table and writes those rows' `_row_id`s to
-`tables/<name>/<snapshot_id>.changes.parquet`. A row counts as changed when any of its values
-does; lineage columns aren't compared, so a record fetched again unchanged isn't a change.
+Each job is also compared with the snapshot that was published when the build started: the
+runner prints `N added, N changed, N removed` per job and writes those entities' ids to
+`changes/<job>/<snapshot_id>.parquet`. An entity counts as changed when any value the job wrote
+for it does; lineage columns aren't compared, so a record fetched again unchanged isn't a change.
 
 Trace any row back to raw records:
 
 ```sh
 uv run python trace.py \
   --bucket-url file:///tmp/waymark-bucket \
-  --table entity_metadata --row-id <_row_id>
+  --table entities --row-id <id>
 ```
 
-Add `--field <column>` to trace one value instead of the whole row. Each row it reaches carries
-the columns the value needs from it, so it follows only the sources those columns read, and a
-filtered reference such as `entities[type=change].created_at` only the rows it matches. It ends
-with the raw fields the value comes from. Here, one ticket's `lead_time_hours` (first pull request
-opened to last one merged), which Waymark averages by issue type:
-
-```
-value = '3891.08'
-  computed from: entities[type=change].created_at, entities[type=change].merged_at, ticket_change_links._row_id
-hop 0: entity_metadata               1 rows  (_row_id 3572569723684, ...)
-hop 1: entities                      2 rows  (_row_id 2182115343763313, 3872359700894120, ...)
-hop 1: ticket_change_links           2 rows  (_row_id 1416744253821264, 4137821165026380, ...)
-hop 2: entities                      3 rows  (_row_id 2182115343763313, 3872359700894120, 5014142668220981, ...)
-hop 2: raw.github_pulls              2 rows  (_dlt_id Y9gwCX5Q7teYUA, vMuArjeHZV8YgQ, ...)
-hop 3: raw.github_pulls              2 rows  (_dlt_id Y9gwCX5Q7teYUA, vMuArjeHZV8YgQ, ...)
-hop 3: raw.jira_issues               1 rows  (_dlt_id CDdkn9Wo6CfC3w, ...)
-raw field: raw.github_pulls.created_at  e.g. 2026-01-21 05:49:42+00:00, 2026-08-03 05:10:54+00:00
-raw field: raw.github_pulls.merged_at  e.g. 2026-07-02 08:54:28+00:00, None
-```
-
-Hop 1 reaches only the pull requests. A link's `_row_id` stands for the whole link, which
-depends on the ticket and pull request it joins, so hop 2 reaches tickets too, and pull requests
-again as whole rows. A row shows up at a later hop only when the value needs more of it than
-before. Only the pull requests' `created_at` is read, so Jira's `created` isn't listed.
+Add `--field <column>` to trace one value instead of the whole row; on an entity, that can be any
+of its metadata keys. Each row it reaches carries the columns the value needs from it, and follows
+only the sources its own `_fields` name for them, and a filtered reference such as
+`entities[type=change].merged_at` only the rows it matches. It ends with the raw fields the value
+comes from. A ticket's `lead_time_hours` (first pull request opened to last one merged) is
+metadata the `ticket_lead_time` job added to it, so tracing it reaches, at hop 1, the ticket's
+links and its pull requests, as entities; then the raw rows behind them; and at the end
+`raw.github_pulls.created_at` and `raw.github_pulls.merged_at`. A link's id values stand for the
+whole link, which depends on the ticket and pull request it joins, so the ticket's raw row is
+reached too, but as a whole row: Jira's `created` isn't one of the fields listed. A row shows up
+at a later hop only when the value needs more of it than before. No hop shows a metadata row: a
+value is reached through its entity.
 
 `trace.py` and `verify.py` read the published snapshot; add `--snapshot-id <id>` for another.
 `runner.py` already verifies; run `verify.py` on its own to check one job or more rows:
@@ -358,7 +364,8 @@ uv run python verify.py \
 ```
 
 For a sample of rows (`--rows-per-branch`, default 2, per distinct `_fields`), it re-runs the job
-on only the rows in the row's `_sources` and expects the same row back. Then it changes each input
+on only the rows in the row's `_sources`, with the metadata of the entities among them, and
+expects the same row back. Then it changes each input
 column of those rows in turn and checks that every output column that changes names that input in
 the row's `_fields`. When a change renames the row, because its `_row_id` comes from that column
 as a grouping key's does, it follows the row to its new id. Add `--job <name>` to check one job. It exits non-zero on an error; warnings
@@ -374,7 +381,7 @@ the job as it was to verify that snapshot.
 In production the jobs live in the bucket, not this repo, so a client can have its own and a new
 version can be checked before it goes live. `registry.py` keeps every version of a job under
 `jobs/<name>/versions/<version>/`, written once. A version is the hash of the job's files, the same
-hash the manifest records beside each table, so a snapshot names the exact code that built it.
+hash the manifest records beside each job, so a snapshot names the exact code that built it.
 `jobs/<name>/active` names the version that runs.
 
 A client's jobs are the shared registry's active jobs, with the client's own replacing them by
@@ -392,12 +399,12 @@ uv run python orchestrate.py --client clients/apache-kafka.toml \
 `--extract none` builds the last complete run without extracting. The quick start's run was
 limited by `--max-pages`, so it never counts as the last and has to be named with `--run-id`;
 leave that out once the bucket has a full run. The jobs are the versions `runner.py` built with,
-so every table is reused.
+so every job is reused.
 
 To change a job, promote a new version. `promote` builds the last extract with that version swapped
-in, reusing every table it doesn't affect, and verifies it. It moves `active` only if that passed,
+in, reusing every job it doesn't affect, and verifies it. It moves `active` only if that passed,
 and the next `run` publishes it. The job from quick start step 5 still fails verify, so promoting
-it is refused; declare `'latest_resolved_at': ['entities.resolved_at']` and promote it again:
+it is refused; declare `'name_length': ['entities.status_group']` and promote it again:
 
 ```sh
 uv run python orchestrate.py --client clients/apache-kafka.toml \
@@ -411,9 +418,8 @@ promotes in the shared one).
 `preview` does the same build without moving `active`. Its snapshot is saved under
 `snapshots/preview-*.json` and never published; its change files are the diff against what's live.
 
-On the Kafka demo bucket, the first `run` from the registry builds everything (62 s). A second
-`run` with nothing new reuses every table (0.3 s), and promoting a new version of
-`entity_metadata` builds and verifies only that table (51 s; it's the largest).
+A second `run` with nothing new reuses every job, and promoting a new version of one job builds
+and verifies only it and the jobs that read its entities.
 
 ## Container jobs
 
@@ -422,10 +428,10 @@ A job can be a container image in place of a query, for logic that needs real co
 runs it with `docker` (or the command in `WAYMARK_DOCKER`), with no network. Its output gets the
 same checks and verification as a SQL job's.
 
-`containers/lead-time/` is a TypeScript example. It computes `lead_time_by_issue_type`, average
-and median lead time per issue type, with the same rows, `_sources` and `_fields` as the SQL job
-in `containers/lead-time/reference/` (no client runs that one: Waymark charts each ticket's
-`lead_time_hours` instead):
+`containers/lead-time/` is a TypeScript example. It makes a `lead_time_by_issue_type` entity per
+issue type, with the average and median of its tickets' `lead_time_hours`, and writes the same
+entities and metadata, with the same `_sources` and `_fields`, as the SQL job in
+`containers/lead-time/reference/`, which is the client template's job of that name:
 
 ```sh
 cd containers/lead-time && bun install && bun test && cd ../..
@@ -437,8 +443,8 @@ uv run python runner.py \
   --job-dir /tmp/ts-jobs
 ```
 
-`--job-dir` adds a folder of jobs after the client's, replacing theirs by name; here it adds a
-table no other job writes. `verify.py` takes the same `--job-dir`, so it checks the job the
+`--job-dir` adds a folder of jobs after the client's, replacing theirs by name; here it adds an
+entity type no other job makes. `verify.py` takes the same `--job-dir`, so it checks the job the
 snapshot was built with.
 
 ## S3 and Azure

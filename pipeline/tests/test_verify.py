@@ -27,6 +27,9 @@ ITEMS = [
 ]  # fmt: skip
 
 ROW = "stable_id('item', id) as _row_id, [source_ref('raw.items', _dlt_id)] as _sources"
+# Every job writes entities: these are named for the item and all dated alike.
+ENTITY = "'item ' || id as name, '2026-01-01T00:00:00Z' as created_at"
+ENTITY_FIELDS = {"name": ["raw.items.id"], "created_at": []}
 
 
 def fields(columns: dict[str, list[str]]) -> str:
@@ -35,14 +38,22 @@ def fields(columns: dict[str, list[str]]) -> str:
     return f"map {{{entries}}} as _fields"
 
 
+def entity_job(name: str, inputs: tuple[str, ...], sql: str, **settings) -> Job:
+    return Job(name, inputs, sql, entity_type=settings.pop("entity_type", name), **settings)
+
+
 def item_job(name: str, select: str, columns: dict[str, list[str]]) -> Job:
-    return Job(name, ("raw.items",), f"select {ROW}, {fields(columns)}, {select} from raw.items")
+    return entity_job(
+        name,
+        ("raw.items",),
+        f"select {ROW}, {fields({**ENTITY_FIELDS, **columns})}, {ENTITY}, {select} from raw.items",
+    )
 
 
 GOOD = item_job(
     "good",
-    "name, json_extract_string(payload, '$.a.b') as b",
-    {"name": ["raw.items.name"], "b": ["raw.items.payload:$.a.b"]},
+    "name as title, json_extract_string(payload, '$.a.b') as b",
+    {"title": ["raw.items.name"], "b": ["raw.items.payload:$.a.b"]},
 )
 
 
@@ -84,9 +95,9 @@ def test_narrows_an_undeclared_json_path(run_root):
 
 
 def test_warns_about_a_reference_nothing_reads(run_root):
-    job = item_job("extra", "name", {"name": ["raw.items.name", "raw.items.size"]})
+    job = item_job("extra", "name as title", {"title": ["raw.items.name", "raw.items.size"]})
     found = verify(run_root, job)
-    assert details(found) == {("unused", "name", "never changed by raw.items.size")}
+    assert details(found) == {("unused", "title", "never changed by raw.items.size")}
     assert all(f.level == "warning" for f in found)
 
 
@@ -96,32 +107,33 @@ def test_a_null_parent_of_a_declared_path_still_counts_as_read(run_root):
 
 
 def test_a_row_that_does_not_list_all_its_inputs_fails_replay(run_root):
-    total = Job(
+    total = entity_job(
         "total",
-        ("good",),
+        ("entities[type=good]", "entity_metadata[entity_type=good]"),
         """
         select stable_id('total', 'all') as _row_id,
-          [source_ref('good', min(_row_id))] as _sources,
-          map {'items': ['good._row_id']} as _fields,
+          [source_ref('entities', min(entity_id))] as _sources,
+          map {'name': [], 'created_at': [], 'items': ['entities.title']} as _fields,
+          'all' as name, '2026-01-01T00:00:00Z' as created_at,
           count(*) as items
-        from good
+        from entity_metadata where key = 'title'
         """,
     )
     (finding,) = verify(run_root, GOOD, total)
     assert finding.check == "replay"
-    assert "reproduced with all of good" in finding.detail
+    assert "metadata of entities it doesn't cite" in finding.detail
 
 
 def test_checks_each_branch_of_the_query(run_root):
-    keyed = Job(
+    keyed = entity_job(
         "keyed",
         ("raw.items",),
         """
         select stable_id('kv', id || ':' || k) as _row_id,
           [source_ref('raw.items', _dlt_id)] as _sources,
           -- Wrong for `size`: its value comes from raw.items.size.
-          map {'key': [], 'value': ['raw.items.name']} as _fields,
-          k as key, v as value
+          map {'name': [], 'created_at': [], 'key': [], 'value': ['raw.items.name']} as _fields,
+          k as name, '2026-01-01T00:00:00Z' as created_at, k as key, v as value
         from (
           select *, unnest([{'k': 'name', 'v': name}, {'k': 'size', 'v': cast(size as varchar)}],
             recursive := true)
@@ -142,23 +154,24 @@ def test_perturb_json_grows_a_null_parent_into_the_declared_path():
 
 
 def test_does_not_check_a_job_whose_files_changed_since_the_build(run_root, capsys):
-    job = item_job("items_copy", "name", {"name": ["raw.items.name"]})
-    built = Job(job.name, job.inputs, job.sql, version="v1")
+    job = item_job("items_copy", "name as title", {"title": ["raw.items.name"]})
+    built = entity_job(job.name, job.inputs, job.sql, version="v1")
     run_jobs([built], CLIENT, run_root)
     assert verify_jobs([built], CLIENT, run_root)
-    changed = Job(job.name, job.inputs, job.sql, version="v2")
+    changed = entity_job(job.name, job.inputs, job.sql, version="v2")
     assert not verify_jobs([changed], CLIENT, run_root)
     assert "files changed since snapshot" in capsys.readouterr().out
 
 
 def total_job(refs: list[str]) -> Job:
     """One row summing the size of every item but `three`."""
-    return Job(
+    return entity_job(
         "total",
         ("raw.items",),
         "select stable_id('total', 'all') as _row_id, "
         "list(source_ref('raw.items', _dlt_id)) as _sources, "
-        f"{fields({'total': refs})}, "
+        f"{fields({'name': [], 'created_at': [], 'total': refs})}, "
+        "'all' as name, '2026-01-01T00:00:00Z' as created_at, "
         "sum(size) filter (where name <> 'three') as total from raw.items",
     )
 
@@ -185,13 +198,14 @@ def test_warns_about_a_filtered_reference_whose_rows_nothing_reads(run_root):
 
 def grouped_job(columns: dict[str, list[str]]) -> Job:
     """One row per name, identified by it: changing a name renames the row."""
-    return Job(
+    return entity_job(
         "by_name",
         ("raw.items",),
         "select stable_id('by_name', name) as _row_id, "
         "list(source_ref('raw.items', _dlt_id)) as _sources, "
-        f"{fields(columns)}, "
-        "name, sum(size) as total from raw.items group by name",
+        f"{fields({'created_at': [], **columns})}, "
+        "name, '2026-01-01T00:00:00Z' as created_at, sum(size) as total "
+        "from raw.items group by name",
     )
 
 
@@ -212,7 +226,29 @@ def test_reports_a_grouping_key_its_fields_leave_out(run_root):
 def test_a_row_a_filter_drops_is_still_not_a_value_change(run_root):
     # Changing size drops the row from the output altogether: no row with its sources is left,
     # so it counts as the row depending on size to exist, as before.
-    job = item_job("big", "name", {"name": ["raw.items.name"]}).sql.replace(
+    job = item_job("big", "name as title", {"title": ["raw.items.name"]}).sql.replace(
         "from raw.items", "from raw.items where size >= 10"
     )
-    assert details(verify(run_root, Job("big", ("raw.items",), job))) == set()
+    assert details(verify(run_root, entity_job("big", ("raw.items",), job))) == set()
+
+
+def test_a_null_value_still_has_its_references_checked(run_root):
+    # Item three's $.a.b is null, so nothing about b is stored for it; a change that gives it a
+    # value must still be declared.
+    job = item_job("nulls", "json_extract_string(payload, '$.a.b') as b", {"b": []})
+    assert ("undeclared", "b", "changes with raw.items.payload:$.a.b") in details(
+        verify(run_root, job)
+    )
+
+
+def test_checks_metadata_whose_keys_the_query_names_at_run_time(run_root):
+    extra = item_job(
+        "extra_keys",
+        "[{'key': 'size_' || name, 'value': cast(size as varchar), 'value_type': 'number'}]"
+        "::struct(\"key\" varchar, \"value\" varchar, value_type varchar)[] as _metadata",
+        {"_metadata": ["raw.items.size"]},
+    )
+    # The key comes from name too, which _metadata's references leave out.
+    assert details(verify(run_root, extra)) == {
+        ("undeclared", "_metadata", "changes with raw.items.name"),
+    }

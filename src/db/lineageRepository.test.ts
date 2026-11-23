@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { traceEntityValue, traceField, walkField } from '../domain/columnLineage';
 import { expandToRaw } from '../domain/lineage';
 import { createLineageRepository } from './lineageRepository';
 import type { LineageRepository } from './lineageRepository';
@@ -24,16 +25,20 @@ describe('lineage over a pipeline run', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('registers every table, and raw ones under raw.', () => {
+  it('registers the entity tables and raw ones under raw., and nothing else', () => {
     expect(adapter.listLineageTables()).toEqual([
-      'changes',
       'entities',
       'entity_metadata',
-      'lead_time_by_issue_type',
-      'tickets',
       'raw.github_pulls',
       'raw.jira_issues',
     ]);
+  });
+
+  it('reads every job’s part of an entity table as one table', async () => {
+    const types = await adapter.query<{ type: string }>(
+      'SELECT DISTINCT type FROM entities ORDER BY type'
+    );
+    expect(types.map(row => row.type)).toEqual(['change', 'lead_time_by_issue_type', 'ticket']);
   });
 
   it('leaves the contract columns out of the views entity queries read', async () => {
@@ -50,10 +55,17 @@ describe('lineage over a pipeline run', () => {
   });
 
   it('gets a derived row with its sources', async () => {
-    const row = await repo.getRow('lead_time_by_issue_type', LINEAGE_FIXTURE.leadTimeId);
+    const row = await repo.getRow('entities', LINEAGE_FIXTURE.leadTimeId);
     expect(row?.rowId).toBe(LINEAGE_FIXTURE.leadTimeId);
-    expect(row?.values.issue_type).toBe('Task');
+    expect(row?.values.name).toBe('Task');
     expect(row?.values._sources).toHaveLength(3);
+  });
+
+  it('gets an entity with its metadata values, under their keys', async () => {
+    const row = await repo.getRow('entities', LINEAGE_FIXTURE.changeId);
+    expect(row?.values).toMatchObject({ name: 'demo/repo#7', type: 'change', number: '7' });
+    const raw = await repo.getRow('raw.github_pulls', LINEAGE_FIXTURE.pullDltId);
+    expect(raw?.values).not.toHaveProperty('_row_id');
   });
 
   it('gets a raw row by its dlt id', async () => {
@@ -62,17 +74,17 @@ describe('lineage over a pipeline run', () => {
   });
 
   it('returns null for a missing row and throws for an unknown table', async () => {
-    expect(await repo.getRow('tickets', '404')).toBeNull();
+    expect(await repo.getRow('entities', '404')).toBeNull();
     await expect(repo.getRow('nope', '1')).rejects.toThrow('Unknown lineage table');
   });
 
   it('groups a row’s parents by table', async () => {
-    const row = await repo.getRow('lead_time_by_issue_type', LINEAGE_FIXTURE.leadTimeId);
+    const row = await repo.getRow('entities', LINEAGE_FIXTURE.leadTimeId);
     const sources = row?.values._sources as Array<{ table: string; row_id: string }>;
     const parents = await repo.getParents(sources, 1);
+    // Entities, never their metadata rows, though the lead time reads only their metadata.
     expect(parents.map(p => [p.table, p.total, p.rows.map(r => r.rowId)])).toEqual([
-      ['changes', 1, ['201']],
-      ['tickets', 2, ['101']],
+      ['entities', 3, ['101']],
     ]);
     expect(parents.every(p => p.available && !p.isRaw)).toBe(true);
   });
@@ -94,7 +106,7 @@ describe('lineage over a pipeline run', () => {
 
   it('expands a derived row to its raw records', async () => {
     const { hops, leaves } = await expandToRaw(
-      { lead_time_by_issue_type: [LINEAGE_FIXTURE.leadTimeId] },
+      { entities: [LINEAGE_FIXTURE.leadTimeId] },
       repo.getSources
     );
     expect(hops).toHaveLength(3);
@@ -121,16 +133,89 @@ describe('column lineage over a pipeline run', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('reads each table’s column map from its Parquet metadata', () => {
-    expect(repo.columnMaps().lead_time_by_issue_type?.avg_lead_time_hours).toEqual([
-      'changes.number',
+  it('reads each table’s column map as the union of its parts’ Parquet metadata', () => {
+    expect(repo.columnMaps().entities?.name).toEqual([
+      'entities[type=ticket].issue_type',
+      'raw.github_pulls.number',
+      'raw.github_pulls.repo',
+      'raw.jira_issues.key',
     ]);
     expect(Object.keys(repo.columnMaps())).not.toContain('raw.jira_issues');
   });
 
+  it('fetches each row’s own _fields', async () => {
+    const fields = await repo.rowFields('entity_metadata', [
+      ...LINEAGE_FIXTURE.issueTypeIds,
+      LINEAGE_FIXTURE.changeNumberId,
+    ]);
+    expect(fields[LINEAGE_FIXTURE.changeNumberId]?.value).toEqual(['raw.github_pulls.number']);
+    expect(fields[LINEAGE_FIXTURE.issueTypeIds[0]]?.value).toEqual([
+      'raw.jira_issues.fields:$.issuetype.name',
+    ]);
+    expect(await repo.rowFields('raw.jira_issues', ['x'])).toEqual({});
+  });
+
+  it('finds the metadata row holding each entity’s value for a key', async () => {
+    const found = await repo.metadataRows(
+      [...LINEAGE_FIXTURE.ticketIds, LINEAGE_FIXTURE.changeId],
+      ['issue_type']
+    );
+    expect(found.map(f => [f.entityId, f.rowId]).sort()).toEqual([
+      ['101', LINEAGE_FIXTURE.issueTypeIds[0]],
+      ['102', LINEAGE_FIXTURE.issueTypeIds[1]],
+    ]);
+  });
+
+  it('fills highlighted metadata keys into an entity parent group', async () => {
+    const [group] = await repo.getParents(
+      [{ table: 'entities', row_id: LINEAGE_FIXTURE.changeId }],
+      10,
+      { entities: ['number'] }
+    );
+    expect(group?.rows[0]?.values.number).toBe('7');
+  });
+
+  it('traces a field through entities to raw, never through a metadata row', async () => {
+    const row = await repo.getRow('entities', LINEAGE_FIXTURE.leadTimeId);
+    const trace = row && traceField(repo.columnMaps(), 'entities', 'name', row.values);
+    if (!trace) throw new Error('expected a trace');
+    const walk = await walkField(
+      'entities',
+      LINEAGE_FIXTURE.leadTimeId,
+      trace,
+      repo.columnMaps(),
+      repo
+    );
+    expect(walk.hops).toEqual([
+      { entities: [LINEAGE_FIXTURE.leadTimeId] },
+      { entities: [...LINEAGE_FIXTURE.ticketIds] },
+      { 'raw.jira_issues': [...LINEAGE_FIXTURE.jiraDltIds].sort() },
+    ]);
+    expect(walk.columns).toEqual({
+      entities: ['issue_type'],
+      'raw.jira_issues': ['fields:$.issuetype.name'],
+    });
+  });
+
+  it('traces an entity’s own metadata value from the entity', async () => {
+    const trace = await traceEntityValue(LINEAGE_FIXTURE.changeId, 'number', repo);
+    if (!trace) throw new Error('expected a trace');
+    const walk = await walkField(
+      'entities',
+      LINEAGE_FIXTURE.changeId,
+      trace,
+      repo.columnMaps(),
+      repo
+    );
+    expect(walk.hops).toEqual([
+      { entities: [LINEAGE_FIXTURE.changeId] },
+      { 'raw.github_pulls': [LINEAGE_FIXTURE.pullDltId] },
+    ]);
+  });
+
   it('drops a malformed column map', () => {
     const lenient = createLineageRepository(adapter, adapter.listLineageTables(), {
-      tickets: '{"x": 1}',
+      entities: '{"x": 1}',
     });
     expect(lenient.columnMaps()).toEqual({});
   });
@@ -180,7 +265,7 @@ describe('reading a published snapshot', () => {
       );
       expect(raw.map(row => row.key)).toEqual(['DEMO-1']);
       const stale = await adapter.query<{ n: number }>(
-        `SELECT count(*) AS n FROM tickets WHERE ticket_key = '${LINEAGE_FIXTURE.staleTicketKey}'`
+        `SELECT count(*) AS n FROM entities WHERE name = '${LINEAGE_FIXTURE.staleTicketKey}'`
       );
       expect(stale[0]?.n).toBe(0);
     });
@@ -191,6 +276,21 @@ describe('reading a published snapshot', () => {
     await withAdapter(url, async adapter => {
       expect(adapter.listLineageTables()).toContain('raw.jira_issues');
     });
+  });
+
+  it('still reads a version 1 manifest, which lists files the same way', async () => {
+    const old = mkdtempSync(join(tmpdir(), 'waymark-snapshot-v1-'));
+    try {
+      await writeLineageFixture(old);
+      const path = join(old, 'snapshots', `${LINEAGE_FIXTURE.snapshotId}.json`);
+      const manifest = JSON.parse(await Bun.file(path).text()) as Record<string, unknown>;
+      writeFileSync(path, JSON.stringify({ ...manifest, version: 1 }));
+      await withAdapter(old, async adapter => {
+        expect(adapter.listLineageTables()).toContain('entities');
+      });
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+    }
   });
 
   it('rejects a manifest that names a file outside its root', async () => {

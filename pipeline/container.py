@@ -10,7 +10,7 @@ and the runner checks that file against the contract like a SQL job's result.
 The container sees (CONTRACT.md, "Container jobs"):
 
 - `WAYMARK_INPUTS`: JSON, input table → Parquet path, such as
-  `{"entities": "/waymark/in/entities.parquet"}`;
+  `{"entity_metadata": "/waymark/in/entity_metadata.parquet"}`;
 - `WAYMARK_CHANGES`: JSON, input table → its change file, for inputs that have one;
 - `WAYMARK_PARAMS`: JSON, the client's parameters (`runner.job_params`);
 - `WAYMARK_OUTPUT`: the path to write the output table to.
@@ -57,8 +57,8 @@ def file_name(table: str) -> str:
 def stage(
     con: duckdb.DuckDBPyConnection, inputs: tuple[str, ...], changes: Mapping[str, str], work: Path
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """Copy each input, as `con` sees it, and each change file into `work/in`. Returns the
-    container's paths to them."""
+    """Copy each input, as `con` sees it, and each input's changes (a `read_parquet(...)` of its
+    change files) into `work/in`. Returns the container's paths to them."""
     staged = work / "in"
     staged.mkdir(parents=True)
     (work / "out").mkdir()
@@ -68,12 +68,9 @@ def stage(
         target = sql_string(str(staged / name))
         con.execute(f"COPY (SELECT * FROM {table}) TO {target} (FORMAT parquet)")
         paths[table] = f"{MOUNT}/in/{name}"
-    for table, url in changes.items():
+    for table, source in changes.items():
         name = f"{file_name(table)}.changes.parquet"
-        con.execute(
-            f"COPY (SELECT * FROM read_parquet({sql_string(url)})) "
-            f"TO {sql_string(str(staged / name))} (FORMAT parquet)"
-        )
+        con.execute(f"COPY (SELECT * FROM {source}) TO {sql_string(str(staged / name))} (FORMAT parquet)")
         change_paths[table] = f"{MOUNT}/in/{name}"
     return paths, change_paths
 

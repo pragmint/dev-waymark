@@ -29,16 +29,21 @@ FAKE_DOCKER = Path(__file__).parent / "fake_docker.py"
 LEAD_TIME_IMAGE = Path(__file__).parent.parent / "containers" / "lead-time"
 IMAGE = "sha256:" + "a" * 64
 
-# One row per entity type, counting them. A correct container job, in SQL for the fake runtime.
+# One entity per entity type it reads, counting them. A correct container job, in SQL for the
+# fake runtime.
 COUNT_BY_TYPE = """
     select
       (hash(type) & 9007199254740991)::bigint as _row_id,
       list({'table': 'entities', 'row_id': cast(_row_id as varchar)}) as _sources,
-      map {'type': ['entities.type'], 'entities': ['entities._row_id']} as _fields,
-      type,
+      map {
+        'name': ['entities.type'], 'created_at': []::varchar[], 'entities': ['entities._row_id']
+      } as _fields,
+      type as name,
+      '2026-01-01T00:00:00Z' as created_at,
       count(*) as entities
     from entities group by type order by type
 """
+BOTH = ("entities[type=ticket]", "entities[type=change]")
 
 
 class FakeDocker:
@@ -70,13 +75,23 @@ def fake_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     return fake
 
 
-def container_job(jobs_dir: Path, name: str, image: str, inputs=("entities",)) -> Path:
+def container_job(jobs_dir: Path, name: str, image: str, inputs=BOTH) -> Path:
     directory = jobs_dir / name
     directory.mkdir(parents=True)
     (directory / "job.toml").write_text(
         f'kind = "container"\nimage = "{image}"\ninputs = {json.dumps(list(inputs))}\n'
+        f'entity_type = "{name}"\n'
     )
     return directory
+
+
+def metadata_of(snap: Snapshot, entity_type: str) -> list[tuple]:
+    with snap.connect() as con:
+        return con.sql(f"""
+            SELECT e.name, m.key, m.value FROM {snap.source("entity_metadata")} AS m
+            JOIN {snap.source("entities")} AS e ON e.id = m.entity_id
+            WHERE e.type = '{entity_type}' ORDER BY ALL
+        """).fetchall()
 
 
 def typed_snapshot(root: Path, snapshot_id: str = "s1", base: Snapshot | None = None) -> Snapshot:
@@ -90,7 +105,8 @@ def typed_snapshot(root: Path, snapshot_id: str = "s1", base: Snapshot | None = 
 
 def test_load_job_reads_a_container_job(tmp_path: Path):
     job = load_job(container_job(tmp_path, "counts", IMAGE))
-    assert (job.kind, job.image, job.inputs, job.sql) == ("container", IMAGE, ("entities",), "")
+    assert (job.kind, job.image, job.inputs, job.sql) == ("container", IMAGE, BOTH, "")
+    assert job.entity_type == "counts"
 
 
 @pytest.mark.parametrize(
@@ -110,9 +126,11 @@ def test_load_job_accepts_a_registry_image_pinned_by_digest(tmp_path: Path):
 @pytest.mark.parametrize(
     "toml, sql, problem",
     [
-        (f'kind = "container"\nimage = "{IMAGE}"\ninputs = []', "select 1", "no query.sql"),
-        (f'image = "{IMAGE}"\ninputs = []', "select 1", "only for container jobs"),
-        ('kind = "python"\ninputs = []', "select 1", "kind must be one of"),
+        (f'kind = "container"\nimage = "{IMAGE}"\ninputs = []\nentity_type = "c"', "select 1",
+         "no query.sql"),
+        (f'image = "{IMAGE}"\ninputs = []\nentity_type = "c"', "select 1",
+         "only for container jobs"),
+        ('kind = "python"\ninputs = []\nentity_type = "c"', "select 1", "kind must be one of"),
     ],
 )
 def test_load_job_refuses_a_job_that_mixes_kinds(tmp_path: Path, toml: str, sql: str, problem):
@@ -158,13 +176,14 @@ def test_a_container_job_builds_like_a_sql_job(tmp_path: Path, fake_docker: Fake
     statuses = run_jobs(load_jobs([JOBS_DIR, tmp_path / "jobs"]), CLIENT, snap)
     assert statuses["counts"] == "built"
 
-    with snap.connect() as con:
-        rows = con.sql(f"SELECT type, entities FROM {snap.source('counts')} ORDER BY type")
-        assert rows.fetchall() == [("change", 3), ("ticket", 3)]
-    metadata = pq.read_metadata(snap.url(snap.tables["counts"]["files"][0])).metadata
+    assert metadata_of(snap, "counts") == [("change", "entities", "3"), ("ticket", "entities", "3")]
+    part = snap.jobs["counts"]["files"]["entities"]
+    metadata = pq.read_metadata(snap.url(part)).metadata
     assert json.loads(metadata[COLUMNS_METADATA_KEY.encode()]) == {
-        "entities": ["entities._row_id"],
-        "type": ["entities.type"],
+        "created_at": [],
+        "id": [],
+        "name": ["entities.type"],
+        "type": [],
     }
     (call,) = fake_docker.calls()
     # It sees only its declared inputs, and the client's parameters.
@@ -182,10 +201,12 @@ def test_a_container_job_that_breaks_the_contract_is_not_written(
     )
     snap = typed_snapshot(tmp_path / "bucket")
     container_job(tmp_path / "jobs", "counts", fake_docker.image(no_sources))
-    container_job(tmp_path / "jobs", "downstream", fake_docker.image("select 1"), ["counts"])
+    container_job(
+        tmp_path / "jobs", "downstream", fake_docker.image("select 1"), ["entities[type=counts]"]
+    )
     statuses = run_jobs(load_jobs([JOBS_DIR, tmp_path / "jobs"]), CLIENT, snap)
     assert (statuses["counts"], statuses["downstream"]) == ("failed", "skipped")
-    assert "counts" not in snap.tables
+    assert "counts" not in snap.jobs
 
 
 def test_a_container_that_exits_with_an_error_fails_its_job(
@@ -201,18 +222,22 @@ def test_a_container_that_exits_with_an_error_fails_its_job(
 def test_a_container_job_gets_the_change_files_of_its_inputs(
     tmp_path: Path, fake_docker: FakeDocker
 ):
-    # Counts how many entities changed since the base, from the change file the runner passes.
+    # Counts how many tickets changed since the base, from the change file the runner passes.
     changed = """
         select 1::bigint as _row_id,
           list({'table': 'entities', 'row_id': cast(_row_id as varchar)}) as _sources,
-          map {'entities': ['entities._row_id']} as _fields,
+          map {
+            'name': []::varchar[], 'created_at': []::varchar[], 'entities': ['entities._row_id']
+          } as _fields,
+          'changed' as name, '2026-01-01T00:00:00Z' as created_at,
           (select count(*) from changes_entities) as entities
         from entities
     """
+    tickets = ["entities[type=ticket]"]
     jobs = tmp_path / "jobs"
-    container_job(jobs, "changed", fake_docker.image(changed))
+    container_job(jobs, "changed", fake_docker.image(changed), tickets)
     first = typed_snapshot(tmp_path / "bucket")
-    container_job(tmp_path / "first-jobs", "changed", fake_docker.image(COUNT_BY_TYPE))
+    container_job(tmp_path / "first-jobs", "changed", fake_docker.image(COUNT_BY_TYPE), tickets)
     run_jobs(load_jobs([JOBS_DIR, tmp_path / "first-jobs"]), CLIENT, first)
     snapshots.save(first)
 
@@ -222,6 +247,8 @@ def test_a_container_job_gets_the_change_files_of_its_inputs(
 
     call = fake_docker.calls()[-1]
     assert list(json.loads(call["WAYMARK_CHANGES"])) == ["entities"]
+    # KAFKA-2 was fetched again, unchanged; the ids are the tickets job's entities.
+    assert metadata_of(second, "changed") == [("changed", "entities", "0")]
 
 
 # ── Verifying ─────────────────────────────────────────────────────────────────
@@ -236,13 +263,14 @@ def test_verify_passes_a_container_job_whose_fields_are_right(
     run_jobs(list(jobs.values()), CLIENT, snap)
     built = len(fake_docker.calls())
     lookups = []
-    row = verify.Replay.row
+    row, rows = verify.Replay.row, verify.Replay.rows
     monkeypatch.setattr(verify.Replay, "row", lambda self, i: lookups.append(i) or row(self, i))
+    monkeypatch.setattr(verify.Replay, "rows", lambda self: lookups.append(None) or rows(self))
 
     checked, found = verify_job(jobs["counts"], CLIENT, snap, per_branch=2)
     assert checked == 2
     assert [f for f in found if f.level == "error"] == []
-    # Perturbations that leave the inputs as they were reuse the output they already got.
+    # A lookup on inputs it already ran on, as for a renamed row, reuses the output it got.
     runs = len(fake_docker.calls()) - built
     assert 0 < runs < len(lookups)
 
@@ -255,8 +283,12 @@ def test_verify_catches_an_input_a_container_job_reads_but_does_not_declare(
         select
           (hash(type) & 9007199254740991)::bigint as _row_id,
           list({'table': 'entities', 'row_id': cast(_row_id as varchar)}) as _sources,
-          map {'type': ['entities.type'], 'name_length': ['entities.type']} as _fields,
-          type,
+          map {
+            'name': ['entities.type'], 'created_at': []::varchar[],
+            'name_length': ['entities.type']
+          } as _fields,
+          type as name,
+          '2026-01-01T00:00:00Z' as created_at,
           sum(length(name)) as name_length
         from entities group by type
     """
@@ -278,8 +310,11 @@ def test_verify_follows_a_container_row_that_a_change_renames(
         select
           (hash(type) & 9007199254740991)::bigint as _row_id,
           list({'table': 'entities', 'row_id': cast(_row_id as varchar)}) as _sources,
-          map {'type': [], 'entities': ['entities._row_id']} as _fields,
-          type,
+          map {
+            'name': []::varchar[], 'created_at': []::varchar[], 'entities': ['entities._row_id']
+          } as _fields,
+          type as name,
+          '2026-01-01T00:00:00Z' as created_at,
           count(*) as entities
         from entities group by type
     """
@@ -290,7 +325,7 @@ def test_verify_follows_a_container_row_that_a_change_renames(
 
     _, found = verify_job(jobs["counts"], CLIENT, snap, per_branch=1)
     errors = {(f.check, f.column, f.detail) for f in found if f.level == "error"}
-    assert errors == {("undeclared", "type", "changes with entities.type")}
+    assert errors == {("undeclared", "name", "changes with entities.type")}
 
 
 # ── The TypeScript example, in a real container ───────────────────────────────
@@ -316,17 +351,22 @@ def test_the_typescript_lead_time_job_matches_the_sql_job(tmp_path: Path):
         assert lead_time.kind == ("container" if name == "ts" else "sql")
         _, found = verify_job(lead_time, CLIENT, snap, per_branch=2)
         assert [f for f in found if f.level == "error"] == [], name
-        tables[name] = duckdb.sql(f"""
-            SELECT * REPLACE (list_sort(list_distinct(_sources)) AS _sources,
-                              cast(_fields AS VARCHAR) AS _fields)
-            FROM {snap.source("lead_time_by_issue_type")} ORDER BY _row_id
-        """).fetchall()
+        tables[name] = [
+            duckdb.sql(f"""
+                SELECT * REPLACE (list_sort(list_distinct(_sources)) AS _sources,
+                                  cast(_fields AS VARCHAR) AS _fields)
+                FROM {snap.source(table)} WHERE {column} = 'lead_time_by_issue_type'
+                ORDER BY ALL
+            """).fetchall()
+            for table, column in [("entities", "type"), ("entity_metadata", "entity_type")]
+        ]
     assert tables["ts"] == tables["sql"]
-    assert len(tables["sql"]) == 1
+    assert len(tables["sql"][0]) == 1
 
 
 def test_build_order_treats_a_container_job_like_any_other(tmp_path: Path):
     container_job(tmp_path, "counts", IMAGE)
     jobs = build_order(load_jobs([JOBS_DIR, tmp_path]))
     names = [job.name for job in jobs]
-    assert names.index("entities") < names.index("counts")
+    assert names.index("tickets") < names.index("counts")
+    assert names.index("changes") < names.index("counts")

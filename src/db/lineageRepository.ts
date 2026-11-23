@@ -2,14 +2,18 @@ import type { SourceDataAdapter } from './source/adapter';
 import { ColumnMapSchema, LineageRowSchema, SourceRefsSchema } from '../schemas/lineage';
 import type { ColumnMap, LineageRow, ParentGroup, SourceRef } from '../schemas/lineage';
 import { JSON_PATH_PATTERN } from '../domain/columnLineage';
-import type { FieldFetchers, RowSource } from '../domain/columnLineage';
+import type { FieldFetchers, MetadataRowRef, RowSource } from '../domain/columnLineage';
 import {
   DERIVED_ID_COLUMN,
+  ENTITIES_TABLE,
+  FIELDS_COLUMN,
   LINEAGE_SCHEMA,
+  METADATA_TABLE,
   PREVIEW_CHARS,
   RAW_PREFIX,
   groupSourcesByTable,
   idColumnFor,
+  isMetadataKey,
   isRawTable,
   planHop,
 } from '../domain/lineage';
@@ -24,7 +28,10 @@ export type RowOptions = {
 export type LineageRepository = FieldFetchers & {
   tables(): string[];
   hasTable(table: string): boolean;
-  /** One row with every column in full, `_sources` included. */
+  /**
+   * One row with every column in full, `_sources` included. An entity comes with its metadata
+   * values too, under their keys: lineage names them as the entity's own (`entities.<key>`).
+   */
   getRow(table: string, rowId: string): Promise<LineageRow | null>;
   /** Rows by id, in id order. */
   getRows(table: string, rowIds: string[], options?: RowOptions): Promise<LineageRow[]>;
@@ -32,7 +39,8 @@ export type LineageRepository = FieldFetchers & {
   getSources(table: string, rowIds: string[]): Promise<SourceRef[]>;
   /**
    * A row's sources fetched as rows, one group per source table. `highlight` names, per table,
-   * the columns to show first; `column:$.path` labels are extracted from JSON text.
+   * the columns to show first; `column:$.path` labels are extracted from JSON text, and an
+   * entity's metadata keys are filled in from its metadata.
    */
   getParents(
     sources: SourceRef[],
@@ -143,6 +151,29 @@ export function createLineageRepository(
     return rows.map(parseRow);
   }
 
+  // Each entity's values for the given keys (all of them when `keys` is undefined), by entity id.
+  async function metadataValues(
+    entityIds: string[],
+    keys?: string[]
+  ): Promise<Record<string, Record<string, string | null>>> {
+    if (!known.has(METADATA_TABLE) || entityIds.length === 0 || keys?.length === 0) return {};
+    const keyMatch = keys ? `AND key IN (SELECT unnest(from_json(?, '["VARCHAR"]')))` : '';
+    const rows = await adapter.query<{ entity_id: string; key: string; value: string | null }>(
+      `SELECT CAST(entity_id AS VARCHAR) AS entity_id, key, value
+       FROM ${tableRef(METADATA_TABLE)}
+       WHERE CAST(entity_id AS VARCHAR) IN (SELECT unnest(from_json(?, '["VARCHAR"]'))) ${keyMatch}
+       ORDER BY key`,
+      keys ? [JSON.stringify(entityIds), JSON.stringify(keys)] : [JSON.stringify(entityIds)]
+    );
+    const values: Record<string, Record<string, string | null>> = {};
+    for (const { entity_id, key, value } of rows) (values[entity_id] ??= {})[key] = value;
+    return values;
+  }
+
+  function withMetadata(rows: LineageRow[], values: Record<string, Record<string, unknown>>) {
+    return rows.map(row => ({ ...row, values: { ...row.values, ...values[row.rowId] } }));
+  }
+
   const repo: LineageRepository = {
     tables: () => [...lineageTables],
 
@@ -155,7 +186,8 @@ export function createLineageRepository(
       const rows = await selectRows(table, idMatch(table), [JSON.stringify([rowId])], {
         limit: 1,
       });
-      return rows[0] ?? null;
+      if (table !== ENTITIES_TABLE || !rows[0]) return rows[0] ?? null;
+      return withMetadata(rows, await metadataValues([rowId]))[0] ?? null;
     },
 
     async getRows(table, rowIds, options = {}) {
@@ -188,6 +220,22 @@ export function createLineageRepository(
       return rows.map(({ rowId, table: source, row_id }) => ({ rowId, table: source, row_id }));
     },
 
+    async rowFields(table, rowIds) {
+      if (!known.has(table) || isRawTable(table) || rowIds.length === 0) return {};
+      if (!(await columnsOf(table)).some(({ name }) => name === FIELDS_COLUMN)) return {};
+      const rows = await adapter.query<{ row_id: string; fields: string | null }>(
+        `SELECT CAST(_row_id AS VARCHAR) AS row_id, CAST(to_json(_fields) AS VARCHAR) AS fields
+         FROM ${tableRef(table)} WHERE ${idMatch(table)}`,
+        [JSON.stringify(rowIds)]
+      );
+      const fields: Record<string, ColumnMap> = {};
+      for (const { row_id, fields: json } of rows) {
+        const parsed = ColumnMapSchema.safeParse(json === null ? null : JSON.parse(json));
+        if (parsed.success) fields[row_id] = parsed.data;
+      }
+      return fields;
+    },
+
     async columnValues(table, column, rowIds) {
       if (!known.has(table) || rowIds.length === 0) return {};
       // A filter names a column the pipeline checked exists; one this run lacks matches nothing.
@@ -201,6 +249,18 @@ export function createLineageRepository(
       return Object.fromEntries(rows.map(({ row_id, value }) => [row_id, value]));
     },
 
+    async metadataRows(entityIds, keys) {
+      if (!known.has(METADATA_TABLE) || entityIds.length === 0 || keys.length === 0) return [];
+      return adapter.query<MetadataRowRef>(
+        `SELECT CAST(entity_id AS VARCHAR) AS "entityId", key,
+           CAST(_row_id AS VARCHAR) AS "rowId"
+         FROM ${tableRef(METADATA_TABLE)}
+         WHERE CAST(entity_id AS VARCHAR) IN (SELECT unnest(from_json(?, '["VARCHAR"]')))
+           AND key IN (SELECT unnest(from_json(?, '["VARCHAR"]')))`,
+        [JSON.stringify(entityIds), JSON.stringify(keys)]
+      );
+    },
+
     async getParents(sources, limit, highlight = {}) {
       // A source table this run doesn't have (raw data not copied alongside
       // the tables, say) still shows, with its count but no rows.
@@ -208,15 +268,18 @@ export function createLineageRepository(
         planHop(groupSourcesByTable(sources)).map(async ({ table, ids }) => {
           const columns = highlight[table] ?? [];
           const extracts = columns.filter(label => label.includes(':'));
+          const shown = ids.slice(0, limit);
+          const rows = known.has(table)
+            ? await repo.getRows(table, shown, { preview: true, extracts })
+            : [];
+          const keys = table === ENTITIES_TABLE ? columns.filter(isMetadataKey) : [];
           return {
             table,
             isRaw: isRawTable(table),
             available: known.has(table),
             total: ids.length,
             highlight: columns,
-            rows: known.has(table)
-              ? await repo.getRows(table, ids.slice(0, limit), { preview: true, extracts })
-              : [],
+            rows: keys.length > 0 ? withMetadata(rows, await metadataValues(shown, keys)) : rows,
           };
         })
       );

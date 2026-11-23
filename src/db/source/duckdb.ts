@@ -71,6 +71,34 @@ async function readColumnMap(connection: DuckDBConnection, path: string): Promis
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * A table's column map: the union of its files' maps, since each file is one job's part of it.
+ * A map that isn't column → references is returned as is, for the repository to reject.
+ */
+async function tableColumnMap(
+  connection: DuckDBConnection,
+  paths: string[]
+): Promise<string | null> {
+  const merged = new Map<string, Set<string>>();
+  for (const path of paths) {
+    const text = await readColumnMap(connection, path);
+    if (text === null) continue;
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return text;
+    for (const [column, refs] of Object.entries(parsed)) {
+      if (!Array.isArray(refs) || !refs.every(ref => typeof ref === 'string')) return text;
+      const known = merged.get(column) ?? new Set<string>();
+      for (const ref of refs) known.add(ref);
+      merged.set(column, known);
+    }
+  }
+  if (merged.size === 0) return null;
+  const columns = [...merged.keys()].sort();
+  return JSON.stringify(
+    Object.fromEntries(columns.map(c => [c, [...(merged.get(c) ?? [])].sort()]))
+  );
+}
+
 async function readJson(connection: DuckDBConnection, url: string): Promise<unknown> {
   const reader = await connection.runAndReadAll(
     `SELECT content FROM read_text('${escapeSqlString(url)}')`
@@ -152,8 +180,7 @@ async function registerDerived(
     const exclude = contract.length > 0 ? ` EXCLUDE (${contract.join(', ')})` : '';
     await connection.run(`CREATE VIEW "${table}" AS SELECT *${exclude} FROM ${source}`);
     await connection.run(`CREATE VIEW ${LINEAGE_SCHEMA}."${table}" AS SELECT * FROM ${source}`);
-    // A table's files are one job's output, so the first file's map is the table's.
-    const columnMap = paths[0] ? await readColumnMap(connection, paths[0]) : null;
+    const columnMap = await tableColumnMap(connection, paths);
     if (columnMap !== null) columnMaps[table] = columnMap;
   }
   return columnMaps;

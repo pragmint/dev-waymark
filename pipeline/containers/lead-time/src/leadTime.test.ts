@@ -1,38 +1,32 @@
 import { describe, expect, test } from 'bun:test';
 import { readJobEnv, stableId } from './contract';
 import {
-  type Entity,
   FIELDS,
-  type Link,
+  type MetadataRow,
+  isoUtc,
   leadTimeByIssueType,
   median,
-  minutesBetween,
   parseIsoUtc,
+  parseNumber,
   roundTo,
 } from './leadTime';
 
 const CLIENT = 'apache-kafka';
-const at = (iso: string) => BigInt(Date.parse(iso)) * 1000n;
 
-function ticket(id: bigint, issueType: string | null): Entity {
-  return { _row_id: id, type: 'ticket', issue_type: issueType, created_at: null, merged_at: null };
+let nextId = 1000n;
+function metadata(entityId: bigint, key: string, value: string | null): MetadataRow {
+  nextId += 1n;
+  return { _row_id: nextId, entity_id: entityId, key, value };
 }
 
-function change(id: bigint, createdAt: string | null, mergedAt: string | null): Entity {
-  return {
-    _row_id: id,
-    type: 'change',
-    issue_type: null,
-    created_at: createdAt,
-    merged_at: mergedAt === null ? null : at(mergedAt),
-  };
+function ticket(id: bigint, issueType: string | null, hours: string | null, merged: string | null) {
+  return [
+    ...(issueType === null ? [] : [metadata(id, 'issue_type', issueType)]),
+    ...(hours === null ? [] : [metadata(id, 'lead_time_hours', hours)]),
+    ...(merged === null ? [] : [metadata(id, 'last_merged_at', merged)]),
+    metadata(id, 'summary', 'not read'),
+  ];
 }
-
-const link = (id: bigint, ticketId: bigint, changeId: bigint): Link => ({
-  _row_id: id,
-  ticket_id: ticketId,
-  change_id: changeId,
-});
 
 describe('stableId', () => {
   test('matches the runner’s stable_id for the same client, kind and key', () => {
@@ -48,16 +42,22 @@ describe('stableId', () => {
 
 describe('the SQL semantics it reproduces', () => {
   test('parseIsoUtc reads iso_utc text and nothing else, like try_cast', () => {
-    expect(parseIsoUtc('2024-01-01T00:00:00Z')).toBe(at('2024-01-01T00:00:00Z'));
+    expect(parseIsoUtc('2024-01-01T00:00:00Z')).toBe(Date.parse('2024-01-01T00:00:00Z'));
     expect(parseIsoUtc('2024-01-01T00:00:00Z~')).toBeNull();
     expect(parseIsoUtc('~perturbed~')).toBeNull();
     expect(parseIsoUtc(null)).toBeNull();
   });
 
-  test('minutesBetween counts minute boundaries, like date_diff', () => {
-    expect(minutesBetween(at('2024-01-01T10:00:59Z'), at('2024-01-01T10:01:00Z'))).toBe(1n);
-    expect(minutesBetween(at('2024-01-01T10:00:00Z'), at('2024-01-01T10:00:59Z'))).toBe(0n);
-    expect(minutesBetween(at('1969-12-31T23:59:30Z'), at('1970-01-01T00:00:00Z'))).toBe(1n);
+  test('isoUtc writes what iso_utc does', () => {
+    expect(isoUtc(Date.parse('2024-01-01T10:00:00Z'))).toBe('2024-01-01T10:00:00Z');
+  });
+
+  test('parseNumber reads a number and nothing else, like try_cast', () => {
+    expect(parseNumber('12.5')).toBe(12.5);
+    expect(parseNumber('-3')).toBe(-3);
+    expect(parseNumber('12.5~')).toBeNull();
+    expect(parseNumber('~perturbed~')).toBeNull();
+    expect(parseNumber(null)).toBeNull();
   });
 
   test('roundTo rounds half away from zero, like round', () => {
@@ -73,72 +73,50 @@ describe('the SQL semantics it reproduces', () => {
 });
 
 describe('leadTimeByIssueType', () => {
-  const entities = [
-    ticket(1n, 'Bug'),
-    ticket(2n, 'Bug'),
-    ticket(3n, 'Task'),
-    ticket(4n, 'Task'),
-    change(10n, '2024-01-01T00:00:00Z', '2024-01-01T02:00:00Z'),
-    change(11n, '2024-01-01T01:00:00Z', '2024-01-01T06:00:00Z'),
-    change(12n, '2024-01-02T00:00:00Z', '2024-01-02T01:00:00Z'),
-    change(13n, '2024-01-03T00:00:00Z', null),
-    change(14n, 'not a date', '2024-01-04T00:00:00Z'),
-  ];
-  const links = [
-    link(100n, 1n, 10n),
-    link(101n, 1n, 11n),
-    link(102n, 2n, 12n),
-    link(103n, 3n, 13n),
-    link(104n, 4n, 14n),
-    // A link to a change that is not in entities, and one whose "ticket" is a change.
-    link(105n, 1n, 99n),
-    link(106n, 10n, 11n),
-  ];
-  const rows = leadTimeByIssueType(CLIENT, entities, links);
+  const rows = leadTimeByIssueType(CLIENT, [
+    ...ticket(1n, 'Bug', '6', '2024-01-01T06:00:00Z'),
+    ...ticket(2n, 'Bug', '1', '2024-01-02T01:00:00Z'),
+    // No lead time: no pull request merged.
+    ...ticket(3n, 'Task', null, null),
+    ...ticket(4n, 'Task', '2', '2024-01-04T00:00:00Z'),
+    // A lead time that isn't a number doesn't count.
+    ...ticket(5n, 'Task', 'soon', '2024-01-05T00:00:00Z'),
+    ...ticket(6n, null, '4', '2024-01-06T00:00:00Z'),
+  ]);
+  const byName = new Map(rows.map(row => [row.name, row]));
 
-  test('spans a ticket’s first change opening to its last merging, averaged by issue type', () => {
-    const bug = rows.find(row => row.issue_type === 'Bug');
-    // Ticket 1: 00:00 to 06:00 is 6 hours; ticket 2: 1 hour.
-    expect(bug).toMatchObject({ tickets: 2n, avg_lead_time_hours: 3.5 });
-    expect(bug?.median_lead_time_hours).toBe(3.5);
+  test('averages each issue type’s tickets with a lead time', () => {
+    expect(byName.get('Bug')).toMatchObject({ tickets: 2n, avg_lead_time_hours: 3.5 });
+    expect(byName.get('Bug')?.median_lead_time_hours).toBe(3.5);
+    expect(byName.get('Task')).toMatchObject({ tickets: 1n, avg_lead_time_hours: 2 });
   });
 
-  test('counts only tickets with a merged change, and a ticket with no valid start counts', () => {
-    const task = rows.find(row => row.issue_type === 'Task');
-    // Ticket 3's only change never merged; ticket 4's change has no parseable created_at.
-    expect(task).toMatchObject({ tickets: 1n, avg_lead_time_hours: null });
+  test('names each entity for its issue type and dates it by its latest merge', () => {
+    expect(byName.get('Bug')?.created_at).toBe('2024-01-02T01:00:00Z');
+    expect(byName.get('No issue type')).toMatchObject({ issue_type: null, tickets: 1n });
   });
 
-  test('lists the tickets, their changes and the links between them as sources', () => {
-    const bug = rows.find(row => row.issue_type === 'Bug');
-    const sources = new Set(bug?._sources.map(source => `${source.table}:${source.row_id}`));
-    expect(sources).toEqual(
-      new Set([
-        'entities:1',
-        'entities:2',
-        'entities:10',
-        'entities:11',
-        'entities:12',
-        'ticket_change_links:100',
-        'ticket_change_links:101',
-        'ticket_change_links:102',
-      ])
-    );
+  test('cites each ticket it counted once, as an entity, and none it skipped', () => {
+    expect(byName.get('Bug')?._sources).toEqual([
+      { table: 'entities', row_id: '1' },
+      { table: 'entities', row_id: '2' },
+    ]);
+    expect(byName.get('Task')?._sources).toEqual([{ table: 'entities', row_id: '4' }]);
   });
 
   test('declares the same _fields as the SQL job, keyed by issue type', () => {
-    expect(rows.map(row => row._fields)).toEqual([FIELDS, FIELDS]);
-    expect(rows[0]._row_id).toBe(stableId(CLIENT, 'lead_time_by_issue_type', 'Bug'));
+    expect(rows.map(row => row._fields)).toEqual([FIELDS, FIELDS, FIELDS]);
+    expect(byName.get('Bug')?._row_id).toBe(stableId(CLIENT, 'lead_time_by_issue_type', 'Bug'));
   });
 
   test('orders rows by ticket count, most first', () => {
-    expect(rows.map(row => row.issue_type)).toEqual(['Bug', 'Task']);
+    expect(rows.map(row => row.name)).toEqual(['Bug', 'No issue type', 'Task']);
   });
 });
 
 describe('readJobEnv', () => {
   const env = {
-    WAYMARK_INPUTS: '{"entities": "file:///waymark/in/entities.parquet"}',
+    WAYMARK_INPUTS: '{"entity_metadata": "file:///waymark/in/entity_metadata.parquet"}',
     WAYMARK_CHANGES: '{}',
     WAYMARK_PARAMS: '{"client": "apache-kafka"}',
     WAYMARK_OUTPUT: '/waymark/out/output.parquet',
@@ -146,7 +124,7 @@ describe('readJobEnv', () => {
 
   test('reads the inputs, changes, params and output', () => {
     expect(readJobEnv(env)).toMatchObject({
-      inputs: { entities: 'file:///waymark/in/entities.parquet' },
+      inputs: { entity_metadata: 'file:///waymark/in/entity_metadata.parquet' },
       changes: {},
       params: { client: 'apache-kafka' },
       output: '/waymark/out/output.parquet',

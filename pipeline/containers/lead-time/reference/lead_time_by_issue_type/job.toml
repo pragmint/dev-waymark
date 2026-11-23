@@ -1,2 +1,3 @@
-description = "Hours from a ticket's first pull request opening to its last one merging, by issue type. The SQL the TypeScript example must match; no client runs it, since Waymark charts each ticket's lead_time_hours instead."
-inputs = ["entities", "ticket_change_links"]
+description = "Lead time by issue type, from each ticket's metadata; each row is an entity. The SQL the TypeScript example must match: the client template's job of the same name."
+inputs = ["entities[type=ticket]", "entity_metadata[entity_type=ticket]"]
+entity_type = "lead_time_by_issue_type"

@@ -6,12 +6,15 @@ import {
   parseColumnRef,
   refLabel,
   refText,
+  traceEntityValue,
   traceField,
   walkField,
 } from './columnLineage';
 
 // Column maps shaped like the Kafka jobs: each is the union of its table's rows' `_fields`.
 // Tickets and pull requests share `entities`, so its created_at reads either raw created field.
+// A ticket's issue_type and a change's merged_at are metadata: `entities.<key>` names them, and
+// the metadata row that holds each says what it reads.
 const MAPS: Record<string, ColumnMap> = {
   lead_time: {
     issue_type: ['entities[type=ticket].issue_type'],
@@ -24,9 +27,10 @@ const MAPS: Record<string, ColumnMap> = {
   },
   entities: {
     type: [],
-    issue_type: ['raw.jira_issues.fields:$.issuetype.name'],
     created_at: ['raw.github_pulls.created_at', 'raw.jira_issues.fields:$.created'],
-    merged_at: ['raw.github_pulls.merged_at'],
+  },
+  entity_metadata: {
+    value: ['raw.github_pulls.merged_at', 'raw.jira_issues.fields:$.issuetype.name'],
   },
   links: {
     ticket_id: ['entities._row_id'],
@@ -47,6 +51,10 @@ const SOURCES: Record<string, Record<string, Array<{ table: string; row_id: stri
     t1: [{ table: 'raw.jira_issues', row_id: 'j1' }],
     c1: [{ table: 'raw.github_pulls', row_id: 'p1' }],
   },
+  entity_metadata: {
+    't1:issue_type': [{ table: 'raw.jira_issues', row_id: 'j1' }],
+    'c1:merged_at': [{ table: 'raw.github_pulls', row_id: 'p1' }],
+  },
   links: {
     l1: [
       { table: 'entities', row_id: 't1' },
@@ -55,6 +63,14 @@ const SOURCES: Record<string, Record<string, Array<{ table: string; row_id: stri
   },
 };
 const TYPES: Record<string, string> = { t1: 'ticket', c1: 'change' };
+// Rows' own `_fields`; every other row falls back to its table's map. Each metadata row's says
+// exactly what its one value reads.
+const FIELDS: Record<string, Record<string, ColumnMap>> = {
+  entity_metadata: {
+    't1:issue_type': { value: ['raw.jira_issues.fields:$.issuetype.name'] },
+    'c1:merged_at': { value: ['raw.github_pulls.merged_at'] },
+  },
+};
 
 const FETCHERS: FieldFetchers = {
   async rowSources(table, rowIds) {
@@ -62,9 +78,22 @@ const FETCHERS: FieldFetchers = {
       (SOURCES[table]?.[rowId] ?? []).map(source => ({ rowId, ...source }))
     );
   },
+  async rowFields(table, rowIds) {
+    return Object.fromEntries(
+      rowIds.flatMap(rowId => (FIELDS[table]?.[rowId] ? [[rowId, FIELDS[table][rowId]]] : []))
+    );
+  },
   async columnValues(table, column, rowIds) {
     expect([table, column]).toEqual(['entities', 'type']);
     return Object.fromEntries(rowIds.map(id => [id, TYPES[id] ?? null]));
+  },
+  // A metadata row's id here is `<entity>:<key>`.
+  async metadataRows(entityIds, keys) {
+    return entityIds.flatMap(entityId =>
+      keys
+        .map(key => ({ entityId, key, rowId: `${entityId}:${key}` }))
+        .filter(({ rowId }) => rowId in (SOURCES.entity_metadata ?? {}))
+    );
   },
 };
 
@@ -142,6 +171,21 @@ describe('traceField', () => {
   });
 });
 
+describe('traceEntityValue', () => {
+  it('starts an entity’s metadata value from the metadata row that holds it', async () => {
+    const trace = await traceEntityValue('c1', 'merged_at', FETCHERS);
+    expect(trace?.direct).toEqual([{ table: 'raw.github_pulls', column: 'merged_at' }]);
+    const walked = trace && (await walkField('entities', 'c1', trace, MAPS, FETCHERS));
+    expect(walked?.hops).toEqual([{ entities: ['c1'] }, { 'raw.github_pulls': ['p1'] }]);
+    expect(walked?.columns).toEqual({ 'raw.github_pulls': ['merged_at'] });
+  });
+
+  it('returns null for a key the entity has no value for, or one of its own columns', async () => {
+    expect(await traceEntityValue('t1', 'merged_at', FETCHERS)).toBeNull();
+    expect(await traceEntityValue('t1', 'name', FETCHERS)).toBeNull();
+  });
+});
+
 describe('walkField', () => {
   it('follows a filtered reference to the rows it matches only', async () => {
     const { hops } = await walk('avg_hours');
@@ -188,6 +232,23 @@ describe('walkField', () => {
     const { hops, leaves } = await walk('avg_hours', {}, 1);
     expect(hops).toHaveLength(2);
     expect(leaves).toEqual({});
+  });
+
+  it('never shows a metadata row: a value is reached through its entity', async () => {
+    const { hops, columns } = await walk('issue_type');
+    expect(hops).toEqual([
+      { lead_time: ['1'] },
+      { entities: ['t1'] },
+      { 'raw.jira_issues': ['j1'] },
+    ]);
+    expect(Object.keys(columns)).not.toContain('entity_metadata');
+  });
+
+  it('follows nothing for a key an entity has no value for', async () => {
+    // t1 has no merged_at, so a reference that reached it for one would read nothing there.
+    const values = { _fields: { avg_hours: ['entities.merged_at'] } };
+    const { leaves } = await walk('avg_hours', values);
+    expect(leaves).toEqual({ 'raw.github_pulls': ['p1'] });
   });
 
   it('follows every source of a column nothing maps', async () => {

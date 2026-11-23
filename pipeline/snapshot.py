@@ -5,14 +5,19 @@ Layout under a bucket URL (`file://`, `s3://` or `az://`):
     raw/<table>/<run_id>.<load_id>.<file_id>.parquet   extract.py; append-only
     runs/<run_id>.json                                  extract.py, once the run finished
     runs/extract.lock                                   extract.py, while a run is going
-    tables/<name>/<snapshot_id>.parquet                 runner.py; written once, never replaced
-    tables/<name>/<snapshot_id>.changes.parquet         runner.py; the diff against the base
+    tables/<table>/<snapshot_id>.<job>.parquet          runner.py; one job's part of an entity
+                                                        table, written once, never replaced
+    changes/<job>/<snapshot_id>.parquet                 runner.py; a job's diff against the base
     snapshots/<snapshot_id>.json                        the manifest: every table's exact files
     latest.json                                         the published snapshot; written last
 
 An extract run is full or incremental. Its run record lists its chain: the last full run, then
 every run after it up to this one. A snapshot of a run reads the raw files of its whole chain, and
 the jobs keep the latest version of each record.
+
+Every table a job writes is an entity table: `entities` and `entity_metadata`. Each job adds its
+own part file to them, and the manifest lists those parts, in build order, as the tables' files.
+Nothing else but raw data is a table.
 
 A snapshot is the unit of identity. Every reader (the runner's jobs, verify.py, trace.py and
 Waymark) resolves a table through a manifest to an exact list of files, never a glob, so files
@@ -24,6 +29,7 @@ a half-written file under a name it trusts.
 import json
 import re
 import socket
+import sys
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -35,12 +41,14 @@ from urllib.parse import urlparse
 import duckdb
 import fsspec
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 RUN_RECORD_VERSION = 1
 RUN_KINDS = ("full", "incremental")
 LATEST = "latest.json"
 EXTRACT_LOCK = "runs/extract.lock"
 RAW_PREFIX = "raw."
+# The tables jobs write, each the union of the parts every job adds.
+ENTITY_TABLES = ("entities", "entity_metadata")
 SNAPSHOT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 TABLE_DIR_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -325,9 +333,12 @@ def break_lock(root: str) -> dict[str, Any] | None:
 class Snapshot:
     """One build: the exact files of every table it read or wrote.
 
-    `tables` maps a table name (`raw.<table>` for raw) to its entry in the manifest. Every entry
-    has `files`, keys relative to `root`; a built table also has `rows`, `job` (the version that
-    built it), `inputs`, and `changes` once it was compared with the base.
+    `tables` maps a table name (`raw.<table>` for raw) to its entry in the manifest: its `files`,
+    keys relative to `root`. An entity table's entry also has `parts`, the file each job added.
+
+    `jobs` maps a job to what it built: `files` (its part of each entity table it adds to), `rows`,
+    `job` (the version that built it), `params`, `inputs` (and `read`, the exact files each input
+    resolved to), and `changes` once it was compared with the base.
 
     `extract` is the run it was built from and `runs` that run's chain, whose raw files it reads.
     `base` is the snapshot that was published when it started, which its diffs compare against.
@@ -345,26 +356,39 @@ class Snapshot:
     runs: list[str] = field(default_factory=list)
     base: "Snapshot | None" = field(default=None, repr=False)
     preview: dict[str, str] | None = None
+    jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def url(self, key: str) -> str:
         return join(self.root, key)
 
-    def output_key(self, table: str) -> str:
-        return f"tables/{table}/{self.id}.parquet"
+    def part_key(self, job: str, table: str) -> str:
+        """Where a job writes its part of an entity table."""
+        return f"tables/{table}/{self.id}.{job}.parquet"
 
-    def changes_key(self, table: str) -> str:
-        return f"tables/{table}/{self.id}.changes.parquet"
+    def changes_key(self, job: str) -> str:
+        return f"changes/{job}/{self.id}.parquet"
 
     def files(self, table: str) -> list[str]:
+        """Every file of the table, as URLs: what Waymark reads."""
         entry = self.tables.get(table)
         if not entry or not entry["files"]:
             raise ValueError(f"Snapshot {self.id} has no files for {table}")
         return [self.url(key) for key in entry["files"]]
 
+    def part(self, job: str, table: str) -> str | None:
+        """The key of the job's part of an entity table, or None if it added none."""
+        return self.jobs.get(job, {}).get("files", {}).get(table)
+
+    def add_parts(self, job: str, files: Mapping[str, str]) -> None:
+        """List a job's part files in the entity tables, after the parts already there."""
+        for table, key in files.items():
+            entry = self.tables.setdefault(table, {"files": [], "parts": {}})
+            entry.setdefault("parts", {})[job] = key
+            entry["files"] = [*entry["files"], key]
+
     def source(self, table: str) -> str:
         """The `read_parquet(...)` expression for one of the snapshot's tables."""
-        files = ", ".join(sql_string(path) for path in self.files(table))
-        return f"read_parquet([{files}], union_by_name = true)"
+        return read_parquet(self.files(table))
 
     def connect(self) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect()
@@ -379,10 +403,23 @@ class Snapshot:
             "runs": self.runs or [self.extract],
             "base": self.base.id if self.base else None,
             "tables": self.tables,
+            "jobs": self.jobs,
             "status": self.status,
             "verified": self.verified,
             "preview": self.preview,
         }
+
+
+def read_parquet(urls: Sequence[str]) -> str:
+    """A `read_parquet(...)` expression over exactly these files."""
+    if not urls:
+        raise ValueError("read_parquet needs at least one file")
+    files = ", ".join(sql_string(url) for url in urls)
+    return f"read_parquet([{files}], union_by_name = true)"
+
+
+class UnsupportedManifest(ValueError):
+    """A manifest written by another version of the pipeline."""
 
 
 def manifest_key(snapshot_id: str) -> str:
@@ -412,8 +449,15 @@ def start(
 
 
 def published(root: str, env: Mapping[str, str]) -> Snapshot | None:
-    """The snapshot `latest.json` names, or None before anything is published."""
-    return load(root, None, env) if exists(join(root, LATEST)) else None
+    """The snapshot `latest.json` names, or None before anything is published. A snapshot in an
+    older manifest version counts as none: nothing in it can be reused or compared with."""
+    if not exists(join(root, LATEST)):
+        return None
+    try:
+        return load(root, None, env)
+    except UnsupportedManifest as error:
+        print(f"{error}; building without a base", file=sys.stderr)
+        return None
 
 
 def save(snapshot: Snapshot) -> str:
@@ -456,7 +500,7 @@ def load(root: str, snapshot_id: str | None, env: Mapping[str, str]) -> Snapshot
         snapshot_id = read_json(join(root, LATEST))["snapshot"]
     manifest = read_json(join(root, manifest_key(snapshot_id)))
     if manifest.get("version") != MANIFEST_VERSION:
-        raise ValueError(f"Unsupported manifest version: {manifest.get('version')!r}")
+        raise UnsupportedManifest(f"Unsupported manifest version: {manifest.get('version')!r}")
     return Snapshot(
         root,
         manifest["snapshot"],
@@ -467,4 +511,5 @@ def load(root: str, snapshot_id: str | None, env: Mapping[str, str]) -> Snapshot
         env,
         manifest.get("runs", [manifest["extract"]]),
         preview=manifest.get("preview"),
+        jobs=manifest.get("jobs", {}),
     )

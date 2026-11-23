@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { getLineageRepo } from '../db/source/index';
 import type { LineageRepository } from '../db/lineageRepository';
 import {
+  ENTITIES_TABLE,
   FIELDS_COLUMN,
   entityHrefFor,
   expandToRaw,
@@ -11,7 +12,9 @@ import {
   parseRowLimit,
   sourcesOf,
 } from '../domain/lineage';
-import { directColumns, traceField, walkField } from '../domain/columnLineage';
+import { directColumns, traceEntityValue, traceField, walkField } from '../domain/columnLineage';
+import type { FieldTrace } from '../domain/columnLineage';
+import type { LineageRow } from '../schemas/lineage';
 import { LineageNotFoundPage } from '../frontend/Pages/LineageNotFoundPage';
 import { LineageRawPage } from '../frontend/Pages/LineageRawPage';
 import { LineageRowPage } from '../frontend/Pages/LineageRowPage';
@@ -34,6 +37,20 @@ function resolve(c: Context): Resolved {
   return { ok: true, repo, table, rowId };
 }
 
+// Where tracing one field of a row starts. An entity's metadata value is traced from the
+// metadata row that holds it, though the page still shows the entity.
+async function startTrace(
+  repo: LineageRepository,
+  table: string,
+  row: LineageRow,
+  field: string | undefined
+): Promise<FieldTrace | null> {
+  if (!field) return null;
+  const trace = traceField(repo.columnMaps(), table, field, row.values);
+  if (trace || table !== ENTITIES_TABLE) return trace;
+  return traceEntityValue(row.rowId, field, repo);
+}
+
 function notFound(c: Context, message: string) {
   return c.html(<LineageNotFoundPage message={message} />, 404);
 }
@@ -49,7 +66,7 @@ export async function lineageRowHandler(c: Context) {
 
   // With ?field=, show only the sources that field reads, and the columns it reads first.
   const field = c.req.query('field') || undefined;
-  const trace = field ? traceField(repo.columnMaps(), table, field, row.values) : null;
+  const trace = await startTrace(repo, table, row, field);
   const sources = trace
     ? hopToSourceRefs(
         (await walkField(table, rowId, trace, repo.columnMaps(), repo, { depth: 1 })).hops[1] ?? {}
@@ -85,7 +102,7 @@ export async function lineageRawHandler(c: Context) {
   if (!row) return notFound(c, `${table} has no row ${rowId}.`);
 
   const field = c.req.query('field') || undefined;
-  const trace = field ? traceField(repo.columnMaps(), table, field, row.values) : null;
+  const trace = await startTrace(repo, table, row, field);
   const walk = trace
     ? await walkField(table, rowId, trace, repo.columnMaps(), repo)
     : { ...(await expandToRaw({ [table]: [rowId] }, repo.getSources)), columns: {} };

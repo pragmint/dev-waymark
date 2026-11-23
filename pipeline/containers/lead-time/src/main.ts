@@ -1,16 +1,15 @@
-// The container's entry point: read the inputs the runner staged, compute the table, and write it
-// with the contract's column types. DuckDB is only the Parquet reader and writer here.
+// The container's entry point: read the inputs the runner staged, compute the entities, and write
+// them with the contract's column types. DuckDB is only the Parquet reader and writer here.
 import {
   DuckDBConnection,
   DuckDBInstance,
-  DuckDBTimestampTZValue,
   type DuckDBValue,
   listValue,
   mapValue,
   structValue,
 } from '@duckdb/node-api';
 import { readJobEnv } from './contract';
-import { type Entity, type LeadTimeRow, type Link, leadTimeByIssueType } from './leadTime';
+import { type LeadTimeRow, type MetadataRow, leadTimeByIssueType } from './leadTime';
 
 type Row = Record<string, DuckDBValue>;
 
@@ -19,6 +18,8 @@ const OUTPUT_TABLE = `
     _row_id BIGINT,
     _sources STRUCT("table" VARCHAR, row_id VARCHAR)[],
     _fields MAP(VARCHAR, VARCHAR[]),
+    name VARCHAR,
+    created_at VARCHAR,
     issue_type VARCHAR,
     tickets BIGINT,
     avg_lead_time_hours DOUBLE,
@@ -49,22 +50,12 @@ async function readRows(con: DuckDBConnection, uri: string, columns: string[]): 
   return reader.getRowObjects();
 }
 
-function toEntity(row: Row): Entity {
-  const merged = row.merged_at;
+function toMetadata(row: Row): MetadataRow {
   return {
     _row_id: bigintColumn(row, '_row_id'),
-    type: textOrNull(row.type),
-    issue_type: textOrNull(row.issue_type),
-    created_at: textOrNull(row.created_at),
-    merged_at: merged instanceof DuckDBTimestampTZValue ? merged.micros : null,
-  };
-}
-
-function toLink(row: Row): Link {
-  return {
-    _row_id: bigintColumn(row, '_row_id'),
-    ticket_id: bigintOrNull(row.ticket_id),
-    change_id: bigintOrNull(row.change_id),
+    entity_id: bigintOrNull(row.entity_id),
+    key: textOrNull(row.key),
+    value: textOrNull(row.value),
   };
 }
 
@@ -86,6 +77,8 @@ async function writeRows(con: DuckDBConnection, rows: LeadTimeRow[], uri: string
     appender.appendMap(
       mapValue(Object.entries(row._fields).map(([key, refs]) => ({ key, value: listValue(refs) })))
     );
+    appender.appendVarchar(row.name);
+    appender.appendVarchar(row.created_at);
     appendNullable(value => appender.appendVarchar(value), appendNull, row.issue_type);
     appender.appendBigInt(row.tickets);
     appendNullable(value => appender.appendDouble(value), appendNull, row.avg_lead_time_hours);
@@ -101,19 +94,13 @@ async function main() {
   const instance = await DuckDBInstance.create(':memory:');
   const con = await instance.connect();
   try {
-    const entities = await readRows(con, env.inputs.entities, [
+    const metadata = await readRows(con, env.inputs.entity_metadata, [
       '_row_id',
-      'type',
-      'issue_type',
-      'created_at',
-      'merged_at',
+      'entity_id',
+      'key',
+      'value',
     ]);
-    const links = await readRows(con, env.inputs.ticket_change_links, [
-      '_row_id',
-      'ticket_id',
-      'change_id',
-    ]);
-    const rows = leadTimeByIssueType(env.params.client, entities.map(toEntity), links.map(toLink));
+    const rows = leadTimeByIssueType(env.params.client, metadata.map(toMetadata));
     await writeRows(con, rows, env.output);
   } finally {
     con.closeSync();

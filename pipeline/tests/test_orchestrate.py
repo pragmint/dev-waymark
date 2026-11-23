@@ -1,4 +1,4 @@
-"""The job registry (registry.py), reusing unchanged tables (runner.py), and run, preview and
+"""The job registry (registry.py), reusing unchanged jobs' parts (runner.py), and run, preview and
 promote (orchestrate.py), on a local bucket.
 
 verify.py is stubbed out: these tests are about what gets built, and replaying the shared jobs
@@ -20,20 +20,20 @@ from snapshot import Run, Snapshot
 from test_runner import CLIENT, ISSUES, RUN, TYPED_PULLS, write_raw
 from verify import built_jobs
 
-# Every entity's name, row for row: a client job small enough to write here, and to break.
+# Each ticket's name again, as its label: a client job small enough to write here, and to break.
 NAMES_SQL = """
 select _row_id, [source_ref('entities', _row_id)] as _sources,
-  map {'name': ['entities.name']} as _fields, name
+  map {'label': ['entities.name']} as _fields, name as label
 from entities
 """
-SHOUTED_SQL = NAMES_SQL.replace(", name\n", ", upper(name) as name\n")
-BROKEN_SQL = "select 1 as name"
+SHOUTED_SQL = NAMES_SQL.replace("name as label", "upper(name) as label")
+BROKEN_SQL = "select 1 as label"
 
 
-def write_job(parent: Path, name: str, sql: str, inputs=("entities",)) -> Path:
+def write_job(parent: Path, name: str, sql: str, inputs=("entities[type=ticket]",)) -> Path:
     folder = parent / name
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "job.toml").write_text(f"inputs = {json.dumps(list(inputs))}\n")
+    (folder / "job.toml").write_text(f'inputs = {json.dumps(list(inputs))}\nadds_to = "ticket"\n')
     (folder / "query.sql").write_text(sql)
     return folder
 
@@ -118,25 +118,24 @@ def build(bucket: Bucket, snapshot_id: str, jobs=None, reuse=True, client=CLIENT
     return snapshots.load(bucket.root, snapshot_id, bucket.env)
 
 
-def test_a_table_that_would_come_out_the_same_is_reused_with_an_empty_change_file(
+def test_a_job_whose_parts_would_come_out_the_same_is_reused_with_an_empty_change_file(
     bucket: Bucket, verified: list[list[str]]
 ):
     first = build(bucket, "s1")
     second = build(bucket, "s2")
     assert set(statuses(second).values()) == {"reused"}
     assert verified[-1] == []  # each was verified in the snapshot that built it
-    for name, entry in second.tables.items():
-        if name.startswith("raw."):
-            continue
-        assert entry["files"] == first.tables[name]["files"]
+    assert second.tables == first.tables
+    for name, entry in second.jobs.items():
+        assert entry["files"] == first.jobs[name]["files"]
         assert entry["built_in"] == "s1"
         assert (entry["changes"]["added"], entry["changes"]["changed"]) == (0, 0)
         assert Path(second.url(entry["changes"]["file"])).is_file()
     # A chain of reuses still names the snapshot that built the files.
-    assert build(bucket, "s3").tables["entities"]["built_in"] == "s1"
+    assert build(bucket, "s3").jobs["tickets"]["built_in"] == "s1"
 
 
-def test_a_new_job_version_rebuilds_that_table_and_what_reads_it(bucket: Bucket, tmp_path: Path):
+def test_a_new_job_version_rebuilds_that_job_and_what_reads_it(bucket: Bucket, tmp_path: Path):
     jobs = load_jobs([JOBS_DIR])
     names = write_job(tmp_path / "a", "names", NAMES_SQL).parent
     shouted = write_job(tmp_path / "b", "names", SHOUTED_SQL).parent
@@ -145,18 +144,24 @@ def test_a_new_job_version_rebuilds_that_table_and_what_reads_it(bucket: Bucket,
     assert statuses(second)["names"] == "built"
     assert {s for name, s in statuses(second).items() if name != "names"} == {"reused"}
 
-    # A new version of entities, which every other job reads, rebuilds them all.
+    # A new version of tickets rebuilds every job that reads tickets, directly or not.
     changed = tmp_path / "c"
     for folder in JOBS_DIR.iterdir():
         target = changed / folder.name
         target.mkdir(parents=True)
         for file in folder.iterdir():
             target.joinpath(file.name).write_bytes(file.read_bytes())
-    (changed / "entities" / "query.sql").write_text(
-        (JOBS_DIR / "entities" / "query.sql").read_text() + "\n-- a comment is a new version\n"
+    (changed / "tickets" / "query.sql").write_text(
+        (JOBS_DIR / "tickets" / "query.sql").read_text() + "\n-- a comment is a new version\n"
     )
     third = build(bucket, "s3", load_jobs([changed]))
-    assert set(statuses(third).values()) == {"built"}
+    assert statuses(third) == {
+        "changes": "reused",
+        "tickets": "built",
+        "ticket_change_links": "built",
+        "change_ticket_keys": "built",
+        "ticket_lead_time": "built",
+    }
 
 
 def test_new_parameters_or_an_unverified_base_rebuild_everything(bucket: Bucket):
@@ -196,7 +201,7 @@ def test_a_limited_run_is_built_only_by_name(tmp_path: Path):
     limited = Bucket(str(root), None, {})
     with pytest.raises(ValueError, match=f"is limited.*--run-id {RUN}"):
         run(CLIENT, limited, extract="none")
-    registry.activate(str(root), "entities", registry.push(str(root), JOBS_DIR / "entities"))
+    registry.activate(str(root), "tickets", registry.push(str(root), JOBS_DIR / "tickets"))
     built = run(CLIENT, limited, extract="none", run_id=RUN, snapshot_id="s1")
     assert built is not None and snapshots.published(str(root), {}).id == "s1"
 
@@ -250,5 +255,5 @@ def test_verify_can_load_the_versions_a_snapshot_was_built_with(bucket: Bucket, 
     assert snap is not None
     with bucket.registries() as found:
         jobs = {job.name: job.version for job in built_jobs(snap, found)}
-    assert jobs == {name: snap.tables[name]["job"] for name in jobs}
+    assert jobs == {name: snap.jobs[name]["job"] for name in jobs}
     assert "names" in jobs
