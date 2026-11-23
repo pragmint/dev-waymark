@@ -171,12 +171,17 @@ Run each from this directory with `uv run python <script>`. Every `--bucket-url`
 `s3://` or `az://` ([S3 and Azure](#s3-and-azure)). `--client` is a client config such as
 `clients/apache-kafka.toml` ([Client config](#client-config)).
 
-**`extract.py`** fetches GitHub and Jira into `raw/` and records the run. It prints `run_id=<id>`.
+**`extract.py`** runs each source module into `raw/` and records the run. It prints `run_id=<id>`.
+What a client fetches is its own: the modules in its `sources/` folder, which start as copies of
+[templates/client-app/sources/](templates/client-app/sources/) (GitHub and Jira; the module
+interface is in the template's README, "Running it"). The lock, run records and raw layout are
+the pipeline's, the same for every client.
 
 | Flag                 | Default          | Meaning                                                              |
 | -------------------- | ---------------- | -------------------------------------------------------------------- |
 | `--client`           |                  | Client config. Required unless `--adopt-run` or `--break-lock`.      |
 | `--bucket-url`       | required         | Bucket to write to.                                                  |
+| `--sources DIR`      | the template's   | Folder of source modules to run.                                     |
 | `--run-id`           | current UTC time | Id of this run, `YYYYMMDDTHHMMSSZ`.                                  |
 | `--full`             | off              | Fetch everything. Without it, fetch what changed since the last run. |
 | `--max-pages N`      | no limit         | Stop each source after N pages. The run is marked limited.           |
@@ -192,6 +197,7 @@ registry, optional) before it, and exits non-zero if a build or verify fails.
 | `run`                 | Extract, build every active job, verify, publish. Reuses each job whose parts would come out the same as the published ones. |
 | `run --extract full`  | The same with a full extract; `--extract none` builds the last complete run (or `--run-id`) without extracting.              |
 | `run --rebuild`       | Build every job, reusing nothing.                                                                                            |
+| `run --sources DIR`   | Extract with the source modules in `DIR` rather than the template's.                                                         |
 | `preview JOB VERSION` | Build the last run with one job at another version. Saved, never published. `VERSION` can be a job folder to push.           |
 | `promote JOB VERSION` | A preview, then make the version active if it passed. `--shared` promotes in the shared registry.                            |
 

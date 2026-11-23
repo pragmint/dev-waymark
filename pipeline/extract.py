@@ -1,4 +1,9 @@
-"""Extract GitHub and Jira into raw Parquet at <bucket>/raw/<table>/<run_id>.<load>.<file>.parquet.
+"""Extract a client's sources into raw Parquet at
+<bucket>/raw/<table>/<run_id>.<load>.<file>.parquet.
+
+What to fetch is the client's: each module in its sources folder (by default the template's,
+templates/client-app/sources/, which fetch GitHub and Jira) returns a dlt source for a run. How
+it's written is the pipeline's, below, the same for every client.
 
 A run is full (`--full`: everything) or incremental (the default: only what changed since the last
 run started, with some overlap). When every source has loaded it writes its run record,
@@ -14,43 +19,58 @@ planning its run to recording it, and a second one fails straight away rather th
 """
 
 import argparse
+import importlib.util
 import json
-import re
 import os
 import sys
 import tempfile
 import tomllib
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import dlt
 from dlt.destinations import filesystem
 from dlt.destinations.impl.filesystem.filesystem import CURRENT_VERSION, INIT_FILE_NAME
-from dlt.sources.rest_api import rest_api_source
 
 import snapshot as snapshots
 from snapshot import Run, check_id, join, new_snapshot_id
 
-PAGE_SIZE = 100
-# How far before the last run's start an incremental run fetches from. GitHub's `updated_at` is
-# UTC to the second, so this only covers clock skew. JQL dates are in the Jira user's time zone
-# (anywhere from -12 to +14 hours) and to the minute, so a day covers any of them. Records fetched
-# twice are harmless: the jobs keep the latest version of each.
-GITHUB_OVERLAP = timedelta(hours=1)
-JIRA_OVERLAP = timedelta(days=1)
-ORDER_BY = re.compile(r"(?:^|\s+)order\s+by\s+", re.IGNORECASE)
+# The source modules a client runs unless it names its own folder: the template's, which a client
+# repo starts from (templates/client-app/sources/).
+DEFAULT_SOURCES = Path(__file__).parent / "templates" / "client-app" / "sources"
 
-# dlt drops a column that is all null in a load, so a run could lose a field depending on what
-# it fetched. Declaring what the transform reads keeps the raw schema the same on every run.
-GITHUB_PULL_COLUMNS = {
-    "title": {"data_type": "text"},
-    "body": {"data_type": "text"},
-    "created_at": {"data_type": "timestamp"},
-    "updated_at": {"data_type": "timestamp"},
-    "closed_at": {"data_type": "timestamp"},
-    "merged_at": {"data_type": "timestamp"},
-}
+
+@dataclass(frozen=True)
+class Source:
+    """One source module: its file name, where an incremental run fetches it from given when the
+    last run started, and the dlt source for a run (everything when `since` is None)."""
+
+    name: str
+    since: Callable[[datetime], str]
+    source: Callable[[Mapping[str, Any], Mapping[str, str], str | None], Any]
+
+
+def load_sources(folder: Path) -> list[Source]:
+    """Every module in the folder whose name doesn't start with `_`, in name order. Each defines
+    `since(cursor)` and `source(client, env, since)`."""
+    found = []
+    for path in sorted(folder.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        spec = importlib.util.spec_from_file_location(f"waymark_source_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            raise ValueError(f"Can't load source module {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        missing = [n for n in ("since", "source") if not callable(getattr(module, n, None))]
+        if missing:
+            raise ValueError(f"Source module {path} doesn't define {' or '.join(missing)}")
+        found.append(Source(path.stem, module.since, module.source))
+    if not found:
+        raise ValueError(f"No source modules in {folder}")
+    return found
 
 
 def new_run_id(now: datetime) -> str:
@@ -59,134 +79,6 @@ def new_run_id(now: datetime) -> str:
 
 # Every file a run writes starts with its id, so a run's files are exactly `<table>/<run_id>.*`.
 RAW_LAYOUT = "{table_name}/{run_id}.{load_id}.{file_id}.{ext}"
-
-
-def slim_pull(pull: dict[str, Any]) -> dict[str, Any]:
-    """Drop the full repo objects GitHub nests in each PR, keeping the branch and repo names."""
-
-    def slim_ref(ref: dict[str, Any]) -> dict[str, Any]:
-        repo = ref.get("repo") or {}
-        return {"ref": ref.get("ref"), "sha": ref.get("sha"), "repo": repo.get("full_name")}
-
-    return {**pull, "head": slim_ref(pull["head"]), "base": slim_ref(pull["base"])}
-
-
-def github_since(started_at: datetime) -> str:
-    return (started_at - GITHUB_OVERLAP).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def github_pulls_endpoint(repo: str, since: str | None) -> dict[str, Any]:
-    """A full run pages by creation date, which doesn't move under it. GitHub's pull list has no
-    `since` filter, so an incremental run pages newest-updated first and stops at the cursor."""
-    params = {"state": "all", "per_page": PAGE_SIZE}
-    if since is None:
-        params = {**params, "sort": "created", "direction": "asc"}
-        return {"path": f"repos/{repo}/pulls", "params": params}
-    return {
-        "path": f"repos/{repo}/pulls",
-        "params": {**params, "sort": "updated", "direction": "desc"},
-        "incremental": {"cursor_path": "updated_at", "initial_value": since, "row_order": "desc"},
-    }
-
-
-def github_config(
-    repos: list[str], env: Mapping[str, str], since: str | None = None
-) -> dict[str, Any]:
-    token = env.get("GITHUB_TOKEN")
-    if not token:
-        raise ValueError("GITHUB_TOKEN is required")
-    return {
-        "client": {
-            "base_url": "https://api.github.com/",
-            "auth": {"type": "bearer", "token": token},
-            "paginator": {"type": "header_link"},
-        },
-        "resources": [
-            {
-                "name": f"github_pulls_{repo.replace('/', '_').replace('-', '_')}",
-                "table_name": "github_pulls",
-                "primary_key": "id",
-                "columns": GITHUB_PULL_COLUMNS,
-                "processing_steps": [{"map": slim_pull}],
-                "endpoint": github_pulls_endpoint(repo, since),
-            }
-            for repo in repos
-        ],
-    }
-
-
-def jira_auth(flavor: str, env: Mapping[str, str]) -> dict[str, str] | None:
-    token = env.get("JIRA_API_TOKEN")
-    if flavor == "cloud":
-        email = env.get("JIRA_EMAIL")
-        if not (email and token):
-            raise ValueError("JIRA_EMAIL and JIRA_API_TOKEN are required for Jira Cloud")
-        return {"type": "http_basic", "username": email, "password": token}
-    return {"type": "bearer", "token": token} if token else None
-
-
-def jira_since(started_at: datetime) -> str:
-    return (started_at - JIRA_OVERLAP).astimezone(UTC).strftime("%Y-%m-%d %H:%M")
-
-
-def incremental_jql(jql: str, since: str | None) -> str:
-    """The client's JQL, narrowed to issues updated since the cursor, keeping its ORDER BY."""
-    if since is None:
-        return jql
-    parts = ORDER_BY.split(jql, maxsplit=1)
-    where = parts[0].strip()
-    order = f" ORDER BY {parts[1].strip()}" if len(parts) > 1 else ""
-    clause = f'updated >= "{since}"'
-    return f"({where}) AND {clause}{order}" if where else f"{clause}{order}"
-
-
-def jira_endpoint(flavor: str, jql: str) -> dict[str, Any]:
-    params = {"jql": jql, "fields": "*all"}
-    if flavor == "cloud":
-        return {
-            "path": "rest/api/3/search/jql",
-            "params": {**params, "maxResults": PAGE_SIZE},
-            "data_selector": "issues",
-            "paginator": {
-                "type": "cursor",
-                "cursor_path": "nextPageToken",
-                "cursor_param": "nextPageToken",
-            },
-        }
-    if flavor == "server":
-        return {
-            "path": "rest/api/2/search",
-            "params": params,
-            "data_selector": "issues",
-            "paginator": {
-                "type": "offset",
-                "limit": PAGE_SIZE,
-                "offset_param": "startAt",
-                "limit_param": "maxResults",
-                "total_path": "total",
-            },
-        }
-    raise ValueError(f"Unknown Jira flavor: {flavor!r}")
-
-
-def jira_config(
-    jira: Mapping[str, str], env: Mapping[str, str], since: str | None = None
-) -> dict[str, Any]:
-    flavor = jira["flavor"]
-    client: dict[str, Any] = {"base_url": jira["base_url"].rstrip("/") + "/"}
-    auth = jira_auth(flavor, env)
-    if auth:
-        client["auth"] = auth
-    return {
-        "client": client,
-        "resources": [
-            {
-                "name": "jira_issues",
-                "primary_key": "id",
-                "endpoint": jira_endpoint(flavor, incremental_jql(jira["jql"], since)),
-            }
-        ],
-    }
 
 
 def mark_raw_initialized(bucket_url: str) -> bool:
@@ -230,6 +122,7 @@ def extract(
     bucket_url: str,
     run_id: str,
     env: Mapping[str, str],
+    sources: list[Source],
     max_pages: int | None = None,
     full: bool = False,
     started_at: datetime | None = None,
@@ -239,7 +132,7 @@ def extract(
     started_at = started_at or datetime.now(UTC)
     # Held from planning, so a second run can't pick the same base run as this one.
     with snapshots.extract_lock(bucket_url, check_id(run_id), started_at):
-        return _extract(client, bucket_url, run_id, env, max_pages, full, started_at)
+        return _extract(client, bucket_url, run_id, env, sources, max_pages, full, started_at)
 
 
 def _extract(
@@ -247,12 +140,13 @@ def _extract(
     bucket_url: str,
     run_id: str,
     env: Mapping[str, str],
+    sources: list[Source],
     max_pages: int | None,
     full: bool,
     started_at: datetime,
 ) -> Run:
     run, cursor = plan_run(bucket_url, check_id(run_id), started_at, full, bool(max_pages))
-    since = {} if cursor is None else {"github": github_since(cursor), "jira": jira_since(cursor)}
+    since = {} if cursor is None else {found.name: found.since(cursor) for found in sources}
     mark_raw_initialized(bucket_url)
     pipeline = dlt.pipeline(
         pipeline_name=f"waymark_{client['client'].replace('-', '_')}",
@@ -268,14 +162,8 @@ def _extract(
     # Otherwise dlt restores its state from the bucket, and its incremental cursor (the newest
     # `updated_at` it saw) overrides the run record's, skipping changes made while a run paged.
     pipeline.config.restore_from_destination = False
-    configs = {
-        "github": github_config(client["github"]["repos"], env, since.get("github")),
-        "jira": jira_config(client["jira"], env, since.get("jira")),
-    }
-    for name, config in configs.items():
-        # Nesting 0 keeps nested objects as JSON columns. Custom fields differ per client and
-        # would otherwise become hundreds of columns; the staging models pick what they need.
-        source = rest_api_source(config, name=name, max_table_nesting=0)
+    for found in sources:
+        source = found.source(client, env, since.get(found.name))
         if max_pages:
             source.add_limit(max_pages)
         # Append: "replace" would delete earlier runs' files, which older snapshots still read.
@@ -307,6 +195,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", type=Path, help="Client config TOML")
     parser.add_argument("--bucket-url", required=True, help="s3://, az:// or file:// base URL")
+    parser.add_argument(
+        "--sources",
+        type=Path,
+        default=DEFAULT_SOURCES,
+        help="Folder of source modules (default: the client template's)",
+    )
     parser.add_argument("--run-id", help="Defaults to the current UTC time")
     parser.add_argument("--full", action="store_true", help="Fetch everything, not just changes")
     parser.add_argument("--max-pages", type=int, help="Stop each resource early, for smoke tests")
@@ -336,7 +230,14 @@ def main() -> None:
     client = tomllib.loads(args.client.read_text())
     try:
         run = extract(
-            client, args.bucket_url, run_id, os.environ, args.max_pages, args.full, started_at
+            client,
+            args.bucket_url,
+            run_id,
+            os.environ,
+            load_sources(args.sources),
+            args.max_pages,
+            args.full,
+            started_at,
         )
     except snapshots.LockHeld as error:
         sys.exit(str(error))

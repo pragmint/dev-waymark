@@ -73,4 +73,4 @@ jobs:
             --client "$CLIENT_TOML" \
             --bucket-url "$BUCKET_URL" \
             --shared-url "$SHARED_URL" \
-            run --extract "$EXTRACT"
+            run --extract "$EXTRACT" --sources "$GITHUB_WORKSPACE/sources"

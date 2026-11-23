@@ -5,7 +5,8 @@ for one client on GitHub Actions. It runs an incremental extract every hour and 
 every Sunday. Each run extracts, builds the registry's active jobs, verifies them, and publishes a
 new snapshot. Tables that haven't changed are reused.
 
-It holds the client's config and the client's own jobs. The pipeline code comes from
+It holds the client's config, the client's sources (what to extract and how) and the client's own
+jobs. The pipeline code comes from
 `pragmint/dev-waymark` at the commit in `.waymark-ref`. The shared jobs come from the shared job
 registry, and this repo's jobs go into the client's registry through pull requests.
 
@@ -15,6 +16,7 @@ follow later changes to the template.
 
 ```
 clients/<client>.toml                   sources and mappings
+sources/<source>.py                     what each extract fetches (GitHub and Jira to start)
 jobs/<job>/                             the client's own jobs (a lead time example)
 .waymark-ref                            the pipeline commit this client runs
 .github/workflows/pipeline.yml          the schedule and the run
@@ -86,6 +88,17 @@ jobs/<job>/                             the client's own jobs (a lead time examp
 - **Changing one of this client's jobs:** open a pull request against `jobs/`. See
   [jobs/README.md](jobs/README.md). If the promote fails after a merge, the job's old version
   stays active: fix it in another PR, or rerun the workflow if the failure wasn't the job's.
+- **Changing or adding a source:** edit `sources/`, or add a module beside the others. Every
+  `.py` file there whose name doesn't start with `_` runs on each extract, in name order. Each
+  defines `since(cursor)`, which turns when the last run started into where an incremental run
+  fetches from, and `source(client, env, since)`, which returns a [dlt](https://dlthub.com/docs)
+  source: everything when `since` is `None`, else what changed since. The pipeline does the rest
+  (the lock, the run record, the raw layout), so a source never writes anything itself. The
+  shared jobs read `raw.github_pulls` and `raw.jira_issues`, so a change to `github.py` or
+  `jira.py` must keep the columns they read; a new source's tables are read only by this
+  client's own jobs. A source can import only what the pipeline installs (dlt and DuckDB), and
+  reads its secrets from `env`: add them to the extract step's `env:` in `pipeline.yml`. These
+  copies are this repo's: fixes to the template's don't reach it.
 - **Changing a shared job:** that happens in `pragmint/dev-waymark`, with `orchestrate.py promote
 --shared` (pipeline README, "Job registry"). You don't need to change this repo.
 - **Upgrading the pipeline:** bump `.waymark-ref`.

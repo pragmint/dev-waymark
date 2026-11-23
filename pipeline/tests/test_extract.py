@@ -14,23 +14,7 @@ from dlt.destinations import filesystem
 
 import extract as extract_module
 import snapshot as snapshots
-from extract import (
-    adopt_run,
-    extract,
-    github_config,
-    github_since,
-    incremental_jql,
-    jira_auth,
-    jira_config,
-    jira_since,
-    mark_raw_initialized,
-    new_run_id,
-    plan_run,
-    slim_pull,
-)
-
-SERVER = {"flavor": "server", "base_url": "https://jira.example.org/jira/", "jql": "project = A"}
-CLOUD = {"flavor": "cloud", "base_url": "https://acme.atlassian.net", "jql": "project = A"}
+from extract import Source, adopt_run, extract, mark_raw_initialized, new_run_id, plan_run
 
 
 def test_new_run_id_uses_utc():
@@ -38,100 +22,9 @@ def test_new_run_id_uses_utc():
     assert new_run_id(now) == "20261102T153005Z"
 
 
-def test_slim_pull_keeps_branch_and_repo_names_only():
-    ref = {"ref": "KAFKA-1-fix", "sha": "abc", "repo": {"full_name": "a/b", "big": "x"}}
-    slim = slim_pull({"id": 1, "title": "KAFKA-1: fix", "head": ref, "base": ref})
-    assert slim["title"] == "KAFKA-1: fix"
-    assert slim["head"] == {"ref": "KAFKA-1-fix", "sha": "abc", "repo": "a/b"}
-
-
-def test_slim_pull_handles_a_deleted_fork():
-    slim = slim_pull({"id": 1, "head": {"ref": "x", "sha": "a", "repo": None}, "base": {}})
-    assert slim["head"]["repo"] is None
-
-
-def test_github_requires_a_token():
-    with pytest.raises(ValueError, match="GITHUB_TOKEN"):
-        github_config(["a/b"], {})
-
-
-def test_github_repos_share_one_table_under_distinct_resources():
-    config = github_config(["a/b-c", "d/e"], {"GITHUB_TOKEN": "t"})
-    resources = config["resources"]
-    assert [r["name"] for r in resources] == ["github_pulls_a_b_c", "github_pulls_d_e"]
-    assert {r["table_name"] for r in resources} == {"github_pulls"}
-
-
-def test_server_jira_is_anonymous_without_a_token():
-    assert "auth" not in jira_config(SERVER, {})["client"]
-
-
-def test_server_jira_uses_v2_offset_paging():
-    endpoint = jira_config(SERVER, {})["resources"][0]["endpoint"]
-    assert endpoint["path"] == "rest/api/2/search"
-    assert endpoint["paginator"]["offset_param"] == "startAt"
-
-
-def test_cloud_jira_uses_v3_cursor_paging():
-    env = {"JIRA_EMAIL": "e", "JIRA_API_TOKEN": "t"}
-    endpoint = jira_config(CLOUD, env)["resources"][0]["endpoint"]
-    assert endpoint["path"] == "rest/api/3/search/jql"
-    assert endpoint["paginator"]["cursor_param"] == "nextPageToken"
-
-
-def test_cloud_jira_requires_email_and_token():
-    with pytest.raises(ValueError, match="JIRA_EMAIL"):
-        jira_auth("cloud", {"JIRA_API_TOKEN": "t"})
-
-
-def test_unknown_jira_flavor_is_rejected():
-    with pytest.raises(ValueError, match="flavor"):
-        jira_config({**SERVER, "flavor": "other"}, {})
-
-
 NOW = datetime(2026, 11, 11, 12, 0, 0, tzinfo=UTC)
 ENV = {"GITHUB_TOKEN": "t"}
-CLIENT = {"client": "acme", "github": {"repos": ["a/b"]}, "jira": SERVER}
-
-
-def test_a_full_github_run_pages_by_creation_date():
-    endpoint = github_config(["a/b"], ENV)["resources"][0]["endpoint"]
-    assert endpoint["params"]["sort"] == "created"
-    assert "incremental" not in endpoint
-
-
-def test_an_incremental_github_run_pages_newest_updated_first_and_stops_at_the_cursor():
-    endpoint = github_config(["a/b"], ENV, "2026-11-10T11:00:00Z")["resources"][0]["endpoint"]
-    assert endpoint["params"] | {"sort": "updated", "direction": "desc"} == endpoint["params"]
-    assert endpoint["incremental"] == {
-        "cursor_path": "updated_at",
-        "initial_value": "2026-11-10T11:00:00Z",
-        "row_order": "desc",
-    }
-
-
-def test_cursors_reach_back_past_the_last_run_start():
-    assert github_since(NOW) == "2026-11-11T11:00:00Z"
-    assert jira_since(NOW) == "2026-11-10 12:00"
-
-
-@pytest.mark.parametrize(
-    ("jql", "expected"),
-    [
-        ("project = A ORDER BY key ASC", '(project = A) AND updated >= "S" ORDER BY key ASC'),
-        ("project = A or project = B", '(project = A or project = B) AND updated >= "S"'),
-        ("order by key", 'updated >= "S" ORDER BY key'),
-        ("", 'updated >= "S"'),
-    ],
-)
-def test_incremental_jql_narrows_the_clients_query_and_keeps_its_order(jql, expected):
-    assert incremental_jql(jql, "S") == expected
-    assert incremental_jql(jql, None) == jql
-
-
-def test_an_incremental_jira_run_filters_on_updated():
-    params = jira_config(SERVER, {}, "2026-11-10 12:00")["resources"][0]["endpoint"]["params"]
-    assert params["jql"] == '(project = A) AND updated >= "2026-11-10 12:00"'
+CLIENT = {"client": "acme"}
 
 
 def save(root: Path, run_id: str, started_at: str, chain: tuple[str, ...], **extra) -> None:
@@ -187,28 +80,38 @@ class FakePipeline:
         self.loaded.append(source)
 
 
-@pytest.fixture
-def fake_dlt(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    seen: dict[str, Any] = {"configs": {}, "pipeline": FakePipeline()}
+def fake_source(name: str, overlap: timedelta, seen: dict[str, Any]) -> Source:
+    """A source module that records the `since` it was given."""
 
-    def source(config: dict[str, Any], name: str, **_kwargs: Any) -> FakeSource:
-        seen["configs"][name] = config
+    def source(_client: Any, _env: Any, since: str | None) -> FakeSource:
+        seen.setdefault("since", []).append((name, since))
         return FakeSource(name)
 
-    monkeypatch.setattr(extract_module, "rest_api_source", source)
+    return Source(name, lambda cursor: (cursor - overlap).strftime("%Y-%m-%d %H:%M"), source)
+
+
+@pytest.fixture
+def fake_dlt(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    seen: dict[str, Any] = {"pipeline": FakePipeline()}
+    seen["sources"] = [
+        fake_source("github", timedelta(hours=1), seen),
+        fake_source("jira", timedelta(days=1), seen),
+    ]
     monkeypatch.setattr(extract_module.dlt, "pipeline", lambda **_kwargs: seen["pipeline"])
     return seen
 
 
 def test_an_extract_records_its_run_after_every_source_loaded(tmp_path: Path, fake_dlt):
     root = str(tmp_path)
-    full = extract(CLIENT, root, "r1", ENV, full=True, started_at=NOW - timedelta(days=1))
+    sources = fake_dlt["sources"]
+    yesterday = NOW - timedelta(days=1)
+    full = extract(CLIENT, root, "r1", ENV, sources, full=True, started_at=yesterday)
     assert full.since == {} and snapshots.load_run(root, "r1") == full
-    run = extract(CLIENT, root, "r2", ENV, started_at=NOW)
+    run = extract(CLIENT, root, "r2", ENV, sources, started_at=NOW)
     assert fake_dlt["pipeline"].loaded == ["github", "jira", "github", "jira"]
-    assert run.since == {"github": "2026-11-10T11:00:00Z", "jira": "2026-11-09 12:00"}
-    jql = fake_dlt["configs"]["jira"]["resources"][0]["endpoint"]["params"]["jql"]
-    assert jql == '(project = A) AND updated >= "2026-11-09 12:00"'
+    since = {"github": "2026-11-10 11:00", "jira": "2026-11-09 12:00"}
+    assert run.since == since
+    assert fake_dlt["since"][2:] == list(since.items())
     assert snapshots.load_run(root, "r2").chain == ("r1", "r2")
     # dlt's own cursor, restored from the bucket, would override the run record's.
     assert fake_dlt["pipeline"].config.restore_from_destination is False
@@ -217,12 +120,13 @@ def test_an_extract_records_its_run_after_every_source_loaded(tmp_path: Path, fa
 def test_a_failed_extract_records_nothing(tmp_path: Path, fake_dlt):
     fake_dlt["pipeline"] = FakePipeline(fail_on="jira")
     with pytest.raises(RuntimeError):
-        extract(CLIENT, str(tmp_path), "r1", ENV, full=True, started_at=NOW)
+        extract(CLIENT, str(tmp_path), "r1", ENV, fake_dlt["sources"], full=True, started_at=NOW)
     assert snapshots.last_run(str(tmp_path)) is None
 
 
 def test_a_smoke_test_run_is_recorded_as_limited(tmp_path: Path, fake_dlt):
-    extract(CLIENT, str(tmp_path), "r1", ENV, max_pages=1, full=True, started_at=NOW)
+    sources = fake_dlt["sources"]
+    extract(CLIENT, str(tmp_path), "r1", ENV, sources, max_pages=1, full=True, started_at=NOW)
     assert snapshots.load_run(str(tmp_path), "r1").limited
     assert snapshots.last_run(str(tmp_path)) is None
 
@@ -231,18 +135,19 @@ def test_an_extract_fails_while_another_holds_the_lock(tmp_path: Path, fake_dlt)
     root = str(tmp_path)
     with snapshots.extract_lock(root, "r1"):
         with pytest.raises(snapshots.LockHeld, match="run r1 on .* --break-lock"):
-            extract(CLIENT, root, "r2", ENV, full=True, started_at=NOW)
+            extract(CLIENT, root, "r2", ENV, fake_dlt["sources"], full=True, started_at=NOW)
     assert fake_dlt["pipeline"].loaded == []
     assert snapshots.last_run(root) is None
 
 
 def test_an_extract_releases_the_lock_when_it_finishes_or_fails(tmp_path: Path, fake_dlt):
     root = str(tmp_path)
-    extract(CLIENT, root, "r1", ENV, full=True, started_at=NOW - timedelta(days=1))
+    sources = fake_dlt["sources"]
+    extract(CLIENT, root, "r1", ENV, sources, full=True, started_at=NOW - timedelta(days=1))
     assert snapshots.lock_holder(root) is None
     fake_dlt["pipeline"] = FakePipeline(fail_on="jira")
     with pytest.raises(RuntimeError):
-        extract(CLIENT, root, "r2", ENV, started_at=NOW)
+        extract(CLIENT, root, "r2", ENV, fake_dlt["sources"], started_at=NOW)
     assert snapshots.lock_holder(root) is None
 
 

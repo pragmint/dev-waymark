@@ -46,9 +46,16 @@ class Bucket:
         return Registries(registry.registry_roots(self.root, self.shared))
 
 
-def extract_run(client: Mapping[str, Any], bucket: Bucket, kind: str, run_id: str | None) -> Run:
-    """The extract run to build: a new one of the given kind, or with `none`, the one `run_id`
-    names or else the last finished run."""
+def extract_run(
+    client: Mapping[str, Any],
+    bucket: Bucket,
+    kind: str,
+    run_id: str | None,
+    sources: Path | None = None,
+) -> Run:
+    """The extract run to build: a new one of the given kind, fetched by the source modules in
+    `sources` (default: the client template's), or with `none`, the one `run_id` names or else
+    the last finished run."""
     if kind not in EXTRACT_KINDS:
         raise ValueError(f"Extract must be one of {', '.join(EXTRACT_KINDS)}, got {kind!r}")
     if kind != "none":
@@ -57,9 +64,11 @@ def extract_run(client: Mapping[str, Any], bucket: Bucket, kind: str, run_id: st
 
         started_at = datetime.now(UTC)
         new_id = run_id or extract.new_run_id(started_at)
+        found = extract.load_sources(sources or extract.DEFAULT_SOURCES)
         return extract.extract(
-            client, bucket.root, new_id, bucket.env, full=kind == "full", started_at=started_at
-        )
+            client, bucket.root, new_id, bucket.env, found, full=kind == "full",
+            started_at=started_at,
+        )  # fmt: skip
     if run_id:
         return snapshots.load_run(bucket.root, run_id)
     last = snapshots.last_run(bucket.root)
@@ -98,10 +107,11 @@ def run(
     rebuild: bool = False,
     publish_it: bool = True,
     snapshot_id: str | None = None,
+    sources: Path | None = None,
 ) -> Snapshot | None:
     """Extract, build and publish. Returns the snapshot, or None if it failed (it's saved, but
     not published)."""
-    the_run = extract_run(client, bucket, extract, run_id)
+    the_run = extract_run(client, bucket, extract, run_id, sources)
     with bucket.registries() as found:
         jobs = require_jobs(found.active_jobs(), bucket)
         snapshot_id = snapshot_id or snapshots.new_snapshot_id(datetime.now(UTC))
@@ -195,6 +205,9 @@ def main() -> None:
         "--run-id", help="The new run's id; with --extract none, the run to build (default: last)"
     )
     run_parser.add_argument("--snapshot-id", help="Defaults to the current UTC time")
+    run_parser.add_argument(
+        "--sources", type=Path, help="Folder of source modules (default: the client template's)"
+    )
     run_parser.add_argument("--rebuild", action="store_true", help="Build every table again")
     run_parser.add_argument("--no-publish", action="store_true", help="Don't move latest.json")
 
@@ -219,7 +232,7 @@ def main() -> None:
         if args.command == "run":
             built = run(
                 client, bucket, args.extract, args.run_id, args.rebuild,
-                not args.no_publish, args.snapshot_id,
+                not args.no_publish, args.snapshot_id, args.sources,
             )  # fmt: skip
             ok = built is not None
         else:
