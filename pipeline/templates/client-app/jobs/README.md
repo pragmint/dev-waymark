@@ -9,7 +9,8 @@ that type, and `adds_to` adds each row's columns as metadata to an existing type
 rules are in the pipeline's
 [CONTRACT.md](https://github.com/pragmint/dev-waymark/blob/main/pipeline/CONTRACT.md#what-a-job-writes).
 
-Two examples, each reading only ticket metadata, `entity_metadata[entity_type=ticket]`:
+Two examples, each reading only tickets and their metadata (`entities[type=ticket]` and
+`entity_metadata[entity_type=ticket]`):
 
 - **`lead_time_by_issue_type`**: an entity per issue type, listed under `lead_time_by_issue_type`
   in the type dropdown and named for its issue type, with how many tickets have a merged pull

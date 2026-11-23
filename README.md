@@ -64,7 +64,7 @@ Any value other than `none` TRUNCATES the source on every start — never point 
 
 ### Data pipeline
 
-[`pipeline/`](pipeline/README.md) is a separate Python project that extracts GitHub and Jira and builds the `entities` and `entity_metadata` tables (and any client-specific tables) as Parquet snapshots in a bucket, with row-level lineage back to the raw records. Point the DuckDB adapter at the bucket to read it:
+[`pipeline/`](pipeline/README.md) is a separate Python project that extracts GitHub and Jira and builds the `entities` and `entity_metadata` tables as Parquet snapshots in a bucket, with row-level lineage back to the raw records. Point the DuckDB adapter at the bucket to read it:
 
 ```bash
 DEV_WAYMARK_SOURCE_DB_ADAPTER=duckdb DEV_WAYMARK_SOURCE_DB_URL=/tmp/waymark-bucket bun dev

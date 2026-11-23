@@ -1,6 +1,6 @@
 # Inventory: `row-lineage-pipeline` vs `main`
 
-As of 2026-11-19, at a46ea75: 15 commits, 83 files changed, about 12.3k lines added. About 3.2k of
+As of 2026-11-23, at 57a0b4a: 21 commits, 108 files changed, about 14.9k lines added. About 3.7k of
 those lines are on the Waymark side (`src/`, `test/`, `scripts/`); the rest are the Python pipeline
 in `pipeline/`.
 
@@ -10,7 +10,9 @@ in `pipeline/`.
 
 - The dlt + dbt prototype is replaced by a pipeline where lineage is stored in every row.
 - **`extract.py`** pulls GitHub pull requests and Jira issues (Server or Cloud) into raw Parquet
-  with dlt.
+  with dlt. What it fetches is the client's own: one source module each, starting as copies of
+  `templates/client-app/sources/` (`github.py`, `jira.py`), chosen with `--sources`. The lock, run
+  records and raw layout stay the pipeline's.
 - **Row contract** ([CONTRACT.md](CONTRACT.md)): every row a job writes has `_row_id` (a stable
   53-bit ID per client), `_sources` (the rows it came from) and `_fields` (which input columns each
   output column read).
@@ -61,7 +63,7 @@ in `pipeline/`.
   snapshot shows.
 - **Demo snapshot** in `pipeline/.data/demo-bucket`, plus a rehearsal copy kept as a fallback.
 
-## Incremental loads (Phase 3)
+## Incremental loads
 
 - **Run records** (`runs/<id>.json`) chain incremental runs back to the last full run. A failed run
   leaves no record, so nothing builds on it.
@@ -72,7 +74,7 @@ in `pipeline/`.
   from raw, with nothing between them.
 - **References can name a subset of rows**, such as `entities[type=change].created_at`.
 
-## Container jobs (Phase 5)
+## Container jobs
 
 - **A job can be a container image** pinned by digest. It runs with no network, a read-only
   filesystem and no credentials.
@@ -82,7 +84,7 @@ in `pipeline/`.
   `lead_time_by_issue_type` entities and metadata as the client template's SQL job, which a
   Docker test checks.
 
-## Job registry and orchestrator (Phase 4)
+## Job registry and orchestrator
 
 - **`registry.py`** keeps job versions in the bucket. Each version is named by the hash of its files
   and written once. An `active` file picks the running version, and a client registry overrides the
@@ -106,7 +108,7 @@ in `pipeline/`.
   in any container that changed.
 - **Docs:** [README.md](README.md) (quick start, command reference, registry, containers, S3 and
   Azure) and [CONTRACT.md](CONTRACT.md). `PLAN.md` is kept out of commits.
-- **Tests:** 200 pytest tests in the pipeline, plus Waymark unit and e2e tests.
+- **Tests:** 208 pytest tests in the pipeline, plus Waymark unit and e2e tests.
 
 ## Everything is an entity
 
@@ -134,7 +136,7 @@ in `pipeline/`.
 ## Still open
 
 - **Testing on real S3** is waiting on Dave's AWS account.
-- **Phase 4 remainder:**
+- **Registry and orchestrator:**
   - limiting each client's credentials to its own part of the bucket;
   - showing the registry in Waymark;
   - a command to retire a job;

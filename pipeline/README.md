@@ -69,6 +69,8 @@ tickets: 100 rows (no base to compare)
 ticket_change_links: 0 rows (no base to compare)
 change_ticket_keys: 0 rows (no base to compare)
 ticket_lead_time: 0 rows (no base to compare)
+lead_time_by_issue_type: 0 rows (no base to compare)
+lead_time_by_issue_type_monthly: 0 rows (no base to compare)
 changes: 2 entities checked in 1.4s, ok
 tickets: 5 entities checked in 3.5s, ok
 ...
@@ -449,8 +451,8 @@ uv run python runner.py \
   --job-dir /tmp/ts-jobs
 ```
 
-`--job-dir` adds a folder of jobs after the client's, replacing theirs by name; here it adds an
-entity type no other job makes. `verify.py` takes the same `--job-dir`, so it checks the job the
+`--job-dir` adds a folder of jobs after the client's, replacing theirs by name; here it replaces
+Kafka's SQL `lead_time_by_issue_type`. `verify.py` takes the same `--job-dir`, so it checks the job the
 snapshot was built with.
 
 ## S3 and Azure
